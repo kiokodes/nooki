@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, AlertCircle, ArrowRight } from 'lucide-react';
+import { Heart, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { signInWithEmail, signUpWithEmail } from '../../lib/authService';
 
@@ -11,12 +11,15 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
   const [isSignUp, setIsSignUp] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     if (!email || !password) {
       setError('Please provide both email and password.');
       return;
@@ -34,6 +37,10 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
 
       if (res.error) {
         setError(res.error);
+      } else if ('requiresEmailConfirmation' in res && res.requiresEmailConfirmation) {
+        setNotice('Check your email and confirm your account, then sign in here to connect with your partner.');
+        setIsSignUp(false);
+        setShowPassword(false);
       } else {
         onSuccess();
       }
@@ -106,6 +113,12 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
           </p>
         </div>
 
+        {notice && (
+          <p role="status" style={{ fontSize: '0.85rem', color: tokens.colors.primaryGreenDeep }}>
+            {notice}
+          </p>
+        )}
+
         {error && (
           <div
             style={{
@@ -164,6 +177,7 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
 
           <div>
             <label
+              htmlFor="password"
               style={{
                 display: 'block',
                 fontSize: '0.8rem',
@@ -174,24 +188,54 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
             >
               Password
             </label>
-            <input
-              type="password"
-              required
-              value={password}
-              placeholder="At least 6 characters"
-              onChange={(e) => setPassword(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: tokens.radii.pill,
-                border: `1.5px solid ${tokens.colors.borderSubtle}`,
-                backgroundColor: tokens.colors.bgSurfaceSubtle,
-                fontSize: '0.9rem',
-                fontFamily: tokens.typography.fontFamily,
-                color: tokens.colors.textPrimary,
-                outline: 'none',
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                required
+                value={password}
+                placeholder="At least 6 characters"
+                onChange={(e) => setPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 52px 12px 16px',
+                  borderRadius: tokens.radii.pill,
+                  border: `1.5px solid ${tokens.colors.borderSubtle}`,
+                  backgroundColor: tokens.colors.bgSurfaceSubtle,
+                  fontSize: '0.9rem',
+                  fontFamily: tokens.typography.fontFamily,
+                  color: tokens.colors.textPrimary,
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-controls="password"
+                title={showPassword ? 'Hide password' : 'Show password'}
+                style={{
+                  position: 'absolute',
+                  right: '4px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: '44px',
+                  height: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  borderRadius: tokens.radii.full,
+                  background: 'transparent',
+                  color: tokens.colors.textSecondary,
+                  cursor: 'pointer',
+                }}
+              >
+                {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+              </button>
+            </div>
           </div>
 
           <button
@@ -229,7 +273,9 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
             type="button"
             onClick={() => {
               setIsSignUp(!isSignUp);
+              setShowPassword(false);
               setError(null);
+              setNotice(null);
             }}
             style={{
               background: 'none',

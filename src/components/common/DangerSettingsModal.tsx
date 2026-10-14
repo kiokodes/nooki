@@ -31,7 +31,7 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
   const handleBreakupAction = async () => {
     setLoading(true);
     try {
-      const res = await requestOrConfirmBreakup(userId, couple.id);
+      const res = await requestOrConfirmBreakup();
       setMessage(res.message);
       if (res.status === 'ended') {
         setTimeout(() => {
@@ -48,7 +48,7 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
   const handleCancelBreakup = async () => {
     setLoading(true);
     try {
-      await cancelBreakup(couple.id);
+      await cancelBreakup();
       setMessage('Breakup request cancelled.');
       setTimeout(() => {
         onCoupleEnded();
