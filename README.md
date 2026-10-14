@@ -4,59 +4,45 @@
 
 ---
 
-## 🎨 Design System & Philosophy
+## 🛠️ Stack
 
-- **Style:** Warm, cozy, storybook-like, rounded, gentle tactile warmth.
-- **Palette:**
-  - **Canvas & Background:** Warm Cream (`#FAF6EE`), Desktop wrapper (`#EFE6D8`)
-  - **Primary Duo:** Blush Peach (`#FF9E88`) & Pastel Mint Green (`#88C999`)
-  - **Storybook Accents:** Soft Lavender (`#C3B1E1`) & Sage (`#A3B899`)
-  - **Currency / Sparks:** Honey Gold (`#F6C26A`)
-  - **Ink / Typography:** Soft espresso cocoa tones (`#3A2E2B`) instead of harsh black.
-- **Typography:** Friendly rounded typefaces (`Nunito` & `Quicksand`).
-- **Cards:** Large corner radius (`28px` to `34px`) with soft, multi-layered warm diffused shadows.
-- **Buttons:** Pill-shaped (`9999px` radius) with playful bouncy micro-interactions.
-- **Theme:** Light mode only for now, centralized in design tokens.
+- **Version Control:** GitHub
+- **Hosting & CI/CD:** Vercel (SPA routing configured via `vercel.json`)
+- **Backend & Database:** Supabase (Auth, PostgreSQL, Row-Level Security, Realtime)
+- **Frontend:** React + TypeScript + Vite
 
 ---
 
-## 📚 Central Design Tokens
+## 🚀 Supabase Setup
 
-All tokens are defined in **`src/tokens/designTokens.ts`** and mapped to CSS Custom Properties in **`src/tokens/injectTokens.ts`**.
-You can adjust any color, radius, spacing, or shadow in that single file to change the look and feel of the entire application.
-
-```typescript
-export const nookiTokens = {
-  colors: { ... },
-  radii: { ... },
-  shadows: { ... },
-  spacing: { ... },
-  typography: { ... },
-  transitions: { ... },
-};
-```
+1. Open your project in the [Supabase Dashboard](https://supabase.com/dashboard).
+2. Go to the **SQL Editor** and run the entire script in:
+   ```
+   supabase/schema.sql
+   ```
+   This creates:
+   - `profiles` table with row-level security.
+   - `couples` table with locked anniversary date.
+   - Functions: `join_couple`, `request_or_confirm_breakup`, `cancel_breakup_request`.
 
 ---
 
-## 🪐 The Nooki Universe Lexicon
+## 🌐 Vercel Deployment
 
-- **Brand / App:** **Nooki**
-- **The Users:** **Nookies**
-- **The Action (Verb):** **To Nook** / **Nooking**
-- **The Action (Noun):** **A Nook** / **Nooks** (*"Check your Nooks," "I sent you a Nook"*)
-- **The Shared Couple World:** **Our Nook**
-- **The Public Web Board:** **The Square** *(or The Public Nook)*
-- **Daily Mini-Game / Question:** **The Daily Nook**
-- **In-App Currency / Decor Drops:** **Nookies** / **Nook Bits**
+1. Import your GitHub repository into **Vercel**.
+2. In **Project Settings** ➔ **Environment Variables**, add:
+   - `VITE_SUPABASE_URL`: Your Supabase Project URL (`https://xyz.supabase.co`)
+   - `VITE_SUPABASE_ANON_KEY`: Your Supabase Project Anon Key (`eyJ...`)
+3. Deploy! Vercel will automatically build the Vite project using the settings in `vercel.json`.
 
 ---
 
-## 📱 Navigation Shell
+## 🎨 Design Tokens & System
 
-1. **Chat (`/chat`):** Nook whisper messaging, heartbeat sync, and special Nook transmissions.
-2. **Media (`/media`):** Shared Spotify/audio listening, photo keepsakes scrapbook, and shared bookmark reading.
-3. **Home (`/home`):** *Center, elevated & highlighted (opens by default).* Features "Our Nook" living room scene, distance tracker, and "The Daily Nook" question streak.
-4. **Discuss (`/discuss`):** "The Square" public board and deep question decks.
-5. **Games (`/games`):** Chibi decor drop shop, mini-games, streak perks, and Nookies bits economy.
-
-Designed for **390px mobile screens first**, with an elegant centered device frame on desktop.
+Tokens are centrally defined in `src/tokens/designTokens.ts`:
+- **Palette:** Warm cream canvas (`#FAF6EE`), Blush baby pink (`#F9A8D4`), Pastel mint green (`#A7F3D0`), Soft lavender (`#DDD6FE`), and Sage (`#CBD5C0`).
+- **Typography:** Friendly rounded typefaces (`Quicksand` / `Nunito`).
+- **Cards & Radii:** Large corner radius (`32px`), pill-shaped buttons (`9999px`).
+- **Navigation Shell:** 5 tabs (Chat, Media, Home, Discuss, Games), with Home elevated in the center.
+- **Lock & Pairing:** The app remains locked until both partners join via the 6-character code.
+- **Mutual Breakup:** Dangerous actions require confirmation from both partners.
