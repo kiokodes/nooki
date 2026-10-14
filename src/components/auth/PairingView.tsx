@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Heart, PlusCircle, LogIn, Calendar, Copy, Check, RefreshCw } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
-import { createCouple, joinCoupleWithCode } from '../../lib/authService';
+import { createCouple, joinCoupleWithCode, leavePendingCouple, updatePendingAnniversary, normalizeInviteCode } from '../../lib/authService';
 import type { Couple } from '../../types/database';
 
 interface PairingProps {
   userId: string;
   userName: string;
   couple: Couple | null;
-  onPairSuccess: () => void;
+  onPairSuccess: () => void | Promise<void>;
 }
 
 export const PairingView: React.FC<PairingProps> = ({
@@ -26,10 +26,44 @@ export const PairingView: React.FC<PairingProps> = ({
 
   // If user already created a couple and is waiting for partner
   if (couple) {
-    const handleCopy = () => {
-      navigator.clipboard.writeText(couple.invite_code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    const handleCopy = async () => {
+      try {
+        await navigator.clipboard.writeText(couple.invite_code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        setError('Could not copy the code. Please select it and copy manually.');
+      }
+    };
+
+    const handleBack = async () => {
+      if (!window.confirm('Go back to pairing options? This will cancel your current invite code. You can then create a new code or enter your partner’s code.')) return;
+      setLoading(true);
+      setError(null);
+      try {
+        await leavePendingCouple();
+        setMode('choose');
+        await onPairSuccess();
+      } catch (err: any) {
+        setError(err?.message || 'Could not return to pairing options.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleSaveAnniversary = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const date = new FormData(e.currentTarget).get('anniversary') as string;
+      setLoading(true);
+      setError(null);
+      try {
+        await updatePendingAnniversary(date);
+        await onPairSuccess();
+      } catch (err: any) {
+        setError(err?.message || 'Could not update your anniversary.');
+      } finally {
+        setLoading(false);
+      }
     };
 
     return (
@@ -39,7 +73,7 @@ export const PairingView: React.FC<PairingProps> = ({
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          padding: '0 24px',
+          padding: '24px',
         }}
       >
         <div
@@ -55,6 +89,8 @@ export const PairingView: React.FC<PairingProps> = ({
             gap: '18px',
           }}
         >
+          {error && <p role="alert" style={{ color: '#DC2626', fontSize: '0.8rem' }}>{error}</p>}
+
           {/* Pulsing gentle ring */}
           <div
             style={{
@@ -148,20 +184,27 @@ export const PairingView: React.FC<PairingProps> = ({
             </button>
           </div>
 
-          {couple.anniversary_date && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.8rem',
-                color: tokens.colors.textSecondary,
-              }}
-            >
-              <Calendar size={14} color={tokens.colors.primaryPinkDeep} />
-              <span>Anniversary locked: <strong>{couple.anniversary_date}</strong></span>
-            </div>
-          )}
+          <form onSubmit={handleSaveAnniversary} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label htmlFor="pending-anniversary" style={{ fontSize: '0.8rem', color: tokens.colors.textSecondary }}>
+              <Calendar size={14} /> Anniversary date
+            </label>
+            <input
+              key={couple.anniversary_date}
+              id="pending-anniversary"
+              name="anniversary"
+              type="date"
+              required
+              defaultValue={couple.anniversary_date || ''}
+              disabled={loading}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: tokens.radii.pill, border: `1.5px solid ${tokens.colors.borderSubtle}`, fontFamily: tokens.typography.fontFamily }}
+            />
+            <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted }}>
+              You can edit this while waiting. It locks only after your partner signs in and joins with your code.
+            </span>
+            <button type="submit" disabled={loading} style={{ padding: '8px', borderRadius: tokens.radii.pill, border: `1px solid ${tokens.colors.borderSubtle}`, background: tokens.colors.bgSurfaceSubtle, cursor: loading ? 'wait' : 'pointer' }}>
+              Save anniversary
+            </button>
+          </form>
 
           <div
             style={{
@@ -177,6 +220,8 @@ export const PairingView: React.FC<PairingProps> = ({
           </div>
 
           <button
+            type="button"
+            disabled={loading}
             onClick={onPairSuccess}
             style={{
               padding: '8px 16px',
@@ -190,6 +235,17 @@ export const PairingView: React.FC<PairingProps> = ({
           >
             Check Connection Now
           </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={handleBack}
+            style={{ background: 'none', border: 'none', color: tokens.colors.textSecondary, fontSize: '0.82rem', cursor: loading ? 'wait' : 'pointer' }}
+          >
+            ← Back to pairing options
+          </button>
+          <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted }}>
+            Going back cancels this code so you can create a new one or enter your partner’s code.
+          </span>
         </div>
       </div>
     );
@@ -207,7 +263,7 @@ export const PairingView: React.FC<PairingProps> = ({
     setError(null);
     try {
       await createCouple(userId, anniversaryDate);
-      onPairSuccess();
+      await onPairSuccess();
     } catch (err: any) {
       setError(err?.message || 'Failed to create couple.');
     } finally {
@@ -218,7 +274,7 @@ export const PairingView: React.FC<PairingProps> = ({
   // Join Couple Flow
   const handleJoinCouple = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!joinCode || joinCode.trim().length < 6) {
+    if (!/^[A-Z0-9]{6}$/.test(normalizeInviteCode(joinCode))) {
       setError('Please enter a valid 6-character invite code.');
       return;
     }
@@ -226,8 +282,8 @@ export const PairingView: React.FC<PairingProps> = ({
     setLoading(true);
     setError(null);
     try {
-      await joinCoupleWithCode(userId, joinCode.trim());
-      onPairSuccess();
+      await joinCoupleWithCode(userId, joinCode);
+      await onPairSuccess();
     } catch (err: any) {
       setError(err?.message || 'Failed to join couple.');
     } finally {
@@ -242,7 +298,7 @@ export const PairingView: React.FC<PairingProps> = ({
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
-        padding: '0 24px',
+        padding: '24px',
       }}
     >
       <div
@@ -420,7 +476,7 @@ export const PairingView: React.FC<PairingProps> = ({
                 }}
               />
               <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted, marginTop: '4px', display: 'block' }}>
-                Note: This is set once when creating the couple and cannot be edited afterward.
+                You can edit this while waiting for your partner. It locks after both partners have signed in and joined.
               </span>
             </div>
 
@@ -445,6 +501,7 @@ export const PairingView: React.FC<PairingProps> = ({
 
             <button
               type="button"
+              disabled={loading}
               onClick={() => {
                 setMode('choose');
                 setError(null);
@@ -470,6 +527,7 @@ export const PairingView: React.FC<PairingProps> = ({
           >
             <div>
               <label
+                htmlFor="invite-code"
                 style={{
                   display: 'block',
                   fontSize: '0.8rem',
@@ -483,10 +541,14 @@ export const PairingView: React.FC<PairingProps> = ({
               <input
                 type="text"
                 required
-                maxLength={6}
+                id="invite-code"
+                name="invite-code"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
                 value={joinCode}
                 placeholder="e.g. 7K4MZ9"
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                onChange={(e) => setJoinCode(normalizeInviteCode(e.target.value))}
                 style={{
                   width: '100%',
                   padding: '12px 16px',
@@ -528,6 +590,7 @@ export const PairingView: React.FC<PairingProps> = ({
 
             <button
               type="button"
+              disabled={loading}
               onClick={() => {
                 setMode('choose');
                 setError(null);

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Sparkles, Globe, User, ArrowRight } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { saveOnboardingProfile } from '../../lib/authService';
+import { getDetectedTimezone, getTimezones } from '../../lib/timezones';
 
 interface OnboardingProps {
   userId: string;
@@ -10,18 +11,10 @@ interface OnboardingProps {
 
 export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }) => {
   const [name, setName] = useState('');
-  const [timezone, setTimezone] = useState('');
+  const [timezone, setTimezone] = useState(getDetectedTimezone);
+  const [timezones] = useState(() => getTimezones(timezone));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      setTimezone(detected);
-    } catch {
-      setTimezone('UTC');
-    }
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,6 +143,7 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
 
           <div>
             <label
+              htmlFor="timezone"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -161,10 +155,12 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
               }}
             >
               <Globe size={14} />
-              <span>Timezone (Auto-detected)</span>
+              <span>Timezone</span>
             </label>
-            <input
-              type="text"
+            <select
+              id="timezone"
+              name="timezone"
+              aria-describedby="timezone-help"
               required
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
@@ -179,9 +175,15 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
                 color: tokens.colors.textPrimary,
                 outline: 'none',
               }}
-            />
-            <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted, marginTop: '4px', display: 'block' }}>
-              Used to calculate hours apart with your partner.
+            >
+              {timezones.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone.replace(/_/g, ' ')}
+                </option>
+              ))}
+            </select>
+            <span id="timezone-help" style={{ fontSize: '0.72rem', color: tokens.colors.textMuted, marginTop: '4px', display: 'block' }}>
+              Auto-detected for you. Choose a different timezone if needed. Used to calculate hours apart with your partner.
             </span>
           </div>
 

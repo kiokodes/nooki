@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   MessageCircle,
   Image as ImageIcon,
@@ -9,6 +9,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { tokens } from './tokens/designTokens';
+import { supabaseConfigurationError } from './lib/supabaseClient';
 import { AuthView } from './components/auth/AuthView';
 import { OnboardingView } from './components/auth/OnboardingView';
 import { PairingView } from './components/auth/PairingView';
@@ -18,7 +19,7 @@ import {
   fetchProfile,
   fetchCouple,
   signOutUser,
-  type MockUser,
+  type AuthUser,
 } from './lib/authService';
 import type { Profile, Couple } from './types/database';
 
@@ -85,14 +86,16 @@ export const App: React.FC = () => {
 
   // Auth & Pairing State
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [couple, setCouple] = useState<Couple | null>(null);
   const [partner, setPartner] = useState<Profile | null>(null);
 
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     try {
       const user = await getCurrentAuthUser();
+      setSessionError(null);
       if (!user) {
         setCurrentUser(null);
         setProfile(null);
@@ -120,34 +123,59 @@ export const App: React.FC = () => {
         setPartner(null);
       }
     } catch (err) {
-      console.error('Error loading session', err);
+      setSessionError(err instanceof Error ? err.message : 'Unable to load your account. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadUserData();
-  }, []);
+    // Defer the external session load so StrictMode's discarded mount does not start a duplicate request.
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) void loadUserData(); });
+    return () => { cancelled = true; };
+  }, [loadUserData]);
 
   // Poll for partner joining when waiting in couple
   useEffect(() => {
     if (!currentUser || !couple || partner) return;
+    let cancelled = false;
     const interval = setInterval(async () => {
-      const info = await fetchCouple(couple.id);
-      if (info && info.partner) {
-        setPartner(info.partner);
-        setCouple(info.couple);
+      try {
+        const info = await fetchCouple(couple.id);
+        if (!cancelled && info && info.partner) {
+          setPartner(info.partner);
+          setCouple(info.couple);
+        }
+      } catch (err) {
+        if (!cancelled) setSessionError(err instanceof Error ? err.message : 'Could not check your connection.');
       }
     }, 2500);
-    return () => clearInterval(interval);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [currentUser, couple, partner]);
 
   const handleSignOut = async () => {
-    await signOutUser();
-    setShowSettings(false);
-    loadUserData();
+    try {
+      await signOutUser();
+      setShowSettings(false);
+      await loadUserData();
+    } catch (err) {
+      setSessionError(err instanceof Error ? err.message : 'Sign out failed. Please try again.');
+    }
   };
+
+  // Backend failures are not missing profiles and must never silently restart onboarding.
+  if (sessionError) {
+    return (
+      <main style={{ maxWidth: '420px', margin: '24px', padding: '28px', borderRadius: tokens.radii.card, background: tokens.colors.bgSurface }}>
+        <h1 style={{ fontSize: '1.4rem', marginBottom: '12px' }}>Unable to connect to Nooki</h1>
+        <p role="alert" style={{ color: tokens.colors.textSecondary, marginBottom: '16px' }}>{sessionError}</p>
+        <p style={{ fontSize: '0.85rem', marginBottom: '16px' }}>Check your connection. If this continues, the app owner should verify the Supabase settings and database migrations.</p>
+        <button type="button" onClick={loadUserData}>Try again</button>
+        {!supabaseConfigurationError && <button type="button" onClick={handleSignOut} style={{ marginLeft: '12px' }}>Sign out</button>}
+      </main>
+    );
+  }
 
   // 1. Loading screen
   if (loading) {
@@ -266,7 +294,7 @@ export const App: React.FC = () => {
             flexDirection: 'column',
             boxShadow: tokens.shadows.card,
             borderRadius: '36px',
-            overflow: 'hidden',
+            overflowY: 'auto',
           }}
         >
           <header
