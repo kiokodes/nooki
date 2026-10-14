@@ -1,0 +1,69 @@
+/* =========================================================================
+   Nooki Design System CSS
+   Warm cream, blush baby pink & pastel green, soft lavender & sage
+   Spacious, airy, minimal storybook style
+   ========================================================================= */
+
+:root {
+  --bg-canvas: #FAF6EE;
+  --bg-desktop: #F1EBE1;
+  --bg-surface: #FFFFFF;
+  --bg-surface-subtle: #FBF8F3;
+
+  --primary-pink: #F9A8D4;
+  --primary-pink-soft: #FCE7F3;
+  --primary-pink-deep: #EC4899;
+
+  --primary-green: #A7F3D0;
+  --primary-green-soft: #ECFDF5;
+  --primary-green-deep: #059669;
+
+  --accent-lavender: #DDD6FE;
+  --accent-lavender-soft: #F5F3FF;
+  --accent-lavender-deep: #7C3AED;
+
+  --accent-sage: #CBD5C0;
+  --accent-sage-soft: #F4F7F2;
+  --accent-sage-deep: #5F7154;
+
+  --text-primary: #372E29;
+  --text-secondary: #7A6E65;
+  --text-muted: #A89E96;
+
+  --border-subtle: #F0E8DC;
+  --radius-card: 32px;
+  --radius-pill: 9999px;
+
+  --shadow-subtle: 0 4px 14px rgba(78, 56, 44, 0.04);
+  --shadow-card: 0 12px 30px rgba(78, 56, 44, 0.05);
+  --shadow-nav: 0 -8px 24px rgba(78, 56, 44, 0.05);
+  --shadow-pink: 0 10px 22px rgba(249, 168, 212, 0.45);
+
+  --font-family: 'Quicksand', 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-desktop);
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
