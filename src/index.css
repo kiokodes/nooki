@@ -1,68 +1,45 @@
 /* =========================================================================
    Nooki Design System CSS
-   Warm, playful, cozy, storybook-like styling for long-distance partners
+   Warm cream, blush baby pink & pastel green, soft lavender & sage
+   Spacious, airy, minimal storybook style
    ========================================================================= */
 
 :root {
-  /* Palette: Cream background, Blush Peach & Pastel Green primaries, Soft Lavender & Sage accents */
-  --nooki-bg-canvas: #FAF6EE;
-  --nooki-bg-desktop: #EFE6D8;
-  --nooki-bg-surface: #FFFDF9;
-  --nooki-bg-surface-alt: #F6EFE3;
-  --nooki-bg-surface-subtle: #FDFBF7;
+  --bg-canvas: #FAF6EE;
+  --bg-desktop: #F1EBE1;
+  --bg-surface: #FFFFFF;
+  --bg-surface-subtle: #FBF8F3;
 
-  --nooki-peach-primary: #FF9E88;
-  --nooki-peach-soft: #FFD9CF;
-  --nooki-peach-deep: #E77A60;
-  --nooki-peach-surface: #FFF3EF;
+  --primary-pink: #F9A8D4;
+  --primary-pink-soft: #FCE7F3;
+  --primary-pink-deep: #EC4899;
 
-  --nooki-green-primary: #88C999;
-  --nooki-green-soft: #D6EFDC;
-  --nooki-green-deep: #61A574;
-  --nooki-green-surface: #EEF8F1;
+  --primary-green: #A7F3D0;
+  --primary-green-soft: #ECFDF5;
+  --primary-green-deep: #059669;
 
-  --nooki-lavender-primary: #C3B1E1;
-  --nooki-lavender-soft: #EDE5F8;
-  --nooki-lavender-deep: #927BB7;
-  --nooki-lavender-surface: #F8F4FD;
+  --accent-lavender: #DDD6FE;
+  --accent-lavender-soft: #F5F3FF;
+  --accent-lavender-deep: #7C3AED;
 
-  --nooki-sage-primary: #A3B899;
-  --nooki-sage-soft: #E2E8DC;
-  --nooki-sage-deep: #708764;
-  --nooki-sage-surface: #F4F7F1;
+  --accent-sage: #CBD5C0;
+  --accent-sage-soft: #F4F7F2;
+  --accent-sage-deep: #5F7154;
 
-  --nooki-honey-primary: #F6C26A;
-  --nooki-honey-soft: #FDE8C5;
-  --nooki-honey-deep: #D49533;
+  --text-primary: #372E29;
+  --text-secondary: #7A6E65;
+  --text-muted: #A89E96;
 
-  --nooki-text-primary: #382C27;
-  --nooki-text-secondary: #6B5C55;
-  --nooki-text-muted: #9E8E87;
-  --nooki-text-light: #FFFDF9;
+  --border-subtle: #F0E8DC;
+  --radius-card: 32px;
+  --radius-pill: 9999px;
 
-  --nooki-border-subtle: #EFE4D2;
-  --nooki-border-medium: #E3D4BD;
+  --shadow-subtle: 0 4px 14px rgba(78, 56, 44, 0.04);
+  --shadow-card: 0 12px 30px rgba(78, 56, 44, 0.05);
+  --shadow-nav: 0 -8px 24px rgba(78, 56, 44, 0.05);
+  --shadow-pink: 0 10px 22px rgba(249, 168, 212, 0.45);
 
-  /* Typography */
-  --nooki-font: 'Nunito', 'Quicksand', -apple-system, BlinkMacSystemFont, sans-serif;
-  --nooki-font-heading: 'Quicksand', 'Nunito', sans-serif;
-
-  /* Radii */
-  --nooki-radius-card: 28px;
-  --nooki-radius-card-lg: 34px;
-  --nooki-radius-pill: 9999px;
-  --nooki-radius-sm: 14px;
-  --nooki-radius-md: 20px;
-
-  /* Soft Storybook Shadows */
-  --nooki-shadow-subtle: 0 3px 10px rgba(92, 64, 51, 0.04);
-  --nooki-shadow-soft: 0 8px 24px rgba(92, 64, 51, 0.07);
-  --nooki-shadow-card: 0 12px 34px -4px rgba(92, 64, 51, 0.08), 0 3px 8px rgba(92, 64, 51, 0.03);
-  --nooki-shadow-float: 0 18px 40px -6px rgba(92, 64, 51, 0.12), 0 4px 12px rgba(92, 64, 51, 0.05);
-  --nooki-shadow-peach: 0 10px 24px rgba(255, 158, 136, 0.38);
-  --nooki-shadow-green: 0 10px 24px rgba(136, 201, 153, 0.38);
-  --nooki-shadow-lavender: 0 10px 24px rgba(195, 177, 225, 0.38);
-  --nooki-shadow-nav: 0 -12px 32px rgba(84, 60, 48, 0.07), 0 -1px 3px rgba(84, 60, 48, 0.02);
+  --font-family: 'Quicksand', 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 *, *::before, *::after {
@@ -75,13 +52,12 @@
 html, body {
   width: 100%;
   height: 100%;
-  background-color: var(--nooki-bg-desktop);
-  font-family: var(--nooki-font);
-  color: var(--nooki-text-primary);
-  line-height: 1.5;
+  background-color: var(--bg-desktop);
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
 }
 
 #root {
@@ -90,94 +66,4 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-/* Base Pill Button */
-.nooki-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-family: var(--nooki-font);
-  font-weight: 700;
-  font-size: 0.95rem;
-  padding: 12px 24px;
-  border-radius: var(--nooki-radius-pill);
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.34, 1.45, 0.7, 1);
-  text-decoration: none;
-  user-select: none;
-}
-
-.nooki-btn:hover {
-  transform: translateY(-2px);
-}
-
-.nooki-btn:active {
-  transform: scale(0.97) translateY(0);
-}
-
-.nooki-btn-peach {
-  background: linear-gradient(135deg, #FFA994 0%, #FF9E88 100%);
-  color: #FFFDF9;
-  box-shadow: var(--nooki-shadow-peach);
-}
-
-.nooki-btn-peach:hover {
-  background: linear-gradient(135deg, #FF9E88 0%, #F08972 100%);
-  box-shadow: 0 12px 28px rgba(255, 158, 136, 0.5);
-}
-
-.nooki-btn-green {
-  background: linear-gradient(135deg, #96D3A6 0%, #88C999 100%);
-  color: #173B20;
-  box-shadow: var(--nooki-shadow-green);
-}
-
-.nooki-btn-green:hover {
-  background: linear-gradient(135deg, #88C999 0%, #76BC88 100%);
-  box-shadow: 0 12px 28px rgba(136, 201, 153, 0.5);
-}
-
-.nooki-btn-lavender {
-  background: linear-gradient(135deg, #CEBEEC 0%, #C3B1E1 100%);
-  color: #34244C;
-  box-shadow: var(--nooki-shadow-lavender);
-}
-
-.nooki-btn-soft {
-  background: var(--nooki-bg-surface-alt);
-  color: var(--nooki-text-secondary);
-  border: 1px solid var(--nooki-border-subtle);
-}
-
-.nooki-btn-soft:hover {
-  background: #EFE4D2;
-  color: var(--nooki-text-primary);
-}
-
-/* Storybook Card style */
-.nooki-card {
-  background-color: var(--nooki-bg-surface);
-  border-radius: var(--nooki-radius-card);
-  padding: 20px;
-  box-shadow: var(--nooki-shadow-card);
-  border: 1px solid var(--nooki-border-subtle);
-  position: relative;
-}
-
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(158, 142, 135, 0.3);
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(158, 142, 135, 0.5);
 }
