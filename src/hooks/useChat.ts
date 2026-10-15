@@ -34,7 +34,8 @@ export interface ChatState {
   /** The partner is composing right now. */
   partnerTyping: boolean;
   sending: boolean;
-  send: (content: string, type?: MessageType) => Promise<void>;
+  /** `sessionId` marks a "Say more" message: which Discuss question it continues from. */
+  send: (content: string, type?: MessageType, sessionId?: string | null) => Promise<void>;
   retry: (entryId: string) => Promise<void>;
   /** Call on every keystroke; the throttle lives here. */
   notifyTyping: () => void;
@@ -226,7 +227,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     if (!coupleId || !userId) return;
     setSending(true);
     try {
-      const saved = await sendMessage(coupleId, userId, entry.content, type);
+      const saved = await sendMessage(coupleId, userId, entry.content, type, entry.session_id);
       // Replace the optimistic bubble with the stored row.
       setPending((items) => items.filter((item) => item.id !== entry.id));
       applyStored(coupleId, (items) => upsert(items, toEntry(saved)));
@@ -239,7 +240,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     }
   }, [applyStored, coupleId, setPending, userId]);
 
-  const send = useCallback(async (content: string, type: MessageType = 'text') => {
+  const send = useCallback(async (content: string, type: MessageType = 'text', sessionId: string | null = null) => {
     if (!coupleId || !userId) return;
     const clean = normalizeMessageContent(content);
     if (!clean) return;
@@ -249,6 +250,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
       sender_id: userId,
       content: clean,
       type,
+      session_id: sessionId ?? null,
       created_at: new Date().toISOString(),
       read_at: null,
       delivery: 'sending',

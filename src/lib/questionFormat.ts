@@ -1,6 +1,6 @@
 import { tokens } from '../tokens/designTokens';
-import { QUESTION_INPUT_TYPES, REACTION_KINDS } from '../types/database';
-import type { AnswerValue, Question, QuestionInputType, ReactionKind } from '../types/database';
+import { QUESTION_INPUT_TYPES } from '../types/database';
+import type { AnswerValue, Question, QuestionInputType } from '../types/database';
 
 /**
  * The Discuss tab's shared vocabulary.
@@ -70,8 +70,8 @@ export const SLIDER_MIN = 1;
 export const SLIDER_MAX = 10;
 /** Matches the `answers` payload check in the database. */
 export const ANSWER_MAX_LENGTH = 4000;
-/** Matches `answer_reactions_comment_length`. */
-export const REACTION_COMMENT_MAX_LENGTH = 1000;
+/** Matches `answer_comments_comment_length`. */
+export const COMMENT_MAX_LENGTH = 1000;
 
 export const UNCATEGORISED = 'Uncategorised';
 
@@ -214,23 +214,6 @@ export function toQuestion(row: Record<string, unknown>): Question {
     options: inputType === 'text' || inputType === 'slider' ? null : options,
     is_adult: Boolean(row.is_adult) || canonicalCategory(row.category) === 'Intimacy',
   };
-}
-
-export const ANSWER_REACTIONS: { kind: ReactionKind; emoji: string; label: string }[] = [
-  { kind: 'happy', emoji: '😊', label: 'Happy' },
-  { kind: 'funny', emoji: '😂', label: 'Funny' },
-  { kind: 'sad', emoji: '😢', label: 'Sad' },
-  { kind: 'angry', emoji: '😠', label: 'Angry' },
-  { kind: 'disappointed', emoji: '😞', label: 'Disappointed' },
-];
-
-export function reactionDisplay(kind: string): { emoji: string; label: string } {
-  const known = ANSWER_REACTIONS.find((entry) => entry.kind === kind);
-  return known ? { emoji: known.emoji, label: known.label } : { emoji: '💬', label: 'Reacted' };
-}
-
-export function isReactionKind(value: unknown): value is ReactionKind {
-  return typeof value === 'string' && (REACTION_KINDS as string[]).includes(value);
 }
 
 /** The blank draft a composer starts from for each input type. */

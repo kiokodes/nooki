@@ -1,19 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Eye, Lock, Pencil } from 'lucide-react';
+import { ArrowLeft, Eye, Lock, MessageCircle, Pencil } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import {
-  ANSWER_REACTIONS,
-  REACTION_COMMENT_MAX_LENGTH,
+  COMMENT_MAX_LENGTH,
   categoryDisplay,
   emptyAnswer,
   isAnswerEmpty,
   parseAnswerValue,
-  reactionDisplay,
   validateAnswer,
 } from '../../lib/questionFormat';
 import { AnswerInput } from './AnswerInput';
 import type { SessionDetail } from '../../hooks/useDiscuss';
-import type { AnswerReaction, AnswerValue, Question, ReactionKind } from '../../types/database';
+import type { AnswerComment, AnswerValue, Question } from '../../types/database';
 
 interface SessionPanelProps {
   detail: SessionDetail;
@@ -24,7 +22,10 @@ interface SessionPanelProps {
   onBack: () => void;
   onSubmit: (value: AnswerValue) => Promise<void>;
   onRevise: (answerId: string, value: AnswerValue) => Promise<void>;
-  onReact: (reaction: ReactionKind, comment: string | null) => Promise<void>;
+  /** Saves your one comment under the revealed answers. */
+  onComment: (comment: string) => Promise<void>;
+  /** Opens the chat with this question attached, for when one comment is not enough. */
+  onSayMore: () => void;
 }
 
 const primaryButtonStyle = (disabled: boolean, background: string = tokens.colors.accentSageDeep): React.CSSProperties => ({
@@ -186,82 +187,101 @@ const AnswerComposer: React.FC<{
   );
 };
 
+/** One stored comment: "You said" or "Alex said", in that partner's colour of the reveal. */
+const CommentCard: React.FC<{ side: 'mine' | 'partner'; label: string; text: string }> = ({ side, label, text }) => (
+  <div
+    data-my-comment={side === 'mine' ? 'true' : undefined}
+    data-partner-comment={side === 'partner' ? 'true' : undefined}
+    style={{
+      padding: '10px 12px',
+      borderRadius: tokens.radii.md,
+      backgroundColor: side === 'mine' ? tokens.colors.primaryPinkSoft : tokens.colors.accentSageSoft,
+      border: `1px solid ${side === 'mine' ? tokens.colors.primaryPink : tokens.colors.accentSage}`,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px',
+    }}
+  >
+    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: tokens.colors.textSecondary }}>
+      {label}
+    </span>
+    <p style={{ margin: 0, fontSize: '0.82rem', lineHeight: 1.5, color: tokens.colors.textPrimary, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+      {text}
+    </p>
+  </div>
+);
+
 /**
- * After the reveal: an emoji and an optional comment, one per partner.
- *
- * Which emoji is selected is read from the stored reaction rather than kept locally, so
- * the picker can never disagree with the database — only the comment being typed is a
- * draft.
+ * After the reveal: one comment each, no emoji. The composer goes away the moment yours
+ * is stored — a second message is not typed here. "Say more" carries the question into
+ * the chat, where the conversation can go on with a link back to these answers.
  */
-const ReactionPicker: React.FC<{
-  myReaction: AnswerReaction | null;
-  partnerReaction: AnswerReaction | null;
+const CommentPanel: React.FC<{
+  myComment: AnswerComment | null;
+  partnerComment: AnswerComment | null;
   partnerName: string;
   busy: boolean;
-  onReact: (reaction: ReactionKind, comment: string | null) => Promise<void>;
-}> = ({ myReaction, partnerReaction, partnerName, busy, onReact }) => {
-  const [comment, setComment] = useState(myReaction?.comment ?? '');
-  const reaction = myReaction?.reaction ?? null;
-  const commentUnchanged = comment.trim() === (myReaction?.comment ?? '');
+  onComment: (comment: string) => Promise<void>;
+  onSayMore: () => void;
+}> = ({ myComment, partnerComment, partnerName, busy, onComment, onSayMore }) => {
+  const [draft, setDraft] = useState('');
+  const empty = draft.trim() === '';
 
-  const send = async (kind: ReactionKind) => {
+  const send = async () => {
     try {
-      await onReact(kind, comment.trim() || null);
+      await onComment(draft.trim());
     } catch {
-      // The screen above already explains why; the picker stays where it was.
+      // The banner above explains why; the draft stays put so nothing is lost.
     }
   };
 
+  if (myComment) {
+    return (
+      <div data-comments style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <CommentCard side="mine" label="You said" text={myComment.comment} />
+        {partnerComment ? (
+          <CommentCard side="partner" label={`${partnerName} said`} text={partnerComment.comment} />
+        ) : (
+          <p data-partner-quiet style={{ margin: 0, fontSize: '0.74rem', color: tokens.colors.textMuted }}>
+            {`${partnerName} hasn't said anything yet.`}
+          </p>
+        )}
+        <button
+          type="button"
+          aria-label="Say more in chat"
+          data-say-more
+          disabled={busy}
+          onClick={onSayMore}
+          style={{
+            ...primaryButtonStyle(busy, tokens.colors.primaryPinkDeep),
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+        >
+          <MessageCircle size={15} aria-hidden="true" />
+          <span>Say more in chat</span>
+        </button>
+        <p data-say-more-hint style={{ margin: 0, textAlign: 'center', fontSize: '0.72rem', color: tokens.colors.textMuted, lineHeight: 1.45 }}>
+          One comment each, here. The chat opens with this question attached, so both answers stay one tap away.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div data-reactions style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div data-comments style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <span style={{ fontSize: '0.8rem', fontWeight: 800, color: tokens.colors.textPrimary }}>
         How did that land?
       </span>
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-        {ANSWER_REACTIONS.map((entry) => {
-          const isSelected = reaction === entry.kind;
-          return (
-            <button
-              key={entry.kind}
-              type="button"
-              aria-label={entry.label}
-              aria-pressed={isSelected}
-              data-reaction={entry.kind}
-              data-selected={isSelected ? 'true' : 'false'}
-              disabled={busy}
-              onClick={() => void send(entry.kind)}
-              style={{
-                flex: '1 1 auto',
-                minWidth: '48px',
-                padding: '8px 6px',
-                borderRadius: tokens.radii.md,
-                border: `1.5px solid ${isSelected ? tokens.colors.accentSageDeep : tokens.colors.borderSubtle}`,
-                backgroundColor: isSelected ? tokens.colors.accentSageSoft : tokens.colors.bgSurface,
-                cursor: busy ? 'not-allowed' : 'pointer',
-                fontSize: '1.15rem',
-                lineHeight: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '3px',
-                fontFamily: tokens.typography.fontFamily,
-              }}
-            >
-              <span aria-hidden="true">{entry.emoji}</span>
-              <span style={{ fontSize: '0.6rem', fontWeight: 700, color: tokens.colors.textSecondary }}>
-                {entry.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
       <textarea
-        aria-label="Add a comment"
-        value={comment}
-        disabled={busy || !reaction}
-        placeholder={reaction ? 'Say something about it (optional)…' : 'Pick a reaction first'}
-        onChange={(event) => setComment(event.target.value.slice(0, REACTION_COMMENT_MAX_LENGTH))}
+        aria-label="Say something about it"
+        data-comment-input
+        value={draft}
+        disabled={busy}
+        placeholder="Say something about it…"
+        onChange={(event) => setDraft(event.target.value.slice(0, COMMENT_MAX_LENGTH))}
         rows={2}
         style={{
           width: '100%',
@@ -278,39 +298,15 @@ const ReactionPicker: React.FC<{
       />
       <button
         type="button"
-        aria-label="Save comment"
-        disabled={busy || !reaction || commentUnchanged}
-        onClick={() => reaction && void send(reaction)}
-        style={primaryButtonStyle(busy || !reaction || commentUnchanged, tokens.colors.primaryPinkDeep)}
+        aria-label="Send comment"
+        disabled={busy || empty}
+        onClick={() => void send()}
+        style={primaryButtonStyle(busy || empty, tokens.colors.primaryPinkDeep)}
       >
-        Save comment
+        Send
       </button>
 
-      {partnerReaction && (
-        <div
-          data-partner-reaction
-          style={{
-            padding: '10px 12px',
-            borderRadius: tokens.radii.md,
-            backgroundColor: tokens.colors.bgSurfaceSubtle,
-            border: `1px solid ${tokens.colors.borderSubtle}`,
-            fontSize: '0.78rem',
-            color: tokens.colors.textSecondary,
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '8px',
-          }}
-        >
-          <span aria-hidden="true" style={{ fontSize: '1.05rem' }}>
-            {reactionDisplay(partnerReaction.reaction).emoji}
-          </span>
-          <span>
-            <strong style={{ color: tokens.colors.textPrimary }}>{partnerName}</strong>
-            {` reacted ${reactionDisplay(partnerReaction.reaction).label.toLowerCase()}`}
-            {partnerReaction.comment ? ` — “${partnerReaction.comment}”` : ''}
-          </span>
-        </div>
-      )}
+      {partnerComment && <CommentCard side="partner" label={`${partnerName} said`} text={partnerComment.comment} />}
     </div>
   );
 };
@@ -333,20 +329,21 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
   onBack,
   onSubmit,
   onRevise,
-  onReact,
+  onComment,
+  onSayMore,
 }) => {
   const { session, question, myAnswer, partnerAnswer, partnerHasAnswered, revealed } = detail;
   // Set by the Edit button only: a fresh answer writes, a saved one revises.
   const [editing, setEditing] = useState(!myAnswer);
 
   const display = question ? categoryDisplay(question.category) : null;
-  const myReaction = useMemo(
-    () => detail.reactions.find((entry) => entry.user_id === userId) ?? null,
-    [detail.reactions, userId],
+  const myComment = useMemo(
+    () => detail.comments.find((entry) => entry.user_id === userId) ?? null,
+    [detail.comments, userId],
   );
-  const partnerReaction = useMemo(
-    () => detail.reactions.find((entry) => entry.user_id !== userId) ?? null,
-    [detail.reactions, userId],
+  const partnerComment = useMemo(
+    () => detail.comments.find((entry) => entry.user_id !== userId) ?? null,
+    [detail.comments, userId],
   );
 
   const back = (
@@ -563,13 +560,14 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
               ))}
             </div>
 
-            <ReactionPicker
+            <CommentPanel
               key={session.id}
-              myReaction={myReaction}
-              partnerReaction={partnerReaction}
+              myComment={myComment}
+              partnerComment={partnerComment}
               partnerName={partnerName}
               busy={busy}
-              onReact={onReact}
+              onComment={onComment}
+              onSayMore={onSayMore}
             />
           </div>
         )}

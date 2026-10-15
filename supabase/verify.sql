@@ -110,7 +110,7 @@ BEGIN
     RAISE EXCEPTION 'messages is not in the supabase_realtime publication, so chat will not update live. Rerun supabase/migrations/202610150003_messages.sql.';
   END IF;
   -- Discuss: the imported question library, its sessions, the sealed answers, the
-  -- reactions and the 18+ consent both partners have to give.
+  -- comments and the 18+ consent both partners have to give.
   IF to_regclass('public.questions') IS NULL THEN
     RAISE EXCEPTION 'Missing questions table. Apply supabase/migrations/202610150004_discuss_questions.sql.';
   END IF;
@@ -120,8 +120,8 @@ BEGIN
   IF to_regclass('public.answers') IS NULL THEN
     RAISE EXCEPTION 'Missing answers table. Apply supabase/migrations/202610150004_discuss_questions.sql.';
   END IF;
-  IF to_regclass('public.answer_reactions') IS NULL THEN
-    RAISE EXCEPTION 'Missing answer_reactions table. Apply supabase/migrations/202610150004_discuss_questions.sql.';
+  IF to_regclass('public.answer_comments') IS NULL THEN
+    RAISE EXCEPTION 'Missing answer_comments table. Apply supabase/migrations/202610150005_discuss_comments_chat_links.sql.';
   END IF;
   IF to_regclass('public.couple_settings') IS NULL THEN
     RAISE EXCEPTION 'Missing couple_settings table. Apply supabase/migrations/202610150004_discuss_questions.sql.';
@@ -129,7 +129,7 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
-      AND c.relname IN ('questions', 'question_sessions', 'answers', 'answer_reactions', 'couple_settings')
+      AND c.relname IN ('questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings')
       AND NOT c.relrowsecurity
   ) THEN RAISE EXCEPTION 'Row-level security must be enabled on the Discuss tables.'; END IF;
   -- The library is read-only for the app: only the owner (or a service-role import) writes it.
@@ -152,18 +152,18 @@ BEGIN
   IF NOT has_table_privilege('authenticated', 'public.answers', 'SELECT')
      OR NOT has_table_privilege('authenticated', 'public.answers', 'INSERT')
      OR NOT has_table_privilege('authenticated', 'public.answers', 'UPDATE')
-     OR NOT has_table_privilege('authenticated', 'public.answer_reactions', 'SELECT')
-     OR NOT has_table_privilege('authenticated', 'public.answer_reactions', 'INSERT')
-     OR NOT has_table_privilege('authenticated', 'public.answer_reactions', 'UPDATE')
+     OR NOT has_table_privilege('authenticated', 'public.answer_comments', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.answer_comments', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.answer_comments', 'UPDATE')
      OR NOT has_table_privilege('authenticated', 'public.couple_settings', 'SELECT')
      OR NOT has_table_privilege('authenticated', 'public.couple_settings', 'INSERT')
      OR NOT has_table_privilege('authenticated', 'public.couple_settings', 'UPDATE') THEN
-    RAISE EXCEPTION 'Authenticated users need select, insert and update on answers, answer_reactions and couple_settings.';
+    RAISE EXCEPTION 'Authenticated users need select, insert and update on answers, answer_comments and couple_settings.';
   END IF;
   IF has_table_privilege('anon', 'public.questions', 'SELECT')
      OR has_table_privilege('anon', 'public.question_sessions', 'SELECT')
      OR has_table_privilege('anon', 'public.answers', 'SELECT')
-     OR has_table_privilege('anon', 'public.answer_reactions', 'SELECT')
+     OR has_table_privilege('anon', 'public.answer_comments', 'SELECT')
      OR has_table_privilege('anon', 'public.couple_settings', 'SELECT') THEN
     RAISE EXCEPTION 'Anonymous users must not be able to reach the Discuss tables.';
   END IF;
@@ -189,9 +189,9 @@ BEGIN
     OR (tablename = 'answers' AND policyname IN (
       'Couple members can view answers', 'Couple members can answer a question',
       'Users can edit their own answer before the reveal'))
-    OR (tablename = 'answer_reactions' AND policyname IN (
-      'Couple members can view reactions', 'Couple members can react to a reveal',
-      'Users can change their own reaction'))
+    OR (tablename = 'answer_comments' AND policyname IN (
+      'Couple members can view comments', 'Couple members can comment on a reveal',
+      'Users can change their own comment'))
     OR (tablename = 'couple_settings' AND policyname IN (
       'Couple members can view their question settings', 'Users can save their own question settings',
       'Users can change their own question settings'))
@@ -213,20 +213,35 @@ BEGIN
     AND tgname = 'question_sessions_guard' AND tgenabled = 'O'
   ) THEN RAISE EXCEPTION 'Missing question_sessions guard trigger. Apply the Discuss migration.'; END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.answer_reactions'::regclass
-    AND tgname = 'answer_reactions_guard' AND tgenabled = 'O'
-  ) THEN RAISE EXCEPTION 'Missing answer_reactions guard trigger. Apply the Discuss migration.'; END IF;
+    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.answer_comments'::regclass
+    AND tgname = 'answer_comments_guard' AND tgenabled = 'O'
+  ) THEN RAISE EXCEPTION 'Missing answer_comments guard trigger. Apply supabase/migrations/202610150005_discuss_comments_chat_links.sql.'; END IF;
+  -- A comment row without its comment is the old emoji world: the migration fixes that.
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'answer_comments' AND column_name = 'comment' AND is_nullable = 'YES'
+  ) THEN RAISE EXCEPTION 'answer_comments.comment must not be nullable. Apply supabase/migrations/202610150005_discuss_comments_chat_links.sql.'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'answer_comments' AND column_name = 'reaction'
+  ) THEN RAISE EXCEPTION 'answer_comments still has the old reaction column. Apply supabase/migrations/202610150005_discuss_comments_chat_links.sql.'; END IF;
+  -- The "Say more" bridge: a message can point back at the Discuss question it grew from.
+  -- Checked here, after the Discuss tables, because it lands with that migration.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'session_id'
+  ) THEN RAISE EXCEPTION 'messages.session_id is missing. Apply supabase/migrations/202610150005_discuss_comments_chat_links.sql.'; END IF;
   IF (SELECT count(*) FROM pg_constraint WHERE conname IN (
     'questions_seriousness_check', 'questions_input_type_check', 'questions_options_shape',
-    'answers_shape_check', 'answer_reactions_reaction_check'
+    'answers_shape_check', 'answer_comments_comment_length'
   )) <> 5 THEN RAISE EXCEPTION 'Required Discuss column checks are missing. Rerun the Discuss migration.'; END IF;
   IF (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public' AND indexname IN (
-    'question_sessions_couple_question', 'answers_session_user', 'answer_reactions_session_user'
-  )) <> 3 THEN RAISE EXCEPTION 'Required Discuss unique indexes are missing: one session per question, and one answer and reaction per partner. Rerun the Discuss migration.'; END IF;
+    'question_sessions_couple_question', 'answers_session_user', 'answer_comments_session_user'
+  )) <> 3 THEN RAISE EXCEPTION 'Required Discuss unique indexes are missing: one session per question, and one answer and comment per partner. Rerun the Discuss migration.'; END IF;
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
      AND (SELECT count(*) FROM pg_publication_tables WHERE pubname = 'supabase_realtime'
           AND schemaname = 'public'
-          AND tablename IN ('question_sessions', 'answers', 'answer_reactions')) <> 3 THEN
+          AND tablename IN ('question_sessions', 'answers', 'answer_comments')) <> 3 THEN
     RAISE EXCEPTION 'The Discuss tables are not all in the supabase_realtime publication, so a reveal will not arrive live. Rerun supabase/migrations/202610150004_discuss_questions.sql.';
   END IF;
   IF NOT has_table_privilege('authenticated', 'public.profiles', 'SELECT')

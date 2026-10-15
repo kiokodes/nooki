@@ -99,6 +99,7 @@ const STARTING_MESSAGES: PreviewMessage[] = [
     sender_id: 'preview-ana',
     content: 'Slept badly, thinking of you. 🌙',
     type: 'text',
+    session_id: null,
     created_at: new Date(Date.now() - DAY_MS - 2 * 3_600_000).toISOString(),
     read_at: new Date(Date.now() - DAY_MS - 3_600_000).toISOString(),
     delivery: 'read',
@@ -110,6 +111,7 @@ const STARTING_MESSAGES: PreviewMessage[] = [
     sender_id: 'preview-sam',
     content: 'Same here. Call me when you wake up?',
     type: 'text',
+    session_id: null,
     created_at: new Date(Date.now() - DAY_MS - 1 * 3_600_000).toISOString(),
     read_at: new Date(Date.now() - DAY_MS).toISOString(),
     delivery: 'read',
@@ -121,6 +123,7 @@ const STARTING_MESSAGES: PreviewMessage[] = [
     sender_id: 'preview-ana',
     content: 'Made your favourite tea ☕️\nWish you were at the table.',
     type: 'text',
+    session_id: null,
     created_at: earlierTodayIso(90),
     read_at: null,
     delivery: 'sent',
@@ -132,6 +135,7 @@ const STARTING_MESSAGES: PreviewMessage[] = [
     sender_id: 'preview-sam',
     content: 'Miss you ❤️',
     type: 'text',
+    session_id: null,
     created_at: earlierTodayIso(60),
     read_at: earlierTodayIso(45),
     delivery: 'read',
@@ -143,12 +147,31 @@ const STARTING_MESSAGES: PreviewMessage[] = [
     sender_id: null,
     content: 'Prompt of the day: what made you smile today?',
     type: 'question',
+    session_id: null,
     created_at: earlierTodayIso(30),
     read_at: null,
     delivery: 'sent',
     author: 'ana',
   },
+  // A "Say more" message from the Discuss tab: the bubble quotes its question above it.
+  {
+    id: 'm6',
+    couple_id: 'preview-couple',
+    sender_id: 'preview-sam',
+    content: 'Beach, always. The sea air fixes everything. 🌊',
+    type: 'text',
+    session_id: 'preview-session-1',
+    created_at: earlierTodayIso(10),
+    read_at: null,
+    delivery: 'sent',
+    author: 'sam',
+  },
 ];
+
+/** The Discuss question the quoted preview bubble grew out of. */
+const PREVIEW_SESSION_QUESTIONS: Record<string, { text: string; category: string }> = {
+  'preview-session-1': { text: 'Beach holiday or city break?', category: 'fun' },
+};
 
 export const AppPreview = () => {
   const [preset, setPreset] = useState(PRESETS[0]);
@@ -224,6 +247,7 @@ export const AppPreview = () => {
       sender_id: profile.id,
       content: trimmed,
       type: 'text',
+      session_id: null,
       created_at: new Date().toISOString(),
       read_at: null,
       delivery: 'sending',
@@ -249,6 +273,7 @@ export const AppPreview = () => {
       sender_id: partner.id,
       content: 'Just sent you a voice note length text 😅 Thinking of our trip.',
       type: 'text' as const,
+      session_id: null,
       created_at: new Date().toISOString(),
       read_at: readAt,
       delivery: 'sent' as const,
@@ -399,6 +424,8 @@ export const AppPreview = () => {
                 onStopTyping={() => {}}
                 onRetry={(entryId) => setMessages((current) => current.filter((message) => message.id !== entryId))}
                 onDismissError={() => {}}
+                questionBySessionId={PREVIEW_SESSION_QUESTIONS}
+                onOpenQuestion={() => {}}
               />
             )}
 

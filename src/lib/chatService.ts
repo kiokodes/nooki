@@ -8,6 +8,11 @@ import type { ChatMessage, MessageType } from '../types/database';
  * Everything here is couple-scoped: the database, not this file, is what stops another
  * couple reading these rows (see the RLS policies in supabase/migrations/
  * 202610150003_messages.sql). The limits below only keep a phone happy.
+ *
+ * A message can also point back at a Discuss question (`session_id`): that is the
+ * "Say more" bridge — the bubble quotes the question, the quote links back to the
+ * revealed answers, and the send policy refuses links to any session but the
+ * couple's own (supabase/migrations/202610150005_discuss_comments_chat_links.sql).
  */
 
 /** How many recent messages a phone keeps in memory. */
@@ -36,6 +41,7 @@ function toChatMessage(row: Record<string, unknown>): ChatMessage {
     sender_id: row.sender_id == null ? null : String(row.sender_id),
     content: String(row.content ?? ''),
     type: (row.type as MessageType) ?? 'text',
+    session_id: row.session_id == null ? null : String(row.session_id),
     created_at: String(row.created_at),
     read_at: row.read_at == null ? null : String(row.read_at),
   };
@@ -63,10 +69,12 @@ export async function sendMessage(
   senderId: string,
   content: string,
   type: MessageType = 'text',
+  /** The Discuss question this message continues from, or null for an ordinary one. */
+  sessionId: string | null = null,
 ): Promise<ChatMessage> {
   const clean = validateMessageContent(content);
   const { data, error } = await requireSupabase().from('messages')
-    .insert({ couple_id: coupleId, sender_id: senderId, content: clean, type })
+    .insert({ couple_id: coupleId, sender_id: senderId, content: clean, type, session_id: sessionId })
     .select('*')
     .single();
   if (error) throw new Error(describeDatabaseError(error));

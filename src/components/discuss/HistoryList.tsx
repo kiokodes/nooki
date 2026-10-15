@@ -1,12 +1,12 @@
 import React from 'react';
 import { ArrowLeft, ChevronRight, Lock } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
-import { categoryDisplay, formatAnswerSummary, reactionDisplay } from '../../lib/questionFormat';
+import { categoryDisplay, formatAnswerSummary } from '../../lib/questionFormat';
 import type { SessionDetail } from '../../hooks/useDiscuss';
 
 interface HistoryListProps {
   sessions: SessionDetail[];
-  /** This phone's account, so the list can show your own reaction on a row. */
+  /** This phone's account, so the list can show your own comment on a row. */
   userId: string;
   partnerName: string;
   onOpen: (sessionId: string) => void;
@@ -89,7 +89,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({ sessions, userId, part
       {sessions.map((detail) => {
         const chip = stateChip(detail, partnerName);
         const display = categoryDisplay(detail.question?.category ?? '');
-        const myReaction = detail.reactions.find((entry) => entry.user_id === userId) ?? null;
+        const myComment = detail.comments.find((entry) => entry.user_id === userId) ?? null;
         return (
           <button
             key={detail.session.id}
@@ -163,9 +163,9 @@ export const HistoryList: React.FC<HistoryListProps> = ({ sessions, userId, part
                     {formatAnswerSummary(detail.myAnswer.answer, detail.question?.input_type ?? 'text').slice(0, 34)}
                   </span>
                 )}
-                {myReaction && (
-                  <span aria-hidden="true" style={{ fontSize: '0.8rem' }}>
-                    {reactionDisplay(myReaction.reaction).emoji}
+                {myComment && (
+                  <span data-my-comment style={{ fontSize: '0.66rem', color: tokens.colors.textSecondary }}>
+                    {`💬 ${myComment.comment.length > 28 ? `${myComment.comment.slice(0, 28)}…` : myComment.comment}`}
                   </span>
                 )}
               </span>

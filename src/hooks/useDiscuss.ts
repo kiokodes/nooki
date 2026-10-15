@@ -3,28 +3,27 @@ import {
   HISTORY_LIMIT,
   askPartner,
   fetchAnswers,
+  fetchComments,
   fetchCoupleSettings,
   fetchQuestionCategories,
   fetchQuestionsByIds,
-  fetchReactions,
   fetchSessions,
   pickQuestion,
   reviseAnswer,
   saveAdultPreference,
-  saveReaction,
+  saveComment,
   submitAnswer,
   subscribeToDiscuss,
   type CategoryCount,
   type DiscussChannel,
 } from '../lib/discussService';
 import type {
-  AnswerReaction,
+  AnswerComment,
   AnswerValue,
   CoupleSettings,
   Question,
   QuestionAnswer,
   QuestionSession,
-  ReactionKind,
 } from '../types/database';
 
 interface UseDiscussOptions {
@@ -40,7 +39,8 @@ export interface SessionDetail {
   /** Null only if the library row was deleted after the session was asked. */
   question: Question | null;
   answers: QuestionAnswer[];
-  reactions: AnswerReaction[];
+  /** One comment per partner, visible only after the reveal — same rule as answers. */
+  comments: AnswerComment[];
   myAnswer: QuestionAnswer | null;
   /** Null until the reveal: the database simply does not send it before then. */
   partnerAnswer: QuestionAnswer | null;
@@ -57,7 +57,7 @@ export interface DiscussState {
   categories: CategoryCount[];
   sessions: SessionDetail[];
   loading: boolean;
-  /** An ask, an answer or a reaction is on its way. */
+  /** An ask, an answer or a comment is on its way. */
   busy: boolean;
   /** The 18+ consent toggle is saving. Separate from busy so discuss operations don't block it. */
   adultSaving: boolean;
@@ -78,7 +78,8 @@ export interface DiscussState {
   ask: (questionId: string) => Promise<string | null>;
   submit: (sessionId: string, value: AnswerValue) => Promise<void>;
   revise: (answerId: string, value: AnswerValue) => Promise<void>;
-  react: (sessionId: string, reaction: ReactionKind, comment: string | null) => Promise<void>;
+  /** Your one comment under a revealed question; a second thought belongs in the chat. */
+  comment: (sessionId: string, text: string) => Promise<void>;
   setAdultEnabled: (enabled: boolean) => Promise<void>;
 }
 
@@ -136,10 +137,10 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
 
     const questionIds = [...new Set(sessions.map((session) => session.question_id))];
     const sessionIds = sessions.map((session) => session.id);
-    const [questions, answers, reactions] = await Promise.all([
+    const [questions, answers, comments] = await Promise.all([
       fetchQuestionsByIds(questionIds),
       fetchAnswers(sessionIds),
-      fetchReactions(sessionIds),
+      fetchComments(sessionIds),
     ]);
 
     const questionById = new Map(questions.map((question) => [question.id, question]));
@@ -151,7 +152,7 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
         session,
         question,
         answers: sessionAnswers,
-        reactions: reactions.filter((reaction) => reaction.session_id === session.id),
+        comments: comments.filter((comment) => comment.session_id === session.id),
         myAnswer: sessionAnswers.find((answer) => answer.user_id === userId) ?? null,
         partnerAnswer: sessionAnswers.find((answer) => answer.user_id !== userId) ?? null,
         // answer_count is public to the couple; the content is not.
@@ -311,15 +312,15 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
     }
   }, [runLoad]);
 
-  const react = useCallback(async (sessionId: string, reaction: ReactionKind, comment: string | null) => {
-    if (!userId) throw new Error('Please sign in again to react.');
+  const comment = useCallback(async (sessionId: string, text: string) => {
+    if (!userId) throw new Error('Please sign in again to comment.');
     setBusy(true);
     try {
-      await saveReaction(sessionId, userId, reaction, comment);
+      await saveComment(sessionId, userId, text);
       setError(null);
       await runLoad({ silent: true });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Your reaction could not be saved.';
+      const message = err instanceof Error ? err.message : 'Your comment could not be saved.';
       setError(message);
       throw new Error(message);
     } finally {
@@ -368,7 +369,7 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
     ask,
     submit,
     revise,
-    react,
+    comment,
     setAdultEnabled,
   };
 }

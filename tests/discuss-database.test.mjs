@@ -241,21 +241,26 @@ test('discuss: an imported library, sealed answers, the reveal, the 18+ gate and
     );
     assert.deepEqual(revised.answer, ['Bins', 'Laundry'], 'an unrevealed answer is editable');
 
-    // --- 9. Reactions wait for the reveal, and belong to one partner each ------------
-    await assert.rejects(discuss.saveReaction(written.sessionId, alice.id, 'sad', null), /until you have both answered/);
-    const firstReaction = await discuss.saveReaction(sessionId, alice.id, 'happy', 'Obviously the beach.');
-    assert.equal(firstReaction.reaction, 'happy');
-    assert.equal(firstReaction.comment, 'Obviously the beach.');
-    const changedReaction = await discuss.saveReaction(sessionId, alice.id, 'funny', 'Obviously the beach.');
-    assert.equal(changedReaction.id, firstReaction.id, 'one reaction per partner, changed in place');
-    assert.equal((await discuss.fetchReactions([sessionId])).length, 1);
-    await assert.rejects(discuss.saveReaction(sessionId, alice.id, 'meh', null), /reaction/i);
+    // --- 9. One comment each, and it waits for the reveal -----------------------------
+    await assert.rejects(discuss.saveComment(written.sessionId, alice.id, 'Too soon.'), /until you have both answered/);
+    await assert.rejects(discuss.saveComment(sessionId, alice.id, '   '), /Say something about it first/);
+    await assert.rejects(discuss.saveComment(sessionId, alice.id, `x${'y'.repeat(1000)}`), /1000 characters/);
+    const firstComment = await discuss.saveComment(sessionId, alice.id, 'Obviously the beach.');
+    assert.equal(firstComment.comment, 'Obviously the beach.');
+    const changedComment = await discuss.saveComment(sessionId, alice.id, 'Obviously the beach, every time.');
+    assert.equal(changedComment.id, firstComment.id, 'one comment per partner, changed in place');
+    assert.equal((await discuss.fetchComments([sessionId])).length, 1);
+    assert.equal((await discuss.fetchComments([sessionId]))[0].comment, 'Obviously the beach, every time.');
+
+    // The friendly refusal is the database's own, not just the client's.
+    const blank = await supabase.from('answer_comments').insert({ session_id: sessionId, user_id: alice.id, comment: '   ' });
+    assert.match(blank.error?.message ?? '', /Say something about it first/, 'the database itself refuses an empty comment');
 
     await auth.signInWithEmail('bob@example.com', 'password');
-    assert.deepEqual(await discuss.fetchReactions([written.sessionId]), [], 'a sealed session shows no reactions');
-    assert.equal((await discuss.fetchReactions([sessionId])).length, 1, 'a revealed one does');
-    await discuss.saveReaction(sessionId, bob.id, 'disappointed', 'Mountains every time.');
-    assert.equal((await discuss.fetchReactions([sessionId])).length, 2, 'one each, not one between them');
+    assert.deepEqual(await discuss.fetchComments([written.sessionId]), [], 'a sealed session shows no comments');
+    assert.equal((await discuss.fetchComments([sessionId])).length, 1, 'a revealed one does');
+    await discuss.saveComment(sessionId, bob.id, 'Mountains every time.');
+    assert.equal((await discuss.fetchComments([sessionId])).length, 2, 'one each, not one between them');
 
     // --- 10. The 18+ category needs both partners, and closes when either opts out ---
     await auth.signInWithEmail('alice@example.com', 'password');
@@ -292,9 +297,9 @@ test('discuss: an imported library, sealed answers, the reveal, the 18+ gate and
     await auth.signInWithEmail('carol@example.com', 'password');
     assert.deepEqual(await discuss.fetchSessions(couple.id), [], "another couple reads no sessions");
     assert.deepEqual(await discuss.fetchAnswers([sessionId]), [], 'and no answers');
-    assert.deepEqual(await discuss.fetchReactions([sessionId]), [], 'and no reactions');
+    assert.deepEqual(await discuss.fetchComments([sessionId]), [], 'and no comments');
     await assert.rejects(discuss.submitAnswer(sessionId, carol.id, 'Butting in'), /own couple|row-level security/i);
-    await assert.rejects(discuss.saveReaction(sessionId, carol.id, 'happy', null), /own couple|row-level security/i);
+    await assert.rejects(discuss.saveComment(sessionId, carol.id, 'Butting in'), /own couple|row-level security/i);
     const carolAsk = await discuss.askPartner('q-fun-1');
     assert.notEqual(carolAsk.sessionId, sessionId, 'the same question gives the other couple its own session');
     assert.deepEqual(await discuss.fetchSessions(couple.id), [], "and Alice's history is still hers alone");
@@ -313,7 +318,7 @@ test('discuss: an imported library, sealed answers, the reveal, the 18+ gate and
     const counts = `SELECT
       (SELECT count(*) FROM public.question_sessions)::int AS sessions,
       (SELECT count(*) FROM public.answers)::int AS answers,
-      (SELECT count(*) FROM public.answer_reactions)::int AS reactions,
+      (SELECT count(*) FROM public.answer_comments)::int AS comments,
       (SELECT count(*) FROM public.couple_settings)::int AS settings,
       (SELECT count(*) FROM public.questions)::int AS questions`;
     const mineBefore = await backend.query(
@@ -321,8 +326,8 @@ test('discuss: an imported library, sealed answers, the reveal, the 18+ gate and
         (SELECT count(*) FROM public.question_sessions WHERE couple_id = $1)::int AS sessions,
         (SELECT count(*) FROM public.answers WHERE session_id IN
           (SELECT id FROM public.question_sessions WHERE couple_id = $1))::int AS answers,
-        (SELECT count(*) FROM public.answer_reactions WHERE session_id IN
-          (SELECT id FROM public.question_sessions WHERE couple_id = $1))::int AS reactions,
+        (SELECT count(*) FROM public.answer_comments WHERE session_id IN
+          (SELECT id FROM public.question_sessions WHERE couple_id = $1))::int AS comments,
         (SELECT count(*) FROM public.couple_settings WHERE couple_id = $1)::int AS settings`,
       [couple.id],
     );
@@ -338,17 +343,19 @@ test('discuss: an imported library, sealed answers, the reveal, the 18+ gate and
     const after = (await backend.query(counts)).rows[0];
     assert.equal(after.sessions, before.sessions - mineBefore.rows[0].sessions, 'their sessions are gone');
     assert.equal(after.answers, before.answers - mineBefore.rows[0].answers, 'and so are their answers');
-    assert.equal(after.reactions, before.reactions - mineBefore.rows[0].reactions, 'and their reactions');
+    assert.equal(after.comments, before.comments - mineBefore.rows[0].comments, 'and their comments');
     assert.equal(after.settings, before.settings - mineBefore.rows[0].settings, 'and their 18+ consent');
     assert.equal(after.questions, before.questions, 'the shared library outlives every couple');
     assert.ok(after.sessions >= 1, "the other couple's history is untouched");
 
     // --- 13. Safe to rerun, and the preflight notices a half-applied migration -------
     const migration = await readFile(new URL('../supabase/migrations/202610150004_discuss_questions.sql', import.meta.url), 'utf8');
+    const commentsMigration = await readFile(new URL('../supabase/migrations/202610150005_discuss_comments_chat_links.sql', import.meta.url), 'utf8');
     const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
     await backend.exec(verification);
     await backend.exec(migration);
-    await backend.exec(migration);
+    await backend.exec(commentsMigration);
+    await backend.exec(commentsMigration);
     await backend.exec(verification);
     await backend.rollback();
 
@@ -368,6 +375,13 @@ test('discuss: an imported library, sealed answers, the reveal, the 18+ gate and
     await assert.rejects(backend.exec(verification), /canonicalised/);
     await backend.rollback();
     await backend.exec(migration);
+    await backend.exec(verification);
+
+    // Without the comment guard an empty comment could be stored; the preflight says so.
+    await backend.exec('DROP TRIGGER answer_comments_guard ON public.answer_comments');
+    await assert.rejects(backend.exec(verification), /answer_comments guard/);
+    await backend.rollback();
+    await backend.exec(commentsMigration);
     await backend.exec(verification);
 
     // A library the app could write to is a bug, not a feature.

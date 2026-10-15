@@ -243,15 +243,17 @@ app as usual. The dev port is pinned with `strictPort` so it cannot silently dri
 
 A question engine for the couple: pick a corner of your life, pick how deep to go, and the
 app hands you a question from the shared library. Ask it, both partners answer privately,
-and the two answers appear together the moment the second one lands — then each can react
-with an emoji and a short comment. It is built from:
+and the two answers appear together the moment the second one lands — then each partner
+can say something about them in one comment. When one comment is not enough, **Say more**
+carries the question into the chat, where the conversation goes on with the question (and
+a link back to those answers) attached. It is built from:
 
 | Piece | File |
 | --- | --- |
 | The screen: browse, question card, session, history | `src/components/discuss/DiscussView.tsx` |
 | Categories, depth chips and the locked 18+ shelf | `src/components/discuss/CategoryPicker.tsx` |
 | The question card and "Ask my partner" | `src/components/discuss/QuestionCard.tsx` |
-| Composer, sealed state, reveal and reaction picker | `src/components/discuss/SessionPanel.tsx` |
+| Composer, sealed state, reveal, comment box and "Say more" | `src/components/discuss/SessionPanel.tsx` |
 | The four answer inputs: text, choice, multi-choice, ranking, slider | `src/components/discuss/AnswerInput.tsx` |
 | Past questions and their state | `src/components/discuss/HistoryList.tsx` |
 | State: load, live re-reads, the pending count, the 18+ gate | `src/hooks/useDiscuss.ts` |
@@ -276,10 +278,13 @@ with an emoji and a short comment. It is built from:
   edit to the client can force a reveal. The second answer fires
   `answers_sync_session_progress`, which stamps `completed_at` — that stamp *is* the
   reveal, and it locks both answers for good.
-- **Reveal and reactions** — the two answers appear side by side with a short
-  fade-and-rise animation (`nooki-reveal-card`, suppressed for `prefers-reduced-motion`),
-  then either partner can react 😊 😂 😢 😠 😞 and add a comment of up to 1000
-  characters. One reaction each, and either can change theirs later.
+- **Reveal, one comment and "Say more"** — the two answers appear side by side with a
+  short fade-and-rise animation (`nooki-reveal-card`, suppressed for
+  `prefers-reduced-motion`), then each partner can say something about them in one
+  comment of up to 1000 characters. A second thought is not typed there: **Say more in
+  chat** opens the Chat tab with that question attached, the sent message quotes the
+  question on its bubble (`messages.session_id`), and tapping the quote walks both
+  partners back to the revealed answers for context.
 - **History** — every question this couple has asked, newest first, each marked
   *Revealed*, *Waiting* or *Your turn*. Opening one shows the same sealed or revealed
   view; a sealed one never shows the partner's answer, because it was never sent.
@@ -293,14 +298,14 @@ with an emoji and a short comment. It is built from:
   session trigger refuses to ask one that is not in the couple's visible library.
 - **One shared library, private sessions** — `questions` is global and read-only for the
   app (`SELECT` only; `verify.sql` fails if that ever changes), while `question_sessions`,
-  `answers`, `answer_reactions` and `couple_settings` are per couple. A couple can ask a
+  `answers`, `answer_comments` and `couple_settings` are per couple. A couple can ask a
   given question only once (`UNIQUE (couple_id, question_id)`); asking again returns the
   same session rather than a second one.
 - **Realtime** — one channel per couple (`nooki-discuss-<coupleId>`) carries Postgres
-  Changes for sessions, settings, answers and reactions. Every event is treated only as
+  Changes for sessions, settings, answers and comments. Every event is treated only as
   "something changed": the app re-reads through RLS instead of trusting the payload, so
   what lands on screen is always exactly what this phone is allowed to see.
-- **Breakup** — sessions, answers and reactions cascade away with the couple; the shared
+- **Breakup** — sessions, answers and comments cascade away with the couple; the shared
   library is untouched and the next couple starts with a clean history.
 
 ### Importing the question library
@@ -373,7 +378,7 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
   **Authentication → Rate Limits**.
 - **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
   chat messages ride Postgres Changes on `messages`, Discuss rides a second couple-scoped
-  channel over `question_sessions`, `couple_settings`, `answers` and `answer_reactions`,
+  channel over `question_sessions`, `couple_settings`, `answers` and `answer_comments`,
   and `last_seen_at` writes ride on the existing "update own profile" policy. The chat and
   Discuss migrations add those tables to the `supabase_realtime` publication (checked by
   `verify.sql`). Optionally enable Realtime Authorization to lock channels down at the
@@ -443,12 +448,12 @@ and the phone/video buttons saying "coming soon"), and discuss: the question voc
 normalised identically in SQL and TypeScript for every accepted spelling, a CSV-shaped
 import repaired or refused row by row, one shared library with per-couple sessions,
 answers sealed by RLS until both partners reply and the reveal that the second answer
-triggers, all four input types validated in the database, reactions gated on the reveal,
+triggers, all four input types validated in the database, comments gated on the reveal,
 the 18+ gate needing both partners and closing the moment either opts out, a third account
 and an unpaired user refused, cascade on breakup with the library left intact, safe
 re-migration, and `verify.sql` catching a half-applied one — plus the live tab itself:
 browsing categories and depths, asking, answering privately, the reveal arriving over
-realtime, reacting and commenting, the unanswered-question badge, ranking by button, the
+realtime, commenting, "Say more" into the chat and the quote linking back, the unanswered-question badge, ranking by button, the
 multi-choice, slider and text inputs, editing a sealed answer, the settings switch and an
 empty library.
 
@@ -518,8 +523,10 @@ Use your actual accounts; there is no automatic user creation.
       nowhere on A's screen or in A's network responses until B has answered too.
 - [ ] When device B answers, both answers appear side by side on both devices without a
       refresh, with the reveal animation.
-- [ ] After the reveal, an emoji reaction and a comment save on one device and appear on
-      the other; the answers are locked and cannot be edited any more.
+- [ ] After the reveal, a comment saves on one device and appears on the other; the
+      answers are locked and cannot be edited any more, and **Say more in chat** opens the
+      chat with the question attached — the sent message quotes it, and the quote reopens
+      the revealed answers on both devices.
 - [ ] A question asked from device B while device A sits on Home badges the Discuss tab,
       and the history list marks it "Your turn".
 - [ ] Ranking reorders by dragging and by the up/down buttons, and the stored order
@@ -528,7 +535,7 @@ Use your actual accounts; there is no automatic user creation.
       turning it on for both unlocks it, and either device turning it off hides it again.
 - [ ] With an empty `questions` table, Discuss says "The question library is empty"
       instead of showing bundled questions; after importing the CSV the categories fill up.
-- [ ] A third account cannot read the couple's sessions, answers or reactions.
+- [ ] A third account cannot read the couple's sessions, answers or comments.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.
 - [ ] Refreshing and signing out/in preserve the couple, anniversary and partner names.
@@ -542,7 +549,9 @@ the realtime **Chat tab** (message bubbles, day separators, sent/read receipts, 
 indicator, unread badge, multi-paragraph composer), the **Discuss tab** (a shared question
 library read from the database, category and depth browsing, "Surprise me", four answer
 input types, answers sealed until both partners reply — enforced by row-level security —
-the side-by-side reveal, emoji reactions with comments, history and an
+the side-by-side reveal, one comment each under the answers, the **Say more** bridge
+into the chat (`messages.session_id` quoting the question and linking back to the
+reveal), history and an
 unanswered-question badge, and a both-partners 18+ gate), couple details, sign-out and
 mutual-breakup settings are implemented. Media and games display **Coming Soon**, and
 voice/video calling is still a "coming soon" toast. No sample conversations or questions

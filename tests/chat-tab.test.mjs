@@ -168,14 +168,50 @@ test('messages: couple-scoped RLS, read receipts, immutability and safe re-migra
     assert.deepEqual(await chat.fetchMessages(couple.id), [], "another couple's chat is sealed");
     await assert.rejects(chat.sendMessage(couple.id, carol.id, 'Butting in'), /row-level security|violates/i);
 
+    // --- "Say more": a message can point back at one of the couple's own questions ------
+    await backend.exec(`INSERT INTO public.questions (id, text, category, seriousness, input_type, options)
+                        VALUES ('q-link', 'Beach holiday or city break?', 'fun', 1, 'choice', '["Beach","City"]')`);
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const { data: aliceAsked } = await supabase.rpc('ask_question', { p_question: 'q-link' });
+    const aliceSession = aliceAsked.session_id;
+    await auth.signInWithEmail('carol@example.com', 'password');
+    const { data: carolAsked } = await supabase.rpc('ask_question', { p_question: 'q-link' });
+    const foreignSession = carolAsked.session_id;
+    assert.notEqual(foreignSession, aliceSession, 'each couple gets its own session for one question');
+
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const linked = await chat.sendMessage(couple.id, alice.id, 'Because the sea air fixes everything.', 'text', aliceSession);
+    assert.equal(linked.session_id, aliceSession, 'the message keeps the link to its question');
+    await settle();
+    const ordinary = await chat.sendMessage(couple.id, alice.id, 'And unrelated: hello again.');
+    assert.equal(ordinary.session_id, null, 'an ordinary message has no link');
+
+    // The link may only point at this couple's own question.
+    await assert.rejects(
+      chat.sendMessage(couple.id, alice.id, 'Sneaky link', 'text', foreignSession),
+      /row-level security|violates/i,
+      "quoting another couple's question is refused",
+    );
+
+    // And once sent, the link is frozen with the rest of the row.
+    await backend.resetRole();
+    await assert.rejects(
+      backend.query('UPDATE public.messages SET session_id = NULL WHERE id = $1', [linked.id]),
+      /cannot be edited/i,
+    );
+
     // The migration is safe to rerun on a populated project.
     const migration = await readFile(new URL('../supabase/migrations/202610150003_messages.sql', import.meta.url), 'utf8');
+    const linksMigration = await readFile(new URL('../supabase/migrations/202610150005_discuss_comments_chat_links.sql', import.meta.url), 'utf8');
     await backend.exec(migration);
     await backend.exec(migration);
+    await backend.exec(linksMigration);
+    await backend.exec(linksMigration);
     await auth.signInWithEmail('alice@example.com', 'password');
     const afterRerun = await chat.fetchMessages(couple.id);
-    assert.equal(afterRerun.length, 5, 'rerunning the migration keeps the transcript');
+    assert.equal(afterRerun.length, 7, 'rerunning the migration keeps the transcript');
     assert.equal(afterRerun[0].content, 'Hello love');
+    assert.equal(afterRerun.find((row) => row.id === linked.id).session_id, aliceSession, 'and keeps the question link');
 
     // Ending the couple takes the chat with it.
     await auth.requestOrConfirmBreakup();

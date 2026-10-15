@@ -294,6 +294,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const calendarMigration = await readFile(new URL('../supabase/migrations/202610150002_couple_events.sql', import.meta.url), 'utf8');
   const chatMigration = await readFile(new URL('../supabase/migrations/202610150003_messages.sql', import.meta.url), 'utf8');
   const discussMigration = await readFile(new URL('../supabase/migrations/202610150004_discuss_questions.sql', import.meta.url), 'utf8');
+  const linksMigration = await readFile(new URL('../supabase/migrations/202610150005_discuss_comments_chat_links.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -321,6 +322,13 @@ test('verify.sql spots a live project that is missing a migration', async () => 
 
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(discussMigration);
+    // The old reaction world is in place but the comment rewrite is not: the preflight
+    // names that migration too.
+    await assert.rejects(db.exec(verification), /answer_comments/,
+      'the preflight must send the owner to the comments migration');
+
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(linksMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -341,6 +349,7 @@ async function server_paths() {
   const calendar = await read('../supabase/migrations/202610150002_couple_events.sql');
   const chat = await read('../supabase/migrations/202610150003_messages.sql');
   const discuss = await read('../supabase/migrations/202610150004_discuss_questions.sql');
+  const links = await read('../supabase/migrations/202610150005_discuss_comments_chat_links.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -426,21 +435,24 @@ async function server_paths() {
 
   const existingOld = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, pairing, calendar, chat, discuss],
+    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links,
+            pairing, calendar, chat, discuss, links],
   });
   check('existing project, all migrations run twice', existingOld, true);
   await existingOld.db.close();
 
   const existingNew = await run({
     defaults: '',
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, pairing, calendar, chat, discuss],
+    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links,
+            pairing, calendar, chat, discuss, links],
   });
   check('existing project with no auto-grant', existingNew, true);
   await existingNew.db.close();
 
   const upgraded = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, chat, discuss, calendar, chat, discuss],
+    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, chat, discuss, links,
+            calendar, chat, discuss, links],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -462,6 +474,19 @@ async function server_paths() {
   check('preflight blocks a project without the Discuss migration', missingDiscuss, false);
   assert.match(missingDiscuss.message, /questions/, 'the message names the missing question table');
   await missingDiscuss.db.close();
+
+  // A project still on the old emoji-reaction schema is blocked, and told which migration
+  // carries the comment rewrite; once it runs, the preflight passes.
+  const missingLinks = await run({
+    defaults: legacyDefaults,
+    steps: [schemaBeforeDiscuss, pairing, calendar, chat, discuss],
+  });
+  check('preflight blocks a project without the comments migration', missingLinks, false);
+  assert.match(missingLinks.message, /answer_comments/, 'the message names the missing comments table');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(links);
+  await missingLinks.db.exec(verify);
+  await missingLinks.db.close();
 
   // The preflight must block a project that lost its API-role grants.
   const broken = await run({

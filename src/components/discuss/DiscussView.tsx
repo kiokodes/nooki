@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, History, X } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { CategoryPicker } from './CategoryPicker';
 import { HistoryList } from './HistoryList';
 import { QuestionCard } from './QuestionCard';
 import { SessionPanel } from './SessionPanel';
-import type { DiscussState } from '../../hooks/useDiscuss';
+import type { DiscussState, SessionDetail } from '../../hooks/useDiscuss';
 import type { Question } from '../../types/database';
 
 interface DiscussViewProps {
@@ -16,6 +16,13 @@ interface DiscussViewProps {
   partnerName: string;
   /** The 18+ category is turned on from the couple settings sheet. */
   onOpenSettings: () => void;
+  /**
+   * A question to open because the chat sent us here — the quoted question on a "Say
+   * more" bubble. The nonce changes on every tap so the same question can be reopened.
+   */
+  focusSession: { id: string; nonce: number } | null;
+  /** "Say more" under the revealed answers: hand the question to the chat. */
+  onSayMore: (detail: SessionDetail) => void;
 }
 
 type Screen = 'browse' | 'question' | 'session' | 'history';
@@ -39,6 +46,8 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
   userName,
   partnerName,
   onOpenSettings,
+  focusSession,
+  onSayMore,
 }) => {
   const [screen, setScreen] = useState<Screen>('browse');
   const [draft, setDraft] = useState<{ question: Question; remaining: number } | null>(null);
@@ -47,6 +56,19 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
   const [notice, setNotice] = useState<string | null>(null);
 
   const openDetail = discuss.sessions.find((entry) => entry.session.id === openSessionId) ?? null;
+
+  // A tap on a question card in the chat lands here, however deep in a session this
+  // screen currently sits. Keyed on the nonce so re-tapping the same quote reopens it;
+  // the hook's reloads change `focusSession` by identity, so the ref does the real guard.
+  const lastFocusNonce = useRef(0);
+  useEffect(() => {
+    if (!focusSession || focusSession.nonce === lastFocusNonce.current) return;
+    lastFocusNonce.current = focusSession.nonce;
+    setNotice(null);
+    setDraft(null);
+    setOpenSessionId(focusSession.id);
+    setScreen('session');
+  }, [focusSession]);
 
   const backToBrowse = () => {
     setScreen('browse');
@@ -273,7 +295,7 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
       {!showMigrationCard && screen === 'session' && (
         openDetail ? (
           <SessionPanel
-            // Keyed by session: a fresh draft and reaction state for every question.
+            // Keyed by session: a fresh draft and comment state for every question.
             key={openDetail.session.id}
             detail={openDetail}
             userId={userId}
@@ -283,12 +305,33 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
             onBack={backToBrowse}
             onSubmit={(value) => discuss.submit(openDetail.session.id, value)}
             onRevise={discuss.revise}
-            onReact={async (reaction, comment) => { await discuss.react(openDetail.session.id, reaction, comment); }}
+            onComment={(comment) => discuss.comment(openDetail.session.id, comment)}
+            onSayMore={() => onSayMore(openDetail)}
           />
-        ) : (
+        ) : discuss.loading ? (
           <p data-discuss-loading style={{ margin: '24px 0', textAlign: 'center', fontSize: '0.82rem', color: tokens.colors.textSecondary }}>
             Opening that question…
           </p>
+        ) : (
+          // A chat quote can point at a session older than the history this phone keeps.
+          <div data-session-screen="unavailable" style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start' }}>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: tokens.colors.textSecondary, lineHeight: 1.5 }}>
+              That question is not in your recent history any more.
+            </p>
+            <button type="button" aria-label="Back to categories" onClick={backToBrowse} style={{
+              padding: '8px 14px',
+              borderRadius: tokens.radii.pill,
+              border: `1.5px solid ${tokens.colors.borderSoft}`,
+              backgroundColor: tokens.colors.bgSurface,
+              color: tokens.colors.textSecondary,
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              fontFamily: tokens.typography.fontFamily,
+              cursor: 'pointer',
+            }}>
+              Categories
+            </button>
+          </div>
         )
       )}
 

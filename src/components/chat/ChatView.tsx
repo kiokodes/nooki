@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, CheckCheck, CircleAlert, Clock, Phone, Send, Video } from 'lucide-react';
+import { Check, CheckCheck, CircleAlert, Clock, MessageSquare, Phone, Send, Video, X } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { useNow } from '../../hooks/useNow';
 import { getInitial, formatLastSeen } from '../../lib/coupleTime';
 import { formatMessageTime, groupMessagesByDay } from '../../lib/chatTime';
 import type { ChatEntry } from '../../types/database';
+
+/** What "Say more" attaches to the composer: the Discuss question being continued. */
+export interface ChatQuestionContext {
+  sessionId: string;
+  questionText: string;
+}
 
 interface ChatViewProps {
   /** The whole transcript, oldest first. */
@@ -17,11 +23,19 @@ interface ChatViewProps {
   partnerTyping: boolean;
   loading: boolean;
   error: string | null;
-  onSend: (content: string) => Promise<void> | void;
+  /** `sessionId` links the message to the Discuss question it continues ("Say more"). */
+  onSend: (content: string, sessionId: string | null) => Promise<void> | void;
   onTyping: () => void;
   onStopTyping: () => void;
   onRetry: (entryId: string) => void;
   onDismissError: () => void;
+  /** What a linked session asked, so a bubble can quote its question. */
+  questionBySessionId?: Record<string, { text: string; category: string }>;
+  /** The question "Say more" just carried in — quoted above the composer until sent. */
+  questionContext?: ChatQuestionContext | null;
+  onClearQuestionContext?: () => void;
+  /** Tap the quoted question on a bubble: jump back to that question and its answers. */
+  onOpenQuestion?: (sessionId: string) => void;
 }
 
 const TOAST_MS = 2_000;
@@ -77,7 +91,9 @@ const Bubble: React.FC<{
   entry: ChatEntry;
   mine: boolean;
   onRetry: (entryId: string) => void;
-}> = ({ entry, mine, onRetry }) => {
+  questionBySessionId?: Record<string, { text: string; category: string }>;
+  onOpenQuestion?: (sessionId: string) => void;
+}> = ({ entry, mine, onRetry, questionBySessionId, onOpenQuestion }) => {
   // System notes (the Discuss tab's automatic lines) read as a quiet centred pill.
   if (entry.type === 'system') {
     return (
@@ -101,6 +117,10 @@ const Bubble: React.FC<{
       </div>
     );
   }
+
+  // A "Say more" message quotes the question it grew from; the quote is the way back
+  // to the revealed answers for whichever partner taps it.
+  const quoted = entry.session_id ? questionBySessionId?.[entry.session_id]?.text : undefined;
 
   return (
     <div
@@ -131,6 +151,44 @@ const Bubble: React.FC<{
           lineHeight: 1.45,
         }}
       >
+        {entry.session_id && (
+          <button
+            type="button"
+            data-question-link={entry.session_id}
+            aria-label="Open this question"
+            onClick={() => onOpenQuestion?.(entry.session_id as string)}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '6px',
+              width: '100%',
+              margin: '0 0 6px 0',
+              padding: '6px 9px',
+              borderRadius: tokens.radii.sm,
+              border: 'none',
+              backgroundColor: mine ? 'rgba(255, 255, 255, 0.55)' : tokens.colors.accentSageSoft,
+              color: mine ? tokens.colors.textPrimary : tokens.colors.accentSageDeep,
+              cursor: 'pointer',
+              fontFamily: tokens.typography.fontFamily,
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              lineHeight: 1.4,
+              textAlign: 'left',
+            }}
+          >
+            <MessageSquare size={12} style={{ flexShrink: 0, marginTop: '2px' }} aria-hidden="true" />
+            <span
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {quoted ?? 'A question you both answered'}
+            </span>
+          </button>
+        )}
         {entry.content}
         <span
           style={{
@@ -202,6 +260,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onStopTyping,
   onRetry,
   onDismissError,
+  questionBySessionId,
+  questionContext = null,
+  onClearQuestionContext,
+  onOpenQuestion,
 }) => {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -236,6 +298,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     input.style.height = `${Math.min(input.scrollHeight || 0, COMPOSER_MAX_HEIGHT)}px`;
   }, []);
 
+  // Landing here from "Say more" means the next thing typed is about that question:
+  // put the cursor in the box so naming it is one motion, not two.
+  useEffect(() => {
+    if (questionContext) inputRef.current?.focus();
+  }, [questionContext]);
+
   const handleSubmit = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
     const content = draft;
@@ -244,9 +312,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setDraft('');
     onStopTyping();
     if (inputRef.current) inputRef.current.style.height = 'auto';
-    await onSend(content);
+    // "Say more" attaches its question to this one message only; the quote then lives
+    // on the bubble itself, so the banner can clear as soon as it is sent.
+    await onSend(content, questionContext?.sessionId ?? null);
+    onClearQuestionContext?.();
     inputRef.current?.focus();
-  }, [draft, onSend, onStopTyping]);
+  }, [draft, onSend, onStopTyping, onClearQuestionContext, questionContext]);
 
   const groups = groupMessagesByDay(messages, now);
   const statusColor = partnerTyping
@@ -420,7 +491,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
               {group.label}
             </div>
             {group.messages.map((entry) => (
-              <Bubble key={entry.id} entry={entry} mine={entry.sender_id === currentUserId} onRetry={onRetry} />
+              <Bubble
+                key={entry.id}
+                entry={entry}
+                mine={entry.sender_id === currentUserId}
+                onRetry={onRetry}
+                questionBySessionId={questionBySessionId}
+                onOpenQuestion={onOpenQuestion}
+              />
             ))}
           </React.Fragment>
         ))}
@@ -487,6 +565,74 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       )}
 
+      {/* The question "Say more" carried in: quoted above the composer until the next
+          message is sent with it or it is dismissed. */}
+      {questionContext && (
+        <div
+          data-chat-question-context
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            margin: '0 14px 6px 14px',
+            padding: '8px 10px 8px 12px',
+            borderRadius: tokens.radii.md,
+            backgroundColor: tokens.colors.accentSageSoft,
+            border: `1px solid ${tokens.colors.accentSage}`,
+            flexShrink: 0,
+          }}
+        >
+          <MessageSquare size={14} color={tokens.colors.accentSageDeep} style={{ flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span
+              style={{
+                display: 'block',
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                color: tokens.colors.accentSageDeep,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Saying more about
+            </span>
+            <span
+              style={{
+                display: 'block',
+                fontSize: '0.76rem',
+                fontWeight: 700,
+                color: tokens.colors.textPrimary,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {questionContext.questionText || 'your question'}
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label="Remove the question link"
+            onClick={onClearQuestionContext}
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: tokens.radii.full,
+              border: 'none',
+              backgroundColor: 'transparent',
+              color: tokens.colors.accentSageDeep,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <X size={13} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       {/* Composer. Enter inserts a paragraph break; only the send button sends. */}
       <form
         data-chat-composer
@@ -503,7 +649,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <textarea
           data-chat-input
           aria-label="Message"
-          placeholder={`Message ${partnerName}…`}
+          placeholder={questionContext ? 'Say more…' : `Message ${partnerName}…`}
           rows={1}
           value={draft}
           ref={inputRef}

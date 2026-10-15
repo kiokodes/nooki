@@ -1,25 +1,26 @@
 import { requireSupabase } from './supabaseClient';
 import { describeDatabaseError } from './authService';
-import { canonicalCategory, coerceAnswerValue, isReactionKind, toQuestion } from './questionFormat';
+import { COMMENT_MAX_LENGTH, canonicalCategory, coerceAnswerValue, toQuestion } from './questionFormat';
 import type {
-  AnswerReaction,
+  AnswerComment,
   AnswerValue,
   CoupleSettings,
   Question,
   QuestionAnswer,
   QuestionSession,
-  ReactionKind,
 } from '../types/database';
 
 /**
  * Discuss transport: the shared question library plus this couple's private sessions.
  *
- * Two rules live in the database, not here, and this file is written so it cannot
+ * Three rules live in the database, not here, and this file is written so it cannot
  * accidentally work around them:
  *
  * - **The reveal.** `answers` rows are only readable by the partner once the session is
  *   complete, so a fetch made too early simply returns fewer rows. Nothing in the app
  *   decides when an answer becomes visible.
+ * - **The comments.** Each partner gets one, only after the reveal. A second thought
+ *   moves to the chat ("Say more"), linked back here by `messages.session_id`.
  * - **The 18+ gate.** Adult rows are invisible to a couple until both partners have
  *   `adult_questions_enabled`, so the library this file can read is already the one the
  *   couple is allowed to see.
@@ -74,13 +75,12 @@ function toAnswer(row: Record<string, unknown>): QuestionAnswer {
   };
 }
 
-function toReaction(row: Record<string, unknown>): AnswerReaction {
+function toComment(row: Record<string, unknown>): AnswerComment {
   return {
     id: String(row.id),
     session_id: String(row.session_id),
     user_id: String(row.user_id),
-    reaction: isReactionKind(row.reaction) ? (row.reaction as ReactionKind) : 'happy',
-    comment: row.comment == null ? null : String(row.comment),
+    comment: String(row.comment ?? ''),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at ?? row.created_at),
   };
@@ -187,11 +187,12 @@ export async function fetchAnswers(sessionIds: string[]): Promise<QuestionAnswer
   return (data ?? []).map((row: Record<string, unknown>) => toAnswer(row));
 }
 
-export async function fetchReactions(sessionIds: string[]): Promise<AnswerReaction[]> {
+/** One comment each; sealed sessions simply return nothing, the way sealed answers do. */
+export async function fetchComments(sessionIds: string[]): Promise<AnswerComment[]> {
   if (!sessionIds.length) return [];
-  const { data, error } = await requireSupabase().from('answer_reactions').select('*').in('session_id', sessionIds);
+  const { data, error } = await requireSupabase().from('answer_comments').select('*').in('session_id', sessionIds);
   if (error) throw new Error(describeDatabaseError(error));
-  return (data ?? []).map((row: Record<string, unknown>) => toReaction(row));
+  return (data ?? []).map((row: Record<string, unknown>) => toComment(row));
 }
 
 export async function submitAnswer(
@@ -223,23 +224,27 @@ export async function reviseAnswer(
   return toAnswer(data as Record<string, unknown>);
 }
 
-/** One reaction per partner per session, so a change of heart overwrites the first. */
-export async function saveReaction(
+/** One comment per partner per session, so a change of heart overwrites the first. */
+export async function saveComment(
   sessionId: string,
   userId: string,
-  reaction: ReactionKind,
-  comment: string | null,
-): Promise<AnswerReaction> {
-  const { data, error } = await requireSupabase().from('answer_reactions')
+  comment: string,
+): Promise<AnswerComment> {
+  const clean = (comment || '').replace(/\r\n/g, '\n').trim();
+  if (!clean) throw new Error('Say something about it first.');
+  if (clean.length > COMMENT_MAX_LENGTH) {
+    throw new Error(`Comments can be up to ${COMMENT_MAX_LENGTH} characters.`);
+  }
+  const { data, error } = await requireSupabase().from('answer_comments')
     .upsert(
-      { session_id: sessionId, user_id: userId, reaction, comment: comment?.trim() || null },
+      { session_id: sessionId, user_id: userId, comment: clean },
       { onConflict: 'session_id,user_id' },
     )
     .select('*')
     .single();
   if (error) throw new Error(describeDatabaseError(error));
-  if (!data) throw new Error('Your reaction could not be saved. Please try again.');
-  return toReaction(data as Record<string, unknown>);
+  if (!data) throw new Error('Your comment could not be saved. Please try again.');
+  return toComment(data as Record<string, unknown>);
 }
 
 export async function fetchCoupleSettings(coupleId: string): Promise<CoupleSettings[]> {
@@ -284,7 +289,7 @@ export interface DiscussChannel {
 }
 
 /**
- * Live sessions, reveals and reactions over one channel.
+ * Live sessions, reveals and comments over one channel.
  *
  * Payloads are used only as a "something changed" signal — the hook re-reads through the
  * normal queries, so what appears on screen is always exactly what row-level security
@@ -302,10 +307,10 @@ export function subscribeToDiscuss(
     { table: 'question_sessions', event: 'UPDATE', filter: `couple_id=eq.${coupleId}` },
     { table: 'couple_settings', event: 'INSERT', filter: `couple_id=eq.${coupleId}` },
     { table: 'couple_settings', event: 'UPDATE', filter: `couple_id=eq.${coupleId}` },
-    // answers and answer_reactions carry no couple_id: RLS decides which rows arrive.
+    // answers and answer_comments carry no couple_id: RLS decides which rows arrive.
     { table: 'answers', event: 'INSERT' },
-    { table: 'answer_reactions', event: 'INSERT' },
-    { table: 'answer_reactions', event: 'UPDATE' },
+    { table: 'answer_comments', event: 'INSERT' },
+    { table: 'answer_comments', event: 'UPDATE' },
   ];
 
   for (const entry of watched) {
