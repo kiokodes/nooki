@@ -14,6 +14,8 @@ import { OnboardingView } from './components/auth/OnboardingView';
 import { PairingView } from './components/auth/PairingView';
 import { CoupleHeader } from './components/common/CoupleHeader';
 import { SplashScreen, SPLASH_DURATION_MS } from './components/common/SplashScreen';
+import { GamesView } from './components/games/GamesView';
+import { useGames } from './hooks/useGames';
 import { HomeView } from './components/home/HomeView';
 import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
@@ -157,6 +159,8 @@ export const App: React.FC = () => {
 
   // The Discuss question engine sits at app level too, so a question the partner asks
   // still badges its tab while this phone is somewhere else.
+  const games = useGames(couple?.id ?? null, currentUser?.id ?? null);
+
   const discuss = useDiscuss({
     coupleId: couple?.id ?? null,
     userId: currentUser?.id ?? null,
@@ -421,7 +425,14 @@ export const App: React.FC = () => {
             onOpenCalendar={() => setShowCalendar(true)}
             userName={profile.name}
             partnerName={partner.name}
+            userWins={games.data?.wins[currentUser.id] ?? 0}
+            partnerWins={games.data?.wins[partner.id] ?? 0}
+            dailyStatus={games.data?.matches.find(m => m.daily_date === games.data?.today)?.finished ? 'Completed today · next challenge at midnight UTC' : 'One shared match a day · resets at midnight UTC'}
+            dailyLabel={games.data?.matches.find(m => m.daily_date === games.data?.today)?.finished ? 'View result' : games.data?.matches.some(m => m.daily_date === games.data?.today) ? 'Resume' : 'Play'}
+            onPlayDailyGame={() => { setActiveTab('games'); void games.start('tic-tac-toe', true); }}
           />
+        ) : activeTab === 'games' ? (
+          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} />
         ) : isChat ? (
           <ChatView
             messages={chat.messages}

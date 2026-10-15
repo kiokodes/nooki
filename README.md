@@ -125,9 +125,9 @@ The Home tab shows:
     default, set in `src/components/home/TodayCard.tsx`). It is separated from today by a
     hairline and a small "Tomorrow" label, so today always reads first.
   - A **calendar icon** in the corner that opens the full calendar.
-- A **Daily game card** (`src/components/home/DailyGameCard.tsx`): a placeholder
+- A **Daily game card** (`src/components/home/DailyGameCard.tsx`): a playable
   **"Today's challenge"** card with a **Play** button and a head-to-head scoreboard
-  showing wins for each partner (`0 to 0` for now).
+  showing wins for each partner (saved daily and practice wins).
 - An **empty rounded area at the bottom of the screen**, reserved for a future animated
   scene.
 
@@ -577,7 +577,7 @@ the side-by-side reveal, one comment each under the answers, the **Say more** br
 into the chat (`messages.session_id` quoting the question and linking back to the
 reveal), history and an
 unanswered-question badge, and a both-partners 18+ gate), couple details, sign-out and
-mutual-breakup settings are implemented. Media and games display **Coming Soon**, and
+mutual-breakup settings are implemented. Media displays **Coming Soon**; Games includes Tic Tac Toe and Rock Paper Scissors, and
 voice/video calling is still a "coming soon" toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, and the question library is whatever the owner imported into `questions`.
@@ -589,3 +589,36 @@ uses the plain sage accent colour like every other surface.
 `src/tokens/designTokens.ts` contains the warm cream, blush pink, pastel mint, lavender
 and sage palette, typography, radii and shadows. The app remains locked until both
 partners are paired; ending a completed couple requires both partners' agreement.
+
+## Games tab and Today's Challenge
+
+Apply **`supabase/migrations/202610150007_games.sql`** to an existing project before
+shipping Games, then run **`supabase/verify-games.sql`** in addition to the usual
+`verify.sql`. New projects get Games from `schema.sql`. This migration is additive
+and rerunnable; it does not reset existing matches. It has not been applied to your
+live project by the frontend build.
+
+- **Tic Tac Toe:** a 3×3 board, alternating turns, all eight winning lines and draws.
+  The starting partner is X. Moves and results are validated by the database.
+- **Rock Paper Scissors:** best of 3 (first to 2 wins) or 5 (first to 3).
+  Ties replay without adding a point. Tap once to lock a secret pick; both picks
+  are revealed together when the second partner submits. Locked picks cannot change.
+- **Games:** unlimited rematches; starting a game with an unfinished practice match
+  resumes that match, including the original match length.
+- **Home → Today's Challenge:** randomly selects either available game on the first
+  start and saves that choice for both partners. Exactly one shared match per couple
+  per **UTC day**, enforced by a database unique constraint and serialized starts.
+  Refreshing, switching devices or tapping again resumes the same match or its result;
+  it never gives another attempt that day. RPS daily matches use best of 3.
+- The Home scoreboard counts completed wins across daily and practice matches;
+  draws do not award wins. Open matches survive tab changes and reloads.
+- Both devices refresh game state every two seconds while visible. No secret picks
+  are published through Realtime or exposed through direct table access. Only the
+  RPC's sanitized snapshot is returned to the couple; other accounts cannot read it.
+- To add another game, extend `GAMES` in `gamesService.ts`, its UI, and the database
+  validator/daily selection pool together. No future game is selected until playable.
+
+Before release, use two real paired accounts to play each game, verify a secret pick
+is absent from the other device's network responses, resume after a reload, finish a
+daily match, and confirm both devices can only view its result until midnight UTC.
+The no-backend development preview remains sample UI, not a local game backend.

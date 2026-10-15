@@ -15,6 +15,8 @@ interface HomeViewProps {
   partnerName?: string;
   userWins?: number;
   partnerWins?: number;
+  dailyStatus?: string;
+  dailyLabel?: string;
   onPlayDailyGame?: () => void;
 }
 
@@ -23,8 +25,8 @@ interface HomeViewProps {
  *
  * It shows:
  * - The Today card: today's date, anything happening today, and what is coming within the next day.
- * - The Daily game card: a placeholder "Today's challenge" card with a play button and a
- *   scoreboard showing wins for each partner (0 to 0 for now).
+ * - The Daily game card: a "Today's challenge" card with a play button and a
+ *   scoreboard showing wins for each partner (saved match wins).
  * - An empty rounded area at the bottom of the screen, reserved for a future animated scene.
  */
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -38,6 +40,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   userWins = 0,
   partnerWins = 0,
   onPlayDailyGame,
+  dailyStatus,
+  dailyLabel,
 }) => {
   // Minute granularity is plenty for a date, and it keeps the tab from re-rendering every second.
   const today = useNow(60_000);
@@ -71,6 +75,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         userWins={userWins}
         partnerWins={partnerWins}
         onPlay={onPlayDailyGame}
+        status={dailyStatus}
+        playLabel={dailyLabel}
       />
 
       {/* Empty rounded area at the bottom of the screen, reserved for a future animated scene */}
