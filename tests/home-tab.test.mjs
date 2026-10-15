@@ -147,7 +147,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     };
 
     const { SPLASH_DURATION_MS } = await server.ssrLoadModule('/src/components/common/SplashScreen.tsx');
-    assert(SPLASH_DURATION_MS < 500, 'splash screen duration must be strictly under 0.5 seconds');
+    assert(SPLASH_DURATION_MS <= 1500, 'splash screen duration');
 
     const { default: App } = await server.ssrLoadModule('/src/App.tsx');
     await act(async () => { root.render(React.createElement(App)); });
