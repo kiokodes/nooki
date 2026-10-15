@@ -38,13 +38,15 @@ and public-key format, not the remote key's validity or the database's health.
    `202610150003_messages.sql`, `202610150004_discuss_questions.sql`,
    `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`,
    `202610150007_games.sql` (Games), `202610150010_snake_duel.sql` (the Snake Duel in
-   Games), `202610150008_shared_books.sql` and `202610150009_two_book_shelf_limit.sql`
-   (shared books). All ten are
+   Games), `202610150011_chess.sql` (Chess in Games), `202610150008_shared_books.sql` and
+   `202610150009_two_book_shelf_limit.sql`
+   (shared books). All eleven are
    safe to rerun and change nothing that already exists: the second adds the shared
    calendar, the third adds the chat log, the fourth adds the Discuss question engine,
    the fifth rewrites reactions into comments and links chat messages to questions, the
    sixth adds chat replies and edits (plus their Realtime publication membership), the
-   seventh adds Games, the tenth adds the Snake Duel's verified runs to Games, and the
+   seventh adds Games, the tenth adds the Snake Duel's verified runs to Games, the
+   eleventh adds Chess's database referee to Games, and the
    last two add the shared-books shelf.
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
@@ -630,7 +632,8 @@ partners are paired; ending a completed couple requires both partners' agreement
 
 Apply **`supabase/migrations/202610150007_games.sql`** to an existing project before
 shipping Games, then **`supabase/migrations/202610150010_snake_duel.sql`** before shipping
-the Snake Duel, then run **`supabase/verify-games.sql`** in addition to the usual
+the Snake Duel and **`supabase/migrations/202610150011_chess.sql`** before shipping Chess,
+then run **`supabase/verify-games.sql`** in addition to the usual
 `verify.sql`. New projects get both from `schema.sql`. Both migrations are additive
 and rerunnable; they do not reset existing matches or duels. They have not been applied
 to your live project by the frontend build.
@@ -678,6 +681,39 @@ to your live project by the frontend build.
 - **Snake Duel · not the daily challenge:** the daily pool stays Tic Tac Toe and Rock
   Paper Scissors (`start_game` never picks snake for a daily match). A duel waits however
   long both partners need, which one UTC day is the wrong container for.
+- **Chess:** adapted clean-room from
+  [PyChess](https://github.com/Kingcitaldo125/PyChess/tree/main/chess) — its 8×8 cell
+  board, per-piece move generators, line-of-sight blocking and attack-based check test,
+  re-implemented in `src/lib/chess.ts`. No PyChess code or PNG pieces are copied (it is
+  GPL-3.0, and its bishop/queen movement, pawn blocking and checkmate test are broken or
+  missing); the board here is a CSS grid of buttons with Unicode glyphs. The engine plays
+  full normal chess — legal-move filtering (a pinned piece cannot expose its king),
+  castling, en passant, promotion with a picker (underpromotion included), checkmate over
+  all replies, stalemate, insufficient material, fifty-move and threefold draws — plus
+  Nooki's situational layer, chosen by whoever starts the match: **Classic Duel**
+  (checkmate wins), **Capture Race** (first to capture **7** enemy pieces wins the moment
+  the seventh capture lands) and **Queen Hunt** (capture the opponent's *original* queen
+  — a promoted queen does not count — to win on the spot). In every mode checkmate still
+  wins and being checkmated still loses: goal moves are legal moves, so they can never
+  leave your own king in check, and there is no move after you are mated for a goal to
+  save you. Kings are never captured.
+- **Chess · the referee is the database:** apply
+  **`supabase/migrations/202610150011_chess.sql`** before shipping Chess
+  (`verify-games.sql` checks it too). Like the Snake duel, the rules live on both sides:
+  `chess_attacked` / `chess_pseudo` / `chess_legal` / `chess_has_move` in SQL mirror
+  `src/lib/chess.ts`, and the only thing a phone may send is `chess_move` with a move in
+  coordinate notation (`e2e4`, `e7e8q`, or `resign`) plus the match's round, checked
+  exactly as `play_game` checks it. The server decides whose piece it is, whether the
+  move is legal, what it captured, and whether checkmate, a draw, the Capture Race or
+  the Queen Hunt ends the match — a phone can never claim a capture, or a queen, it did
+  not really make. The starter is White (`player_x`); the position lives in the match's
+  `chess` jsonb (64 piece codes — `wQ` the original queen, `wQ*` a promoted one —
+  castling rights, the en-passant square, captures, history, repetition counts, which
+  the snapshot strips). There are no secrets to seal, so the snapshot shows the whole
+  position to both partners. One open chess match per couple, as with the other games;
+  resigning is always allowed, on either turn. Chess is not in the daily pool. The
+  design preview still plays pass-and-play on one phone, with undo, because it has no
+  backend by design.
 - **Games:** unlimited rematches; starting a game with an unfinished practice match
   resumes that match, including the original match length. A finished duel stays reachable
   from the library's *Last Snake Duel* row, so its result does not vanish.

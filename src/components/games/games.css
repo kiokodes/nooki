@@ -86,6 +86,28 @@
 .snake-leave-actions .snake-leave-danger { background: #ed91ad; }
 .snake-leave-actions button:disabled { opacity: .55; cursor: default; }
 
+/* --- Chess -------------------------------------------------------------------
+   PyChess drew PNG pieces on a 600px PyGame canvas; here the board is a CSS grid
+   of buttons with Unicode glyphs, so it scales to a phone and every square is
+   tappable and screen-reader labelled. Light squares borrow the cream, dark
+   squares the green, of PyChess's board — warmed toward Nooki's palette. */
+.chess-board { display:grid; grid-template-columns:repeat(8,1fr); max-width:400px; margin:14px auto; border:2px solid #795d88; border-radius:12px; overflow:hidden; }
+.games-view .chess-cell { position:relative; aspect-ratio:1; border:0; border-radius:0; padding:0; font-size:clamp(1.3rem,7vw,2rem); line-height:1; display:flex; align-items:center; justify-content:center; }
+.chess-light { background:#f7ead9 !important; }
+.chess-dark { background:#a8bf97 !important; }
+.chess-selected { box-shadow:inset 0 0 0 3px #ed91ad; }
+.chess-check { box-shadow:inset 0 0 0 3px #d33f6a; }
+.chess-piece-white { color:#fffdfb; text-shadow:0 0 3px #443c42,0 1px 2px #443c42; }
+.chess-piece-black { color:#2f2a2e; text-shadow:0 1px 1px #ffffff66; }
+.chess-dot { width:26%; height:26%; border-radius:50%; background:#443c4255; pointer-events:none; }
+.chess-capture { box-shadow:inset 0 0 0 3px #ed91adcc; }
+.chess-scores { display:flex; gap:8px; margin:10px 0 0; }
+.chess-scores > div { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; padding:10px 12px; border-radius:14px; background:#faf6fb; border:1px solid #eee4e7; font-size:.75rem; }
+.chess-scores .chess-turn { border-color:#ed91ad; }
+.chess-captured { min-height:1.2em; font-size:1rem; letter-spacing:2px; }
+.chess-promotion { display:flex; flex-wrap:wrap; gap:8px; }
+.chess-history { overflow-wrap:anywhere; text-align:left; }
+.chess-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
 /* --- Sudoku --------------------------------------------------------------- */
 .sudoku-board { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; max-width: 320px; margin: 0 auto 12px; aspect-ratio: 1; }
 .sudoku-cell { aspect-ratio: 1; font-size: 1rem; }

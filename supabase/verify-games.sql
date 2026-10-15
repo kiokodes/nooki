@@ -51,6 +51,33 @@ BEGIN
      RAISE EXCEPTION 'The Snake internals must stay server-side: %',fn;
    END IF;
  END LOOP;
+ -- Chess (migration 011). Its rules live in the database too: chess_legal is the
+ -- mirror of src/lib/chess.ts, and a phone may only name two squares.
+ IF NOT EXISTS (
+   SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='game_matches' AND column_name='chess'
+ ) THEN
+   RAISE EXCEPTION 'Apply supabase/migrations/202610150011_chess.sql before deploying Chess.';
+ END IF;
+ IF NOT EXISTS (
+   SELECT 1 FROM pg_constraint
+    WHERE conrelid='public.game_matches'::regclass AND contype='c'
+      AND pg_get_constraintdef(oid) LIKE '%chess%'
+ ) THEN
+   RAISE EXCEPTION 'The game_matches game check does not allow chess: rerun migration 011.';
+ END IF;
+ FOREACH fn IN ARRAY ARRAY['public.start_chess(text)','public.chess_move(uuid,integer,text)'] LOOP
+   IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Chess RPC: %',fn; END IF;
+   IF NOT has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
+     RAISE EXCEPTION 'Unsafe Chess RPC permissions: %',fn;
+   END IF;
+ END LOOP;
+ FOREACH fn IN ARRAY ARRAY['public.chess_attacked(text[],integer,text)','public.chess_pseudo(text[],text,integer,integer,integer)','public.chess_apply(text[],integer,integer,text,integer)','public.chess_legal(text[],text,integer,integer,integer,text)','public.chess_has_move(text[],text,integer,text)','public.chess_in_check(text[],text)','public.chess_view(jsonb)','public.chess_state_json(text)','public.chess_start_board()'] LOOP
+   IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing the Chess internals: %',fn; END IF;
+   IF has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
+     RAISE EXCEPTION 'The Chess internals must stay server-side: %',fn;
+   END IF;
+ END LOOP;
 END $$;
-SELECT 'PASS: Games RPCs, the Snake replay and secret-table permissions are configured. Test both devices before release.' AS result;
+SELECT 'PASS: Games RPCs, the Snake replay, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;

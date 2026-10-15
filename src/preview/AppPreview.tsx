@@ -11,6 +11,7 @@ import {
 import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
 import { PreviewSnake } from './PreviewSnake';
+import { ChessDuel } from '../components/games/ChessDuel';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { ChatView } from '../components/chat/ChatView';
@@ -451,6 +452,7 @@ export const AppPreview = () => {
             {tab === 'games' ? (
               /* The duel, played out on this page: same board, same rules, no backend. */
               <section style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px 24px' }}>
+                <ChessDuel partnerName={partner.name} />
                 <PreviewSnake partnerName={partner.name} />
               </section>
             ) : tab === 'home' ? (
@@ -644,3 +646,4 @@ export const AppPreview = () => {
 };
 
 export default AppPreview;
+;
