@@ -42,6 +42,15 @@ export const tokens = {
     borderSoft: '#E6DCCF',
   },
 
+  /**
+   * The two shared-book highlight colours: one fixed ink per partner, so a passage
+   * reads the same on both phones (see HighlightColor in types/database.ts).
+   */
+  highlightInk: {
+    rose: '#EC4899',
+    sage: '#059669',
+  },
+
   radii: {
     sm: '12px',
     md: '18px',

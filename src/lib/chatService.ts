@@ -18,6 +18,11 @@ import type { ChatMessage, MessageType } from '../types/database';
  * words rewritten by their author (`edited_at`) — the couple-scoped link and the
  * author-only edit are enforced the same database way
  * (supabase/migrations/202610150006_chat_replies_edits.sql). There is no delete.
+ *
+ * Finally, a message can share a book highlight (`highlight_id`): the bubble quotes
+ * the passage, and tapping the quote opens the reader at that spot — the "highlight
+ * to chat" bridge and its way back. The send policy refuses a link to any highlight
+ * outside the couple (supabase/migrations/202610150008_shared_books.sql).
  */
 
 /** How many recent messages a phone keeps in memory. */
@@ -48,6 +53,7 @@ function toChatMessage(row: Record<string, unknown>): ChatMessage {
     type: (row.type as MessageType) ?? 'text',
     session_id: row.session_id == null ? null : String(row.session_id),
     reply_to_id: row.reply_to_id == null ? null : String(row.reply_to_id),
+    highlight_id: row.highlight_id == null ? null : String(row.highlight_id),
     created_at: String(row.created_at),
     read_at: row.read_at == null ? null : String(row.read_at),
     edited_at: row.edited_at == null ? null : String(row.edited_at),
@@ -80,6 +86,8 @@ export async function sendMessage(
   sessionId: string | null = null,
   /** The message this one answers (swipe-to-reply), or null for an ordinary one. */
   replyToId: string | null = null,
+  /** The book highlight this message shares ("highlight to chat"), or null. */
+  highlightId: string | null = null,
 ): Promise<ChatMessage> {
   const clean = validateMessageContent(content);
   const { data, error } = await requireSupabase().from('messages')
@@ -90,6 +98,7 @@ export async function sendMessage(
       type,
       session_id: sessionId,
       reply_to_id: replyToId,
+      highlight_id: highlightId,
     })
     .select('*')
     .single();

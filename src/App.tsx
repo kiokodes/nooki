@@ -5,7 +5,6 @@ import {
   Home as HomeIcon,
   MessageSquare,
   Gamepad2,
-  Sparkles,
 } from 'lucide-react';
 import { tokens } from './tokens/designTokens';
 import { supabaseConfigurationError } from './lib/supabaseClient';
@@ -20,9 +19,12 @@ import { HomeView } from './components/home/HomeView';
 import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
+import { MediaView } from './components/media/MediaView';
+import { ReaderView, type ShareHighlightInput } from './components/media/ReaderView';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
+import { useBooks } from './hooks/useBooks';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import {
@@ -166,6 +168,31 @@ export const App: React.FC = () => {
     userId: currentUser?.id ?? null,
   });
 
+  // The Media tab's "Read together" shelf: one book in play, both partners' places in
+  // it, and the highlights that reach the chat. App-level for the same reason as the
+  // chat — a partner's highlight lands while this phone is somewhere else.
+  const books = useBooks({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+    partnerId: partner?.id ?? null,
+  });
+
+  // The full-screen reader is a layer over whatever tab is open (Chat jumps come
+  // straight here too). Tagged with the couple so nothing outlives the account.
+  const [readerStored, setReaderStored] = useState<{
+    coupleId: string;
+    bookId: string;
+    jump: 'partner' | { location: string } | null;
+    nonce: number;
+  } | null>(null);
+  const readerNonce = useRef(0);
+
+  const openReader = useCallback((bookId: string, jump: 'partner' | { location: string } | null = null) => {
+    if (!couple) return;
+    readerNonce.current += 1;
+    setReaderStored({ coupleId: couple.id, bookId, jump, nonce: readerNonce.current });
+  }, [couple]);
+
   // Same list, looked up the way the chat needs it: which question did this session ask?
   const questionBySessionId = useMemo(
     () => Object.fromEntries(
@@ -178,6 +205,29 @@ export const App: React.FC = () => {
     ),
     [discuss.sessions],
   );
+
+  // What each shared highlight quoted, for the chat's quote cards. The quote comes
+  // from the highlight row — even after the book is deleted (book_id then reads null)
+  // so the words stay in the chat and only the jump away is gone.
+  const highlightById = useMemo(() => {
+    const titleByBookId = Object.fromEntries(books.books.map((book) => [book.id, book.title]));
+    return Object.fromEntries(books.highlights.map((highlight) => [highlight.id, {
+      quote_text: highlight.quote_text,
+      book_id: highlight.book_id,
+      book_title: highlight.book_id ? titleByBookId[highlight.book_id] ?? null : null,
+    }]));
+  }, [books.books, books.highlights]);
+
+  // The quote card on a bubble: open the reader and jump to the passage. A deleted
+  // book's card is disabled in the chat, so this only ever runs for a live one.
+  const handleOpenHighlight = useCallback((highlightId: string) => {
+    if (!couple) return;
+    const highlight = books.highlights.find((item) => item.id === highlightId);
+    if (!highlight?.book_id) return;
+    const book = books.books.find((item) => item.id === highlight.book_id);
+    if (!book) return;
+    openReader(book.id, { location: highlight.location });
+  }, [books.books, books.highlights, couple, openReader]);
 
   // "Say more" under the revealed answers: switch to the chat with the question attached.
   const handleSayMore = useCallback((detail: SessionDetail) => {
@@ -197,9 +247,34 @@ export const App: React.FC = () => {
     setActiveTab('discuss');
   }, [couple]);
 
+  // Highlight & share: the margin note first, then the chat message that quotes it.
+  // With no comment the message carries the quote itself, so the transcript always
+  // holds the words even if the book later goes away. If the chat copy fails after
+  // the highlight landed, that is not worth retrying a highlight for: the passage is
+  // saved and painted, and useChat has already recorded the failed message in the
+  // transcript ("Not sent — tap to retry").
+  const addHighlight = books.addHighlight;
+  const sendChatMessage = chat.send;
+  const handleShareHighlight = useCallback(async (bookId: string, input: ShareHighlightInput, comment: string) => {
+    const highlight = await addHighlight({
+      bookId,
+      location: input.location,
+      quoteText: input.quoteText,
+      rects: input.rects,
+    });
+    try {
+      await sendChatMessage(comment.trim() || input.quoteText.trim(), 'text', null, null, highlight.id);
+    } catch {
+      // Saved already; the transcript keeps the failure visible on the Chat tab.
+    }
+  }, [addHighlight, sendChatMessage]);
+
   // Valid only while the couple that made them is the one on this phone.
   const chatContext = chatContextStored && couple?.id === chatContextStored.coupleId
     ? { sessionId: chatContextStored.sessionId, questionText: chatContextStored.questionText }
+    : null;
+  const readerTarget = readerStored && couple?.id === readerStored.coupleId
+    ? readerStored
     : null;
   const focusSession = focusSessionStored && couple?.id === focusSessionStored.coupleId
     ? { id: focusSessionStored.id, nonce: focusSessionStored.nonce }
@@ -385,9 +460,7 @@ export const App: React.FC = () => {
   }
 
   // 5. Unlocked Couple App (Both partners joined)
-  const currentTab = TABS.find((t) => t.key === activeTab)!;
   const isHome = activeTab === 'home';
-  const isChat = activeTab === 'chat';
   const isDiscuss = activeTab === 'discuss';
 
   return (
@@ -405,7 +478,8 @@ export const App: React.FC = () => {
         {/* Home tab: Today card, daily game card and reserved animated scene area.
             Chat tab: the couple's live conversation.
             Discuss tab: the question engine over the imported library.
-            Media and Games stay as airy placeholders. */}
+            Media tab: the "Read together" shelf (shared books), with the full-screen
+            reader opening over whatever tab is active. Games is its own tab. */}
         {isDiscuss ? (
           <DiscussView
             discuss={discuss}
@@ -433,7 +507,15 @@ export const App: React.FC = () => {
           />
         ) : activeTab === 'games' ? (
           <GamesView games={games} userId={currentUser.id} partnerName={partner.name} />
-        ) : isChat ? (
+        ) : activeTab === 'media' ? (
+          <MediaView
+            state={books}
+            userId={currentUser.id}
+            userName={profile.name}
+            partnerName={partner.name}
+            onOpenReader={(bookId) => openReader(bookId)}
+          />
+        ) : (
           <ChatView
             messages={chat.messages}
             currentUserId={currentUser.id}
@@ -453,76 +535,9 @@ export const App: React.FC = () => {
             questionContext={chatContext}
             onClearQuestionContext={() => setChatContextStored(null)}
             onOpenQuestion={handleOpenQuestion}
+            highlightById={highlightById}
+            onOpenHighlight={handleOpenHighlight}
           />
-        ) : (
-          <section
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '0 24px',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                backgroundColor: tokens.colors.bgSurface,
-                borderRadius: tokens.radii.card,
-                padding: '32px 24px',
-                boxShadow: tokens.shadows.card,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '14px',
-              }}
-            >
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 16px',
-                  borderRadius: tokens.radii.pill,
-                  backgroundColor: currentTab.accentSoft,
-                  color: currentTab.accentColor,
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                }}
-              >
-                <Sparkles size={13} />
-                <span>Coming Soon</span>
-              </div>
-
-              <h1
-                style={{
-                  fontSize: '1.75rem',
-                  fontWeight: 800,
-                  color: tokens.colors.textPrimary,
-                  margin: 0,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                {currentTab.label}
-              </h1>
-
-              <p
-                style={{
-                  fontSize: '0.88rem',
-                  color: tokens.colors.textSecondary,
-                  lineHeight: 1.5,
-                  maxWidth: '250px',
-                  margin: 0,
-                }}
-              >
-                {`${currentTab.comingSoonSubtitle}. Stay tuned!`}
-              </p>
-            </div>
-          </section>
         )}
 
         {/* Bottom Navigation with 5 tabs */}
@@ -678,6 +693,30 @@ export const App: React.FC = () => {
             onClose={() => setShowCalendar(false)}
           />
         )}
+
+        {/* The full-screen reader over whatever tab is open (Chat jumps land here). */}
+        {readerTarget && (() => {
+          const book = books.books.find((item) => item.id === readerTarget.bookId);
+          if (!book) return null;
+          return (
+            <ReaderView
+              key={`${book.id}-${readerTarget.nonce}`}
+              book={book}
+              userId={currentUser.id}
+              userName={profile.name}
+              partnerName={partner.name}
+              myProgress={books.progress.find((item) => item.book_id === book.id && item.user_id === currentUser.id) ?? null}
+              partnerProgress={books.progress.find((item) => item.book_id === book.id && item.user_id !== currentUser.id) ?? null}
+              highlights={books.highlights.filter((item) => item.book_id === book.id)}
+              initialJump={readerTarget.jump}
+              onSaveProgress={(location, percent) => { void books.saveProgress(book.id, location, percent).catch(() => {}); }}
+              onShareHighlight={(input, comment) => handleShareHighlight(book.id, input, comment)}
+              onLeave={async () => { await books.leave(book.id); }}
+              onFinish={async () => { await books.finish(book.id); }}
+              onClose={() => setReaderStored(null)}
+            />
+          );
+        })()}
 
         {/* Danger Zone Settings Modal (Sign Out & Mutual Breakup Option) */}
         {showSettings && couple && (

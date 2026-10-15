@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CheckCheck, CircleAlert, Clock, MessageSquare, Pencil, Phone, Reply as ReplyIcon, Send, Video, X } from 'lucide-react';
+import { BookOpen, Check, CheckCheck, CircleAlert, Clock, MessageSquare, Pencil, Phone, Reply as ReplyIcon, Send, Video, X } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { useNow } from '../../hooks/useNow';
 import { getInitial, formatLastSeen } from '../../lib/coupleTime';
@@ -41,6 +41,14 @@ interface ChatViewProps {
   onClearQuestionContext?: () => void;
   /** Tap the quoted question on a bubble: jump back to that question and its answers. */
   onOpenQuestion?: (sessionId: string) => void;
+  /**
+   * What a shared highlight quoted, so the bubble can show the passage.
+   * `book_id` is null when the book was deleted — the quote stays readable but the
+   * jump back into the book is gone.
+   */
+  highlightById?: Record<string, { quote_text: string; book_id: string | null; book_title: string | null }>;
+  /** Tap the quoted passage on a bubble: open the reader at the highlight. */
+  onOpenHighlight?: (highlightId: string) => void;
 }
 
 const TOAST_MS = 2_000;
@@ -105,6 +113,15 @@ interface ReplyQuote {
   snippet: string;
 }
 
+/**
+ * Whitespace-folded text, for "is the bubble body just the quote?" — a highlight
+ * with no comment sends the quote itself as the message, and the bubble should then
+ * show the quote card once, not twice.
+ */
+function normalizeForCompare(content: string): string {
+  return (content || '').replace(/\s+/g, ' ').trim();
+}
+
 interface GestureState {
   startX: number;
   startY: number;
@@ -118,6 +135,8 @@ const Bubble: React.FC<{
   onRetry: (entryId: string) => void;
   questionBySessionId?: Record<string, { text: string; category: string }>;
   onOpenQuestion?: (sessionId: string) => void;
+  highlightById?: Record<string, { quote_text: string; book_id: string | null; book_title: string | null }>;
+  onOpenHighlight?: (highlightId: string) => void;
   /** What this bubble answers, looked up by the transcript; undefined when unknown. */
   replyOf?: ReplyQuote;
   onSwipeReply: (entry: ChatEntry) => void;
@@ -130,6 +149,8 @@ const Bubble: React.FC<{
   onRetry,
   questionBySessionId,
   onOpenQuestion,
+  highlightById,
+  onOpenHighlight,
   replyOf,
   onSwipeReply,
   onOpenActions,
@@ -168,6 +189,14 @@ const Bubble: React.FC<{
   // A "Say more" message quotes the question it grew from; the quote is the way back
   // to the revealed answers for whichever partner taps it.
   const quoted = entry.session_id ? questionBySessionId?.[entry.session_id]?.text : undefined;
+
+  // A "highlight to chat" message quotes a passage from the couple's book. The quote
+  // comes from the highlight row, so it survives even when the book is deleted — the
+  // jump away then simply isn't there ("the book is gone").
+  const highlight = entry.highlight_id ? highlightById?.[entry.highlight_id] : undefined;
+  const quoteIsBody = Boolean(
+    highlight && normalizeForCompare(entry.content) === normalizeForCompare(highlight.quote_text),
+  );
 
   // Swiping and long-pressing live on delivered bubbles only: a pending quote would
   // point at an id the database does not have yet, and a failed one has the retry.
@@ -403,7 +432,108 @@ const Bubble: React.FC<{
             </button>
           )}
 
-          {entry.content}
+          {entry.highlight_id && (
+            highlight?.book_id ? (
+              <button
+                type="button"
+                data-highlight-link={entry.highlight_id}
+                aria-label="Open this passage in the book"
+                onClick={() => onOpenHighlight?.(entry.highlight_id as string)}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  margin: '0 0 6px 0',
+                  padding: '6px 9px',
+                  borderRadius: tokens.radii.sm,
+                  border: 'none',
+                  borderLeft: `3px solid ${tokens.colors.primaryGreenDeep}`,
+                  backgroundColor: mine ? 'rgba(255, 255, 255, 0.55)' : tokens.colors.primaryGreenSoft,
+                  cursor: 'pointer',
+                  fontFamily: tokens.typography.fontFamily,
+                  textAlign: 'left',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.66rem',
+                    fontWeight: 800,
+                    color: tokens.colors.primaryGreenDeep,
+                    marginBottom: '2px',
+                  }}
+                >
+                  <BookOpen size={11} aria-hidden="true" />
+                  {highlight?.book_title ? `from ${highlight.book_title}` : 'from your book'}
+                </span>
+                <span
+                  data-highlight-quote
+                  style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    fontSize: '0.78rem',
+                    fontStyle: 'italic',
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                    color: tokens.colors.textPrimary,
+                  }}
+                >
+                  “{highlight?.quote_text ?? 'A passage you highlighted'}”
+                </span>
+              </button>
+            ) : (
+              <div
+                data-highlight-link-dead={entry.highlight_id}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  margin: '0 0 6px 0',
+                  padding: '6px 9px',
+                  borderRadius: tokens.radii.sm,
+                  border: 'none',
+                  borderLeft: `3px solid ${tokens.colors.borderSoft}`,
+                  backgroundColor: mine ? 'rgba(255, 255, 255, 0.4)' : tokens.colors.bgSurfaceSubtle,
+                  fontFamily: tokens.typography.fontFamily,
+                  textAlign: 'left',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.66rem',
+                    fontWeight: 800,
+                    color: tokens.colors.textMuted,
+                    marginBottom: '2px',
+                  }}
+                >
+                  <BookOpen size={11} aria-hidden="true" />
+                  Book deleted — the quote stays
+                </span>
+                <span
+                  style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    fontSize: '0.78rem',
+                    fontStyle: 'italic',
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                    color: tokens.colors.textSecondary,
+                  }}
+                >
+                  “{highlight?.quote_text ?? entry.content}”
+                </span>
+              </div>
+            )
+          )}
+
+          {quoteIsBody ? null : entry.content}
           <span
             style={{
               display: 'inline-flex',
@@ -487,6 +617,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   questionContext = null,
   onClearQuestionContext,
   onOpenQuestion,
+  highlightById,
+  onOpenHighlight,
 }) => {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -802,6 +934,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 mine={entry.sender_id === currentUserId}
                 onRetry={onRetry}
                 questionBySessionId={questionBySessionId}
+                highlightById={highlightById}
+                onOpenHighlight={onOpenHighlight}
                 onOpenQuestion={onOpenQuestion}
                 replyOf={entry.reply_to_id ? {
                   senderName: messageById.has(entry.reply_to_id)

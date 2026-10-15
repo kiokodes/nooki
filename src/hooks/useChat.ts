@@ -38,12 +38,14 @@ export interface ChatState {
   /**
    * `sessionId` marks a "Say more" message: which Discuss question it continues from.
    * `replyToId` marks a swipe-to-reply: which earlier message this one answers.
+   * `highlightId` marks a "highlight to chat" share: which book passage it quotes.
    */
   send: (
     content: string,
     type?: MessageType,
     sessionId?: string | null,
     replyToId?: string | null,
+    highlightId?: string | null,
   ) => Promise<void>;
   /** Rewrites the words of a message this phone sent. There is no delete. */
   edit: (messageId: string, content: string) => Promise<void>;
@@ -162,6 +164,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
               && item.content === message.content
               && (item.session_id ?? null) === message.session_id
               && (item.reply_to_id ?? null) === message.reply_to_id
+              && (item.highlight_id ?? null) === message.highlight_id
               && item.delivery === 'sending'
             )));
           }
@@ -251,6 +254,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
         type,
         entry.session_id,
         entry.reply_to_id,
+        entry.highlight_id,
       );
       // Replace the optimistic bubble with the stored row.
       setPending((items) => items.filter((item) => item.id !== entry.id));
@@ -269,6 +273,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     type: MessageType = 'text',
     sessionId: string | null = null,
     replyToId: string | null = null,
+    highlightId: string | null = null,
   ) => {
     if (!coupleId || !userId) return;
     const clean = normalizeMessageContent(content);
@@ -281,6 +286,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
       type,
       session_id: sessionId ?? null,
       reply_to_id: replyToId ?? null,
+      highlight_id: highlightId ?? null,
       created_at: new Date().toISOString(),
       read_at: null,
       edited_at: null,
