@@ -139,17 +139,18 @@ test('messages: couple-scoped RLS, read receipts, immutability and safe re-migra
     await chat.markMessagesRead(couple.id, alice.id);
     assert.notEqual((await chat.fetchMessages(couple.id)).find((row) => row.id === answer.id).read_at, null);
 
-    // A message can only be marked read: its words, type and author are frozen.
+    // Its type is frozen, and only the recipient ever stamps a receipt — never the sender.
     await backend.resetRole();
     await assert.rejects(
-      backend.query('UPDATE public.messages SET content = $1 WHERE id = $2', ['Edited', first.id]),
-      /cannot be edited/i,
+      backend.query('UPDATE public.messages SET type = $1 WHERE id = $2', ['answer', first.id]),
+      /frozen|cannot be edited/i,
+      'the message type is frozen',
     );
     await assert.rejects(
-      backend.query('UPDATE public.messages SET type = $1 WHERE id = $2', ['answer', first.id]),
-      /cannot be edited/i,
+      backend.query('UPDATE public.messages SET read_at = now() WHERE id = $1', [first.id]),
+      /cannot mark your own message as read/i,
+      'the sender cannot stamp their own bubble',
     );
-    await backend.query('UPDATE public.messages SET read_at = now() WHERE id = $1', [first.id]);
 
     // Unpaired accounts and other couples see nothing, and cannot write into this chat.
     const stranger = (await auth.signUpWithEmail('third@example.com', 'password')).user;
@@ -164,18 +165,115 @@ test('messages: couple-scoped RLS, read receipts, immutability and safe re-migra
     const otherCouple = (await auth.createCouple(dave.id, '2021-01-01')).couple;
     await auth.signInWithEmail('carol@example.com', 'password');
     await auth.joinCoupleWithCode(carol.id, otherCouple.invite_code);
-    await chat.sendMessage(otherCouple.id, carol.id, 'Our own chat');
+    const carolHello = await chat.sendMessage(otherCouple.id, carol.id, 'Our own chat');
     assert.deepEqual(await chat.fetchMessages(couple.id), [], "another couple's chat is sealed");
     await assert.rejects(chat.sendMessage(couple.id, carol.id, 'Butting in'), /row-level security|violates/i);
 
+    // --- "Say more": a message can point back at one of the couple's own questions ------
+    await backend.exec(`INSERT INTO public.questions (id, text, category, seriousness, input_type, options)
+                        VALUES ('q-link', 'Beach holiday or city break?', 'fun', 1, 'choice', '["Beach","City"]')`);
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const { data: aliceAsked } = await supabase.rpc('ask_question', { p_question: 'q-link' });
+    const aliceSession = aliceAsked.session_id;
+    await auth.signInWithEmail('carol@example.com', 'password');
+    const { data: carolAsked } = await supabase.rpc('ask_question', { p_question: 'q-link' });
+    const foreignSession = carolAsked.session_id;
+    assert.notEqual(foreignSession, aliceSession, 'each couple gets its own session for one question');
+
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const linked = await chat.sendMessage(couple.id, alice.id, 'Because the sea air fixes everything.', 'text', aliceSession);
+    assert.equal(linked.session_id, aliceSession, 'the message keeps the link to its question');
+    await settle();
+    const ordinary = await chat.sendMessage(couple.id, alice.id, 'And unrelated: hello again.');
+    assert.equal(ordinary.session_id, null, 'an ordinary message has no link');
+
+    // The link may only point at this couple's own question.
+    await assert.rejects(
+      chat.sendMessage(couple.id, alice.id, 'Sneaky link', 'text', foreignSession),
+      /row-level security|violates/i,
+      "quoting another couple's question is refused",
+    );
+
+    // And once sent, the link is frozen with the rest of the row.
+    await backend.resetRole();
+    await assert.rejects(
+      backend.query('UPDATE public.messages SET session_id = NULL WHERE id = $1', [linked.id]),
+      /cannot be edited|frozen/i,
+    );
+
+    // --- Swipe-to-reply: a message can quote any earlier one in this chat ---------------
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const reply = await chat.sendMessage(couple.id, alice.id, 'Back to your note: yes.', 'text', null, answer.id);
+    assert.equal(reply.reply_to_id, answer.id, 'the reply keeps the id it answers');
+    assert.equal(reply.session_id, null, 'a plain reply quotes no Discuss question');
+
+    // Quoting another couple's message is refused row by row, like a foreign question.
+    await assert.rejects(
+      chat.sendMessage(couple.id, alice.id, 'Sneaky reply', 'text', null, carolHello.id),
+      /row-level security|violates|foreign key/i,
+      "quoting another couple's message is refused",
+    );
+
+    // What a message answers is frozen with it.
+    await backend.resetRole();
+    await assert.rejects(
+      backend.query('UPDATE public.messages SET reply_to_id = NULL WHERE id = $1', [reply.id]),
+      /frozen/i,
+    );
+
+    // --- Editing: only the author, only the words, stamped by the server ----------------
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const bareAgain = (await chat.fetchMessages(couple.id)).find((row) => row.id === first.id);
+    assert.equal(bareAgain.edited_at, null, 'a fresh message is not edited');
+    const edited = await chat.editMessage(couple.id, alice.id, first.id, 'Hello love ✨');
+    assert.equal(edited.content, 'Hello love ✨');
+    assert(edited.edited_at, 'editing stamps edited_at');
+    assert.notEqual(edited.edited_at, edited.created_at, 'the stamp is the edit, not the birth');
+
+    await assert.rejects(chat.editMessage(couple.id, alice.id, reply.id, '   '), /write a message/);
+    await assert.rejects(chat.editMessage(couple.id, alice.id, reply.id, `x${'y'.repeat(4000)}`), /4000 characters/);
+
+    // The partner cannot touch your words: the service finds no row, the database finds no pass.
+    await auth.signInWithEmail('bob@example.com', 'password');
+    await assert.rejects(
+      chat.editMessage(couple.id, bob.id, first.id, 'Not my words.'),
+      /only edit your own messages/i,
+    );
+    const bobAttempt = await supabase.from('messages').update({ content: 'Not my words.' }).eq('id', first.id);
+    assert(bobAttempt.error, 'the database refuses too');
+    assert.match(bobAttempt.error.message, /only edit your own messages/i);
+
+    // The stamp only moves with the words — nobody can set it by hand.
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const fakeStamp = await supabase.from('messages').update({ edited_at: new Date().toISOString() }).eq('id', linked.id);
+    assert(fakeStamp.error, 'edited_at cannot be forged');
+    assert.match(fakeStamp.error.message, /edit stamp/i);
+
+    // A read receipt only travels one way.
+    await backend.resetRole();
+    await assert.rejects(
+      backend.query('UPDATE public.messages SET read_at = NULL WHERE id = $1', [first.id]),
+      /read receipt|mark your own/i,
+      'a stamped receipt cannot be taken back',
+    );
+
     // The migration is safe to rerun on a populated project.
     const migration = await readFile(new URL('../supabase/migrations/202610150003_messages.sql', import.meta.url), 'utf8');
+    const linksMigration = await readFile(new URL('../supabase/migrations/202610150005_discuss_comments_chat_links.sql', import.meta.url), 'utf8');
+    const repliesMigration = await readFile(new URL('../supabase/migrations/202610150006_chat_replies_edits.sql', import.meta.url), 'utf8');
     await backend.exec(migration);
     await backend.exec(migration);
+    await backend.exec(linksMigration);
+    await backend.exec(linksMigration);
+    await backend.exec(repliesMigration);
+    await backend.exec(repliesMigration);
     await auth.signInWithEmail('alice@example.com', 'password');
     const afterRerun = await chat.fetchMessages(couple.id);
-    assert.equal(afterRerun.length, 5, 'rerunning the migration keeps the transcript');
-    assert.equal(afterRerun[0].content, 'Hello love');
+    assert.equal(afterRerun.length, 8, 'rerunning the migration keeps the transcript');
+    assert.equal(afterRerun[0].content, 'Hello love ✨', 'and keeps the edit');
+    assert(afterRerun[0].edited_at, 'and the edit stamp');
+    assert.equal(afterRerun.find((row) => row.id === linked.id).session_id, aliceSession, 'and keeps the question link');
+    assert.equal(afterRerun.find((row) => row.id === reply.id).reply_to_id, answer.id, 'and keeps the quoted reply');
 
     // Ending the couple takes the chat with it.
     await auth.requestOrConfirmBreakup();
@@ -446,6 +544,86 @@ test('chat tab: live bubbles, receipts, typing, unread badge and day grouping', 
       'the retry delivers the message',
     );
 
+    // --- Swipe-to-reply: drag a message toward the transcript ------------------------------
+    // A pointer drag on a delivered bubble: down, sideways past the trigger, up.
+    const firePointer = async (target, type, x, y) => act(() => {
+      target.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y }));
+    });
+    const bobRow = () => document.querySelector(`[data-message-row="${bobAgain.id}"]`);
+    assert(bobRow(), "the partner's bubble is on screen");
+
+    await firePointer(bobRow(), 'pointerdown', 300, 120);
+    await firePointer(bobRow(), 'pointermove', 372, 122);
+    await firePointer(bobRow(), 'pointerup', 372, 122);
+    await waitFor(() => document.querySelector('[data-reply-context]'), 'the swipe opens the reply bar');
+    assert(document.querySelector('[data-reply-context]').textContent.includes('Replying to Bob'),
+      'the bar says who you are answering');
+    assert(document.querySelector('[data-reply-context]').textContent.includes('Still here'),
+      'and quotes their message');
+
+    // It can be dismissed before anything is typed.
+    await act(async () => { button('Clear reply').click(); });
+    assert.equal(document.querySelector('[data-reply-context]'), null, 'clearing drops the reply');
+
+    // Swiping again, this time the message actually goes.
+    await firePointer(bobRow(), 'pointerdown', 300, 120);
+    await firePointer(bobRow(), 'pointermove', 372, 122);
+    await firePointer(bobRow(), 'pointerup', 372, 122);
+    await waitFor(() => document.querySelector('[data-reply-context]'), 'the reply bar is back');
+    await fill('Always. 💛');
+    await act(async () => { button('Send message').click(); });
+    await waitFor(async () => (await chat.fetchMessages(couple.id)).some((row) => row.reply_to_id === bobAgain.id),
+      'the reply was stored with its quote');
+    assert.equal(document.querySelector('[data-reply-context]'), null, 'sending clears the reply bar');
+    await waitFor(() => document.querySelector(`[data-reply-quote="${bobAgain.id}"]`), 'the bubble quotes it too');
+    assert(document.querySelector(`[data-reply-quote="${bobAgain.id}"]`).textContent.includes('Still here'),
+      'the quote shows the original words');
+    assert(document.querySelector(`[data-reply-quote="${bobAgain.id}"]`).textContent.includes('Bob'),
+      'and who wrote them');
+
+    // Tapping the quote walks back to the original bubble.
+    await act(async () => { document.querySelector(`[data-reply-quote="${bobAgain.id}"]`).click(); });
+    assert.equal(
+      document.querySelector(`[data-message-id="${bobAgain.id}"]`)?.getAttribute('data-highlighted'),
+      'true',
+      'the original bubble lights up',
+    );
+
+    // --- The action menu: long press (or right click), Reply for all, Edit for yours ------
+    const ownRow = () => document.querySelector(`[data-message-row="${stored[0].id}"]`);
+    await act(() => {
+      bobRow().dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    await waitFor(() => document.querySelector('[data-message-actions]'), 'the menu opens');
+    assert(button('Reply'), 'every message can be answered');
+    assert(!button('Edit'), "but the partner's words are not yours to edit");
+    await act(async () => { button('Close menu').click(); });
+    assert.equal(document.querySelector('[data-message-actions]'), null, 'the menu closes');
+
+    await act(() => {
+      ownRow().dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    await waitFor(() => document.querySelector('[data-message-actions]'), 'the menu opens on your bubble');
+    assert(button('Reply'), 'you can answer your own message');
+    assert(button('Edit'), 'and fix your own words');
+
+    // --- Edit: the box starts with the original words and Save is the send button --------
+    await act(async () => { button('Edit').click(); });
+    await waitFor(() => document.querySelector('[data-edit-context]'), 'the edit bar opens');
+    assert(document.querySelector('[data-edit-context]').textContent.includes('Editing message'));
+    await waitFor(() => field('Message').value === 'Hi Bob\nHow was your day?', 'the box starts with the original words');
+    assert(!button('Send message'), 'sending is saving while you edit');
+    assert(button('Save edit'), 'under a new name');
+    await fill('Hi Bob\nHow was your day? ❤️');
+    await act(async () => { button('Save edit').click(); });
+    await waitFor(async () => {
+      const row = (await chat.fetchMessages(couple.id)).find((item) => item.id === stored[0].id);
+      return row?.content === 'Hi Bob\nHow was your day? ❤️' && row.edited_at;
+    }, 'the edit was stored with its stamp');
+    assert.equal(document.querySelector('[data-edit-context]'), null, 'saving closes the edit bar');
+    assert.equal(field('Message').value, '', 'and the composer is a blank new message again');
+    await waitFor(() => ownRow()?.querySelector('[data-edited="true"]'), 'the bubble is marked as edited');
+
     // --- The call buttons only say "coming soon" ------------------------------------------
     await act(async () => { button('Voice call').click(); });
     assert(document.querySelector('[data-toast]'), 'the phone button shows a toast');
@@ -501,8 +679,8 @@ test('design preview: the sample chat works without a backend', async () => {
       'the preview uses the sample couple');
 
     // The Chat tab carries the sample conversation and its unread badge.
-    assert.equal(chatTab().getAttribute('aria-label'), 'Chat, 2 unread messages',
-      'the sample conversation starts with two unread messages from Ana');
+    assert.equal(chatTab().getAttribute('aria-label'), 'Chat, 3 unread messages',
+      'the sample conversation starts with three unread messages from Ana');
     await act(async () => { chatTab().click(); });
     assert(document.querySelector('[data-screen="chat"]'), 'the preview shows the real chat');
     assert.equal(document.querySelector('[data-nav-badge="chat"]'), null, 'opening the chat clears the badge');
@@ -537,7 +715,7 @@ test('design preview: the sample chat works without a backend', async () => {
     await act(async () => {
       [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Ana sends a message')).click();
     });
-    assert.equal(document.querySelectorAll('[data-mine="false"]').length, 4, "Ana's new message arrived while the chat is open");
+    assert.equal(document.querySelectorAll('[data-mine="false"]').length, 5, "Ana's new message arrived while the chat is open");
     assert.equal(document.querySelector('[data-nav-badge="chat"]'), null, 'and it reads as read, because the chat was open');
 
     // Switching to Home and receiving one shows the unread badge, like the app.

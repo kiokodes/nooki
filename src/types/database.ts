@@ -50,9 +50,28 @@ export interface ChatMessage {
   sender_id: string | null;
   content: string;
   type: MessageType;
+  /**
+   * The Discuss question this message continues from, set when "Say more" carries a
+   * revealed question into the chat. The bubble renders it as a quoted question card
+   * and tapping the card reopens the session — the way back to the answers. NULL for
+   * ordinary messages.
+   */
+  session_id: string | null;
+  /**
+   * The message this one answers, set by swipe-to-reply or the long-press menu. The
+   * bubble renders it as a quoted strip and tapping the strip scrolls back to the
+   * original. The database only accepts replies inside the same couple, and the id is
+   * frozen with the rest of the row. NULL for ordinary messages.
+   */
+  reply_to_id: string | null;
   created_at: string;
   /** Set when the *other* partner has seen it — the read receipt. */
   read_at: string | null;
+  /**
+   * Set by the database when the author rewrote the words. The bubble then shows a
+   * small "edited" marker next to its time. NULL while the message is unedited.
+   */
+  edited_at: string | null;
 }
 
 /**
@@ -131,17 +150,16 @@ export interface QuestionAnswer {
   created_at: string;
 }
 
-/** The five reactions a partner can leave after a reveal. */
-export type ReactionKind = 'happy' | 'funny' | 'sad' | 'angry' | 'disappointed';
-
-export const REACTION_KINDS: ReactionKind[] = ['happy', 'funny', 'sad', 'angry', 'disappointed'];
-
-export interface AnswerReaction {
+/**
+ * What is left after the reveal: one comment per partner per question. A second thought
+ * does not get typed here — it moves to the chat through "Say more"
+ * (messages.session_id), where the conversation can go on with the answers one tap away.
+ */
+export interface AnswerComment {
   id: string;
   session_id: string;
   user_id: string;
-  reaction: ReactionKind;
-  comment: string | null;
+  comment: string;
   created_at: string;
   updated_at: string;
 }

@@ -3,9 +3,10 @@
  *
  * Everything on screen here comes from the `questions` table: the library is imported the
  * way the owner's CSV would be, and the tab is driven through its categories, question
- * card, answer composer, reveal and reaction picker. The partner's half is played by
- * signing in as Bob and calling the same services, then nudging Alice over the fake
- * realtime channel — so a reveal only happens if row-level security actually lets it.
+ * card, answer composer, reveal and comment box — and on through "Say more" into the
+ * chat and back. The partner's half is played by signing in as Bob and calling the same
+ * services, then nudging Alice over the fake realtime channel — so a reveal only happens
+ * if row-level security actually lets it.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,7 +26,7 @@ INSERT INTO public.questions (id, text, category, seriousness, input_type, optio
   ('q-touch', 'What should we try tonight?', 'intimacy', 5, 'choice', '["Talking","Touch"]', false);
 `;
 
-test('discuss tab: browse the library, ask, answer privately, reveal together and react', async () => {
+test('discuss tab: browse the library, ask, answer privately, reveal together, comment and say more in chat', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent', 'FormData', 'localStorage']) {
     globalThis[key] = dom.window[key];
@@ -195,7 +196,7 @@ test('discuss tab: browse the library, ask, answer privately, reveal together an
     assert.equal(document.querySelector('[data-answer-input]')?.getAttribute('data-answer-input'), 'choice');
     const send = button('Send my answer');
     assert(send.disabled, 'an empty choice cannot be sent');
-    assert(!document.querySelector('[data-reaction]'), 'reactions belong to the reveal, not the composer');
+    assert(!document.querySelector('[data-comment-input]'), 'comments belong to the reveal, not the composer');
 
     await click(document.querySelector('[data-option="Beach"]'));
     assert.equal(document.querySelector('[data-option="Beach"]')?.getAttribute('data-selected'), 'true');
@@ -239,27 +240,48 @@ test('discuss tab: browse the library, ask, answer privately, reveal together an
     assert(partner?.className.includes('nooki-reveal-card'), 'both cards carry the reveal animation class');
     assert(body().includes('You both answered'), 'the reveal says so');
 
-    // --- 5. React and comment after the reveal ------------------------------------------
-    assert(document.querySelector('[data-reaction="funny"]'), 'the reaction picker opens with the reveal');
-    await click('Funny');
+    // --- 5. One comment under the reveal — anything more moves to the chat -------------
+    assert(!document.querySelector('[data-reaction]'), 'there is no emoji row any more');
+    assert(button('Send comment').disabled, 'an empty comment cannot be sent');
+    await type(document.querySelector('[aria-label="Say something about it"]'), 'Same, honestly.');
+    assert(!button('Send comment').disabled, 'a written comment can be sent');
+    await click('Send comment');
     await waitFor(async () => (await rows(
-      'SELECT reaction FROM public.answer_reactions WHERE session_id = $1 AND user_id = $2',
+      'SELECT comment FROM public.answer_comments WHERE session_id = $1 AND user_id = $2',
       [first.id, alice.id],
-    )).length === 1, 'a reaction should be stored');
-    assert.equal(document.querySelector('[data-reaction="funny"]')?.getAttribute('data-selected'), 'true');
-    assert(!document.querySelector('[data-partner-reaction]'), 'Bob has not reacted yet');
+    ))[0]?.comment === 'Same, honestly.', 'the comment should be stored');
 
-    await type(document.querySelector('[aria-label="Add a comment"]'), 'Same, honestly.');
-    assert(!button('Save comment').disabled, 'a comment can be saved once a reaction is picked');
-    await click('Save comment');
+    await waitFor(() => document.querySelector('[data-my-comment]')?.textContent.includes('Same, honestly.'), 'Alice sees her own comment');
+    assert.equal(document.querySelector('[aria-label="Say something about it"]'), null, 'one comment is all the reveal takes');
+    assert(!document.querySelector('[data-partner-comment]'), 'Bob has not commented yet');
+    assert(document.querySelector('[data-partner-quiet]')?.textContent.includes("hasn't said anything yet"), 'and the screen says so');
+    assert(button('Say more in chat'), 'a second thought gets the chat instead');
+
+    await asBob(() => discuss.saveComment(first.id, bob.id, 'Obviously the beach.'));
+    await pushDiscuss('answer_comments', 'INSERT');
+    await waitFor(() => document.querySelector('[data-partner-comment]')?.textContent.includes('Obviously the beach.'), 'Bob’s comment should arrive');
+
+    // --- 5b. "Say more" opens the chat with the question attached -----------------------
+    await click('Say more in chat');
+    await waitFor(() => document.querySelector('[data-screen="chat"]'), 'the Chat tab should open');
+    assert(document.querySelector('[data-chat-question-context]')?.textContent.includes('Beach holiday or city break?'), 'the composer carries the question');
+
+    await type(document.querySelector('[aria-label="Message"]'), 'Because the sea air fixes everything.');
+    await click('Send message');
     await waitFor(async () => (await rows(
-      'SELECT comment FROM public.answer_reactions WHERE session_id = $1 AND user_id = $2',
-      [first.id, alice.id],
-    ))[0]?.comment === 'Same, honestly.', 'the comment should be stored with the reaction');
+      'SELECT session_id FROM public.messages WHERE couple_id = $1 AND session_id IS NOT NULL',
+      [couple.id],
+    )).length === 1, 'the message should be stored with its question link');
+    assert.equal(document.querySelector('[data-chat-question-context]'), null, 'sending clears the attachment');
+    await waitFor(() => document.querySelector(`[data-question-link="${first.id}"]`), 'the bubble quotes its question');
+    assert(document.querySelector(`[data-question-link="${first.id}"]`)?.textContent.includes('Beach holiday or city break?'), 'and the quote is the question text');
 
-    await asBob(() => discuss.saveReaction(first.id, bob.id, 'happy', null));
-    await pushDiscuss('answer_reactions', 'INSERT');
-    await waitFor(() => document.querySelector('[data-partner-reaction]')?.textContent.includes('😊'), 'Bob’s reaction should arrive');
+    // --- 5c. Tapping the quote walks back to the revealed answers -----------------------
+    await click('Open this question');
+    await waitFor(() => document.querySelector('[data-session-screen="revealed"]'), 'the question reopens on its reveal');
+    assert.equal(document.querySelector('[data-question-text]')?.textContent, 'Beach holiday or city break?');
+    assert(document.querySelector('[data-reveal-card="mine"]')?.textContent.includes('Beach'), 'her answer is right there');
+    assert(document.querySelector('[data-reveal-card="partner"]')?.textContent.includes('City'), 'and his beside it');
 
     // --- 6. A question asked from the other phone badges this one -----------------------
     await click('Home');
@@ -382,7 +404,8 @@ test('discuss tab: browse the library, ask, answer privately, reveal together an
 
     // --- 11. Nothing is bundled: an empty library says to import the CSV -----------------
     await backend.exec(`
-      DELETE FROM public.answer_reactions;
+      DELETE FROM public.messages;
+      DELETE FROM public.answer_comments;
       DELETE FROM public.answers;
       DELETE FROM public.question_sessions;
       DELETE FROM public.questions;

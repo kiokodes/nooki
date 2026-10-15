@@ -92,7 +92,7 @@ export async function installTestBackend(client) {
   client.from = (table) => {
     if (![
       'profiles', 'couples', 'couple_events', 'messages',
-      'questions', 'question_sessions', 'answers', 'answer_reactions', 'couple_settings',
+      'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
     ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;

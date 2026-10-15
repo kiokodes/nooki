@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   MessageCircle,
   Image as ImageIcon,
@@ -20,7 +20,7 @@ import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
-import { useDiscuss } from './hooks/useDiscuss';
+import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import {
@@ -131,6 +131,13 @@ export const App: React.FC = () => {
   const [couple, setCouple] = useState<Couple | null>(null);
   const [partner, setPartner] = useState<Profile | null>(null);
 
+  // The bridge between Discuss and Chat: "Say more" carries a revealed question into
+  // the composer, and the quoted question on a bubble carries its session back. Both
+  // ends are tagged with the couple they belong to, so nothing outlives the account.
+  const [chatContextStored, setChatContextStored] = useState<{ coupleId: string; sessionId: string; questionText: string } | null>(null);
+  const [focusSessionStored, setFocusSessionStored] = useState<{ coupleId: string; id: string; nonce: number } | null>(null);
+  const focusNonce = useRef(0);
+
   // Presence runs for the whole unlocked app (not just the Home tab) so a partner
   // is still shown as online while this phone is browsing another tab.
   // One shared calendar for the Today card and the calendar modal.
@@ -154,6 +161,45 @@ export const App: React.FC = () => {
     coupleId: couple?.id ?? null,
     userId: currentUser?.id ?? null,
   });
+
+  // Same list, looked up the way the chat needs it: which question did this session ask?
+  const questionBySessionId = useMemo(
+    () => Object.fromEntries(
+      discuss.sessions
+        .filter((detail) => detail.question !== null)
+        .map((detail) => [
+          detail.session.id,
+          { text: detail.question!.text, category: detail.question!.category },
+        ]),
+    ),
+    [discuss.sessions],
+  );
+
+  // "Say more" under the revealed answers: switch to the chat with the question attached.
+  const handleSayMore = useCallback((detail: SessionDetail) => {
+    setChatContextStored({
+      coupleId: detail.session.couple_id,
+      sessionId: detail.session.id,
+      questionText: detail.question?.text ?? '',
+    });
+    setActiveTab('chat');
+  }, []);
+
+  // The quote on a linked bubble: jump back to that question and its answers.
+  const handleOpenQuestion = useCallback((sessionId: string) => {
+    if (!couple) return;
+    focusNonce.current += 1;
+    setFocusSessionStored({ coupleId: couple.id, id: sessionId, nonce: focusNonce.current });
+    setActiveTab('discuss');
+  }, [couple]);
+
+  // Valid only while the couple that made them is the one on this phone.
+  const chatContext = chatContextStored && couple?.id === chatContextStored.coupleId
+    ? { sessionId: chatContextStored.sessionId, questionText: chatContextStored.questionText }
+    : null;
+  const focusSession = focusSessionStored && couple?.id === focusSessionStored.coupleId
+    ? { id: focusSessionStored.id, nonce: focusSessionStored.nonce }
+    : null;
 
   const { partnerOnline } = useCouplePresence({
     coupleId: couple?.id ?? null,
@@ -363,6 +409,8 @@ export const App: React.FC = () => {
             userName={profile.name}
             partnerName={partner.name}
             onOpenSettings={() => setShowSettings(true)}
+            focusSession={focusSession}
+            onSayMore={handleSayMore}
           />
         ) : isHome ? (
           <HomeView
@@ -384,11 +432,16 @@ export const App: React.FC = () => {
             partnerTyping={chat.partnerTyping}
             loading={chat.loading}
             error={chat.error}
-            onSend={chat.send}
+            onSend={(content, sessionId, replyToId) => chat.send(content, 'text', sessionId, replyToId)}
             onTyping={chat.notifyTyping}
             onStopTyping={chat.notifyStoppedTyping}
+            onEditMessage={chat.edit}
             onRetry={chat.retry}
             onDismissError={chat.clearError}
+            questionBySessionId={questionBySessionId}
+            questionContext={chatContext}
+            onClearQuestionContext={() => setChatContextStored(null)}
+            onOpenQuestion={handleOpenQuestion}
           />
         ) : (
           <section

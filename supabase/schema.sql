@@ -517,7 +517,7 @@ $realtime$;
 
 -- ============================================================================
 -- 13. Discuss: the shared question library, each couple's private sessions,
--- answers, reactions, and the 18+ consent both partners must give.
+-- answers, one comment each, and the 18+ consent both partners must give.
 -- Added for the Discuss tab. Kept identical to
 -- supabase/migrations/202610150004_discuss_questions.sql.
 -- It inserts no questions: the library is imported from the owner's CSV.
@@ -940,25 +940,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS answers_session_user ON public.answers(session
 CREATE INDEX IF NOT EXISTS idx_answers_session ON public.answers(session_id);
 
 -- ============================================================================
--- 6) Reactions and comments, added after the reveal
+-- 6) Comments: one per partner, added after the reveal. Anything longer moves to
+--    the chat through "Say more" — see section 14 below.
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS public.answer_reactions (
+CREATE TABLE IF NOT EXISTS public.answer_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL REFERENCES public.question_sessions(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  reaction TEXT NOT NULL
-    CONSTRAINT answer_reactions_reaction_check
-    CHECK (reaction IN ('happy', 'funny', 'sad', 'angry', 'disappointed')),
-  comment TEXT,
+  comment TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
-  CONSTRAINT answer_reactions_comment_length CHECK (comment IS NULL OR char_length(btrim(comment)) <= 1000)
+  CONSTRAINT answer_comments_comment_length CHECK (char_length(btrim(comment)) BETWEEN 1 AND 1000)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS answer_reactions_session_user
-  ON public.answer_reactions(session_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_answer_reactions_session ON public.answer_reactions(session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS answer_comments_session_user
+  ON public.answer_comments(session_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_answer_comments_session ON public.answer_comments(session_id);
 
 -- ============================================================================
 -- 7) Helper predicates. SECURITY DEFINER so a policy can ask about a session
@@ -1027,7 +1025,7 @@ ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.couple_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.question_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.answers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.answer_reactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.answer_comments ENABLE ROW LEVEL SECURITY;
 
 -- The library is shared, but 18+ rows only exist for a couple that opted in together.
 -- Signed-in accounts get SELECT and nothing else: the CSV import runs as the owner.
@@ -1103,17 +1101,17 @@ WITH CHECK (
   AND public.get_session_couple_id(session_id) = public.get_user_couple_id(auth.uid())
 );
 
--- Reactions are part of the reveal, so they follow the same rule as answers.
-DROP POLICY IF EXISTS "Couple members can view reactions" ON public.answer_reactions;
-CREATE POLICY "Couple members can view reactions" ON public.answer_reactions
+-- Comments are part of the reveal, so they follow the same rule as answers.
+DROP POLICY IF EXISTS "Couple members can view comments" ON public.answer_comments;
+CREATE POLICY "Couple members can view comments" ON public.answer_comments
 FOR SELECT TO authenticated
 USING (
   public.get_session_couple_id(session_id) = public.get_user_couple_id(auth.uid())
   AND public.is_session_revealed(session_id)
 );
 
-DROP POLICY IF EXISTS "Couple members can react to a reveal" ON public.answer_reactions;
-CREATE POLICY "Couple members can react to a reveal" ON public.answer_reactions
+DROP POLICY IF EXISTS "Couple members can comment on a reveal" ON public.answer_comments;
+CREATE POLICY "Couple members can comment on a reveal" ON public.answer_comments
 FOR INSERT TO authenticated
 WITH CHECK (
   user_id = auth.uid()
@@ -1121,8 +1119,8 @@ WITH CHECK (
   AND public.is_session_revealed(session_id)
 );
 
-DROP POLICY IF EXISTS "Users can change their own reaction" ON public.answer_reactions;
-CREATE POLICY "Users can change their own reaction" ON public.answer_reactions
+DROP POLICY IF EXISTS "Users can change their own comment" ON public.answer_comments;
+CREATE POLICY "Users can change their own comment" ON public.answer_comments
 FOR UPDATE TO authenticated
 USING (
   user_id = auth.uid()
@@ -1344,7 +1342,7 @@ CREATE TRIGGER answers_sync_session_progress
 AFTER INSERT OR DELETE ON public.answers
 FOR EACH ROW EXECUTE FUNCTION public.sync_session_progress();
 
-CREATE OR REPLACE FUNCTION public.guard_answer_reaction()
+CREATE OR REPLACE FUNCTION public.guard_answer_comment()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -1355,25 +1353,28 @@ BEGIN
     RAISE EXCEPTION 'Please sign in first.';
   END IF;
   IF public.get_session_couple_id(NEW.session_id) IS DISTINCT FROM public.get_user_couple_id(auth.uid()) THEN
-    RAISE EXCEPTION 'You can only react inside your own couple.';
+    RAISE EXCEPTION 'You can only comment inside your own couple.';
   END IF;
   IF NEW.user_id <> auth.uid() THEN
-    RAISE EXCEPTION 'You can only react as yourself.';
+    RAISE EXCEPTION 'You can only comment as yourself.';
   END IF;
   IF NOT public.is_session_revealed(NEW.session_id) THEN
-    RAISE EXCEPTION 'Reactions wait until you have both answered.';
+    RAISE EXCEPTION 'Comments wait until you have both answered.';
   END IF;
   NEW.comment := NULLIF(btrim(coalesce(NEW.comment, '')), '');
+  IF NEW.comment IS NULL THEN
+    RAISE EXCEPTION 'Say something about it first.';
+  END IF;
   RETURN NEW;
 END;
 $$;
 
-DROP TRIGGER IF EXISTS answer_reactions_guard ON public.answer_reactions;
-CREATE TRIGGER answer_reactions_guard
-BEFORE INSERT OR UPDATE ON public.answer_reactions
-FOR EACH ROW EXECUTE FUNCTION public.guard_answer_reaction();
+DROP TRIGGER IF EXISTS answer_comments_guard ON public.answer_comments;
+CREATE TRIGGER answer_comments_guard
+BEFORE INSERT OR UPDATE ON public.answer_comments
+FOR EACH ROW EXECUTE FUNCTION public.guard_answer_comment();
 
-CREATE OR REPLACE FUNCTION public.set_answer_reaction_updated_at()
+CREATE OR REPLACE FUNCTION public.set_answer_comment_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SET search_path = public
@@ -1384,10 +1385,10 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS answer_reactions_set_updated_at ON public.answer_reactions;
-CREATE TRIGGER answer_reactions_set_updated_at
-BEFORE UPDATE ON public.answer_reactions
-FOR EACH ROW EXECUTE FUNCTION public.set_answer_reaction_updated_at();
+DROP TRIGGER IF EXISTS answer_comments_set_updated_at ON public.answer_comments;
+CREATE TRIGGER answer_comments_set_updated_at
+BEFORE UPDATE ON public.answer_comments
+FOR EACH ROW EXECUTE FUNCTION public.set_answer_comment_updated_at();
 
 CREATE OR REPLACE FUNCTION public.set_couple_settings_updated_at()
 RETURNS TRIGGER
@@ -1594,9 +1595,9 @@ GRANT SELECT ON public.questions TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.couple_settings TO authenticated;
 GRANT SELECT, INSERT ON public.question_sessions TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.answers TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON public.answer_reactions TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.answer_comments TO authenticated;
 REVOKE ALL ON public.questions, public.couple_settings, public.question_sessions,
-  public.answers, public.answer_reactions FROM anon;
+  public.answers, public.answer_comments FROM anon;
 
 -- Revoked as well as simply not granted: on a project that still carries Supabase's
 -- legacy default privileges, `authenticated` would otherwise inherit write access to both
@@ -1608,13 +1609,13 @@ REVOKE INSERT, UPDATE, DELETE ON public.questions FROM authenticated;
 REVOKE UPDATE, DELETE ON public.question_sessions FROM authenticated;
 
 -- ============================================================================
--- 12) Realtime: a partner's answer, the reveal and their reaction should arrive
+-- 12) Realtime: a partner's answer, the reveal and their comment should arrive
 --     without a refresh. RLS still decides what each phone is allowed to see.
 -- ============================================================================
 
 ALTER TABLE public.question_sessions REPLICA IDENTITY FULL;
 ALTER TABLE public.answers REPLICA IDENTITY FULL;
-ALTER TABLE public.answer_reactions REPLICA IDENTITY FULL;
+ALTER TABLE public.answer_comments REPLICA IDENTITY FULL;
 ALTER TABLE public.couple_settings REPLICA IDENTITY FULL;
 
 DO $realtime$
@@ -1624,7 +1625,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     RETURN;
   END IF;
-  FOREACH v_table IN ARRAY ARRAY['questions', 'couple_settings', 'question_sessions', 'answers', 'answer_reactions'] LOOP
+  FOREACH v_table IN ARRAY ARRAY['questions', 'couple_settings', 'question_sessions', 'answers', 'answer_comments'] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables
       WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = v_table
@@ -1634,3 +1635,146 @@ BEGIN
   END LOOP;
 END
 $realtime$;
+
+
+-- ============================================================================
+-- 14. Comments, and the "Say more" bridge from Discuss into Chat
+-- Mirrors supabase/migrations/202610150005_discuss_comments_chat_links.sql for
+-- brand-new projects. The comment half (`answer_comments`) is written into section 6
+-- above; this half lets a chat message point back at the question it grew out of, so
+-- the conversation continues with the revealed answers one tap away.
+-- ============================================================================
+
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES public.question_sessions(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.messages.session_id IS
+  'The Discuss question this message continues from (set by "Say more"). NULL for ordinary messages.';
+
+-- The link is frozen with the rest of the message: only the read receipt can change.
+CREATE OR REPLACE FUNCTION public.guard_message_immutable()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public
+AS $$
+BEGIN
+  IF NEW.id <> OLD.id
+     OR NEW.couple_id <> OLD.couple_id
+     OR NEW.sender_id IS DISTINCT FROM OLD.sender_id
+     OR NEW.content IS DISTINCT FROM OLD.content
+     OR NEW.type IS DISTINCT FROM OLD.type
+     OR NEW.session_id IS DISTINCT FROM OLD.session_id
+     OR NEW.created_at <> OLD.created_at THEN
+    RAISE EXCEPTION 'Messages cannot be edited. Only the read receipt can change.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- A "Say more" link may only point at one of this couple's own questions.
+DROP POLICY IF EXISTS "Couple members can send messages" ON public.messages;
+CREATE POLICY "Couple members can send messages" ON public.messages
+FOR INSERT TO authenticated
+WITH CHECK (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND (sender_id = auth.uid() OR (sender_id IS NULL AND type = 'system'))
+  AND (session_id IS NULL OR public.get_session_couple_id(session_id) = couple_id)
+);
+
+-- ============================================================================
+-- 15. Chat replies and edits
+-- Mirrors supabase/migrations/202610150006_chat_replies_edits.sql for brand-new
+-- projects. Swipe-to-reply quotes the answered message (couple-scoped, frozen on
+-- insert), and the author — and only the author — can edit the words later, with the
+-- server stamping edited_at. There is still no delete and no reactions.
+-- ============================================================================
+
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES public.messages(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.messages.reply_to_id IS
+  'The message this one answers (set by swipe-to-reply). NULL for ordinary messages.';
+
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN public.messages.edited_at IS
+  'When the author last rewrote the content. NULL while the message is unedited.';
+
+CREATE OR REPLACE FUNCTION public.guard_message_immutable()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.id <> OLD.id
+     OR NEW.couple_id <> OLD.couple_id
+     OR NEW.sender_id IS DISTINCT FROM OLD.sender_id
+     OR NEW.type IS DISTINCT FROM OLD.type
+     OR NEW.session_id IS DISTINCT FROM OLD.session_id
+     OR NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id
+     OR NEW.created_at <> OLD.created_at THEN
+    RAISE EXCEPTION 'Most of a message is frozen: only its author can edit the words, and only the recipient can stamp the receipt.';
+  END IF;
+
+  IF NEW.read_at IS DISTINCT FROM OLD.read_at THEN
+    IF OLD.sender_id IS NOT DISTINCT FROM auth.uid() THEN
+      RAISE EXCEPTION 'You cannot mark your own message as read.';
+    END IF;
+    IF OLD.read_at IS NOT NULL OR NEW.read_at IS NULL THEN
+      RAISE EXCEPTION 'A read receipt cannot be taken back.';
+    END IF;
+  END IF;
+
+  IF NEW.content IS DISTINCT FROM OLD.content THEN
+    IF OLD.sender_id IS DISTINCT FROM auth.uid() THEN
+      RAISE EXCEPTION 'You can only edit your own messages.';
+    END IF;
+    -- The server stamps the edit: a phone's clock never writes edited_at.
+    NEW.edited_at := timezone('utc'::text, now());
+  ELSIF NEW.edited_at IS DISTINCT FROM OLD.edited_at THEN
+    -- Silently keeping an edited_at the client sent would let it look forged.
+    RAISE EXCEPTION 'The edit stamp only moves when the words do.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS messages_guard_immutable ON public.messages;
+CREATE TRIGGER messages_guard_immutable
+BEFORE UPDATE ON public.messages
+FOR EACH ROW EXECUTE FUNCTION public.guard_message_immutable();
+
+-- Same definer-side reason as the migration: quoting must not recurse the read policy
+-- into the send policy, so the couple check reads as the owner.
+CREATE OR REPLACE FUNCTION public.message_is_in_couple(p_message_id UUID, p_couple_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p_message_id IS NOT NULL
+     AND p_couple_id IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM public.messages parent
+       WHERE parent.id = p_message_id AND parent.couple_id = p_couple_id
+     );
+$$;
+
+DROP POLICY IF EXISTS "Couple members can send messages" ON public.messages;
+CREATE POLICY "Couple members can send messages" ON public.messages
+FOR INSERT TO authenticated
+WITH CHECK (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND (sender_id = auth.uid() OR (sender_id IS NULL AND type = 'system'))
+  AND (session_id IS NULL OR public.get_session_couple_id(session_id) = couple_id)
+  AND (reply_to_id IS NULL OR public.message_is_in_couple(reply_to_id, couple_id))
+);
+
+DROP POLICY IF EXISTS "Couple members can mark messages read" ON public.messages;
+DROP POLICY IF EXISTS "Couple members can update their chat" ON public.messages;
+CREATE POLICY "Couple members can update their chat" ON public.messages
+FOR UPDATE TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()))
+WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()));
