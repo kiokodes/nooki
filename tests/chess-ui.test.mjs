@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 
-test('chess UI: duel picker, legal-move highlights, captures and the queen hunt banner', async () => {
+test('chess UI: library starts a refereed duel; the board plays one out', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent']) globalThis[key] = dom.window[key];
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -13,14 +13,21 @@ test('chess UI: duel picker, legal-move highlights, captures and the queen hunt 
   const root = createRoot(document.getElementById('root'));
   try {
     const { GamesView } = await server.ssrLoadModule('/src/components/games/GamesView.tsx');
-    const games = { data: { matches: [] }, error: null, busy: false, match: undefined, select: () => {}, start: () => {}, play: () => {}, refresh: () => {} };
+    const calls = [];
+    const games = { data: { matches: [] }, error: null, busy: false, match: undefined, select: () => {}, start: () => {}, play: () => {}, refresh: () => {}, startChess: (mode) => calls.push(mode), playChess: () => {} };
     await act(async () => root.render(React.createElement(GamesView, { games, userId: 'a', partnerName: 'Bob' })));
     const button = (text) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(text));
     const chessCard = [...document.querySelectorAll('article')].find((c) => c.textContent.includes('Chess'));
     assert.ok(chessCard, 'chess has a library card');
     assert.ok(chessCard.textContent.includes('first-to-7-captures'));
+    // The library card picks the situational duel, then starts it through the database.
+    await act(async () => [...chessCard.querySelectorAll('button')].find((b) => b.textContent.includes('Queen Hunt')).click());
+    await act(async () => button('Play Chess with Bob →').click());
+    assert.deepEqual(calls, ['queen-hunt'], 'starting chess goes through start_chess with the chosen mode');
 
-    await act(async () => button('Play Chess →').click());
+    // The board itself (pass-and-play in the preview, the same component online).
+    const { ChessDuel } = await server.ssrLoadModule('/src/components/games/ChessDuel.tsx');
+    await act(async () => root.render(React.createElement(ChessDuel, { partnerName: 'Bob' })));
     assert.ok(document.querySelector('[data-chess="setup"]'), 'the duel picker opens');
     await act(async () => button('Queen Hunt').click());
     await act(async () => button('Start Queen Hunt').click());

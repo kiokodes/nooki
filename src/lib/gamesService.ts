@@ -1,5 +1,6 @@
 import { requireSupabase } from './supabaseClient';
 import type { SnakeChange, SnakePoint } from './snake';
+import type { ChessColor, ChessEndReason, ChessPieceType, ChessState } from './chess';
 import { isSnakeDirection } from './snake';
 
 export const GAMES = [
@@ -56,6 +57,20 @@ export interface SnakeDuel {
   partner: SnakeSide;
 }
 
+/** A chess match as the database reports it: the position, and only the position. */
+export interface ChessSnapshot {
+  mode: 'classic' | 'capture-race' | 'queen-hunt';
+  /** 64 piece codes, index 0 = a8: `wP`, `bQ`, `wQ*` (a promoted queen), `''` empty. */
+  board: string[];
+  castling: string;
+  en_passant: number | null;
+  halfmove: number;
+  captures: { white: string[]; black: string[] };
+  history: string[];
+  end_reason: string | null;
+  drawn: boolean;
+}
+
 export interface GameMatch {
   id: string; game: GameId; daily_date: string | null; player_x: string; player_o: string;
   board: string[]; turn_id: string; best_of: number; round: number; score_x: number; score_o: number;
@@ -63,6 +78,8 @@ export interface GameMatch {
   rounds: { round: number; x: string; o: string; winner: string | null }[];
   /** Present on snake duels only: the run this phone may play, and the partner's status. */
   snake?: SnakeDuel | null;
+  /** Present on chess matches only: the position the database has validated. */
+  chess?: ChessSnapshot | null;
 }
 export interface GamesSnapshot { today: string; wins: Record<string, number>; matches: GameMatch[] }
 async function rpc<T>(name: string, args = {}): Promise<T> {
@@ -71,7 +88,9 @@ async function rpc<T>(name: string, args = {}): Promise<T> {
     if (['PGRST202', '42P01', '42883'].includes(error.code)) {
       throw new Error(name.startsWith('snake')
         ? 'Snake needs a database update. Apply migration 202610150010_snake_duel.sql.'
-        : 'Games needs a database update. Apply migration 202610150007_games.sql.');
+        : name.includes('chess')
+          ? 'Chess needs a database update. Apply migration 202610150011_chess.sql.'
+          : 'Games needs a database update. Apply migration 202610150007_games.sql.');
     }
     throw new Error(error.message);
   }
@@ -112,6 +131,52 @@ export function snakeChanges(dirs: [number, string][] | undefined): SnakeChange[
   }
   return changes;
 }
+
+
+const CHESS_TYPE_FROM_CODE: Record<string, ChessPieceType> = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king' };
+
+/** Rebuild the engine's state from the database's snapshot, so the board, the legal
+ *  move highlights and the check marker are the phone's own — while the *result* of
+ *  every move is decided by the server's mirror of the same engine. */
+export function chessStateFromMatch(match: GameMatch): ChessState | null {
+  const snap = match.chess;
+  if (!snap) return null;
+  const colorOf = (id: string | null): ChessColor | null => (id === null ? null : id === match.player_x ? 'white' : 'black');
+  return {
+    board: snap.board.map((code, i) => {
+      if (!code) return null;
+      const color: ChessColor = code[0] === 'w' ? 'white' : 'black';
+      const type = CHESS_TYPE_FROM_CODE[code[1]] ?? 'pawn';
+      // The hunt counts only the original queen: the server codes her `Q`, promoted
+      // queens `Q*`, and the id is what tells them apart here too.
+      const id = type === 'queen' && !code.endsWith('*') ? `${color}-queen` : `${color}-${type}-${i}`;
+      return { id, type, color };
+    }),
+    turn: colorOf(match.turn_id) ?? 'white',
+    castling: { K: snap.castling.includes('K'), Q: snap.castling.includes('Q'), k: snap.castling.includes('k'), q: snap.castling.includes('q') },
+    enPassant: snap.en_passant,
+    halfmove: snap.halfmove,
+    fullmove: Math.floor(snap.history.length / 2) + 1,
+    mode: snap.mode,
+    captures: { white: snap.captures.white as ChessPieceType[], black: snap.captures.black as ChessPieceType[] },
+    winner: colorOf(match.winner_id),
+    endReason: (snap.end_reason as ChessEndReason | null) ?? null,
+    drawn: snap.drawn,
+    history: snap.history,
+    repetitions: {},
+  };
+}
+
+/* ---------------------------------------------------------------------------
+   Chess. The database is the referee (migration 202610150011_chess.sql mirrors
+   src/lib/chess.ts): a phone sends only a move in coordinate notation — `e2e4`,
+   `e7e8q`, `resign` — and the server validates it, counts the capture and decides
+   checkmate, draws and the situational goals. player_x is White.
+   --------------------------------------------------------------------------- */
+
+export const startChess = (mode: string) => rpc<string>('start_chess', { p_mode: mode });
+export const playChess = (match: GameMatch, move: string) =>
+  rpc<ChessSnapshot>('chess_move', { p_id: match.id, p_round: match.round, p_move: move });
 
 export const startSnakeRun = (id: string) => rpc<SnakeRun>('snake_start', { p_id: id });
 export const beatSnakeRun = (id: string, ticks: number, changes: SnakeChange[]) =>

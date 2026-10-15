@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  beatSnakeRun, fetchGames, finishSnakeRun, forfeitSnakeRun, playGame, startGame, startSnakeRun,
+  beatSnakeRun, fetchGames, finishSnakeRun, forfeitSnakeRun, playChess, playGame, startChess, startGame, startSnakeRun,
   type GameId, type GameMatch, type GamesSnapshot, type SnakeRun,
 } from '../lib/gamesService';
+import type { ChessMode } from '../lib/chess';
 import type { SnakeChange } from '../lib/snake';
 
 /**
@@ -17,6 +18,7 @@ import type { SnakeChange } from '../lib/snake';
 export function needsMyMove(match: GameMatch, userId: string | null): boolean {
   if (!userId || match.finished) return false;
   if (match.game === 'tic-tac-toe') return match.turn_id === userId;
+  if (match.game === 'chess') return match.turn_id === userId;
   if (match.game === 'snake') return !match.snake?.mine || match.snake.mine.status === 'running';
   return !match.my_pick;
 }
@@ -84,6 +86,13 @@ export function useGames(coupleId: string | null, userId: string | null) {
       if (current.current === scope) setSelected({ scope, id });
     }),
     play: (match: GameMatch, move: string) => run(async () => { await playGame(match, move); }),
+    /** Start (or resume) the couple's open chess match in the chosen situational mode. */
+    startChess: (mode: ChessMode) => run(async () => {
+      const id = await startChess(mode);
+      if (current.current === scope) setSelected({ scope, id });
+    }),
+    /** One chess move (or `resign`) through the database referee. */
+    playChess: (match: GameMatch, move: string) => run(async () => { await playChess(match, move); }),
     /** Deal the food and start this phone's one run. Resuming a live run hands the same one back. */
     startSnake: (matchId: string) => run(async () => { await startSnakeRun(matchId); }),
     beat,
