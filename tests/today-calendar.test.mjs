@@ -293,6 +293,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const pairingMigration = await readFile(new URL('../supabase/migrations/202610150001_pairing_flow.sql', import.meta.url), 'utf8');
   const calendarMigration = await readFile(new URL('../supabase/migrations/202610150002_couple_events.sql', import.meta.url), 'utf8');
   const chatMigration = await readFile(new URL('../supabase/migrations/202610150003_messages.sql', import.meta.url), 'utf8');
+  const discussMigration = await readFile(new URL('../supabase/migrations/202610150004_discuss_questions.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -314,6 +315,12 @@ test('verify.sql spots a live project that is missing a migration', async () => 
 
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(chatMigration);
+    // The chat is in place but the question engine is not: the preflight names it too.
+    await assert.rejects(db.exec(verification), /questions/,
+      'the preflight must send the owner to the Discuss migration');
+
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(discussMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -333,9 +340,11 @@ async function server_paths() {
   const pairing = await read('../supabase/migrations/202610150001_pairing_flow.sql');
   const calendar = await read('../supabase/migrations/202610150002_couple_events.sql');
   const chat = await read('../supabase/migrations/202610150003_messages.sql');
+  const discuss = await read('../supabase/migrations/202610150004_discuss_questions.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
+  const schemaBeforeDiscuss = schema.split('-- 13. Discuss:')[0];
 
   const base = `
     CREATE ROLE authenticated NOLOGIN; CREATE ROLE anon NOLOGIN; CREATE SCHEMA auth;
@@ -417,21 +426,21 @@ async function server_paths() {
 
   const existingOld = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, pairing, calendar, chat],
+    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, pairing, calendar, chat, discuss],
   });
   check('existing project, all migrations run twice', existingOld, true);
   await existingOld.db.close();
 
   const existingNew = await run({
     defaults: '',
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, pairing, calendar, chat],
+    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, pairing, calendar, chat, discuss],
   });
   check('existing project with no auto-grant', existingNew, true);
   await existingNew.db.close();
 
   const upgraded = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, chat, calendar, chat],
+    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, chat, discuss, calendar, chat, discuss],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -443,6 +452,16 @@ async function server_paths() {
   check('preflight blocks a project without the chat migration', missingChat, false);
   assert.match(missingChat.message, /messages/, 'the message names the missing chat table');
   await missingChat.db.close();
+
+  // A project that has the chat but not the Discuss tables is blocked, and told which
+  // migration to run: the tab would otherwise open onto a dead library.
+  const missingDiscuss = await run({
+    defaults: legacyDefaults,
+    steps: [schemaBeforeDiscuss, pairing, calendar, chat],
+  });
+  check('preflight blocks a project without the Discuss migration', missingDiscuss, false);
+  assert.match(missingDiscuss.message, /questions/, 'the message names the missing question table');
+  await missingDiscuss.db.close();
 
   // The preflight must block a project that lost its API-role grants.
   const broken = await run({

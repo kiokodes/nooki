@@ -74,3 +74,85 @@ export interface UserSession {
   couple: Couple | null;
   partner: Profile | null;
 }
+
+/* ---------------------------------------------------------------------------
+   Discuss: one shared question library, and each couple's private sessions.
+   The library rows are imported by the app owner from a CSV — never bundled
+   here. See supabase/migrations/202610150004_discuss_questions.sql.
+   --------------------------------------------------------------------------- */
+
+/**
+ * How a question wants to be answered. The database canonicalises whatever the CSV said
+ * into these five values; `multi_choice` is the tick-several variant of `choice`.
+ */
+export type QuestionInputType = 'text' | 'choice' | 'multi_choice' | 'ranking' | 'slider';
+
+export const QUESTION_INPUT_TYPES: QuestionInputType[] = ['text', 'choice', 'multi_choice', 'ranking', 'slider'];
+
+export interface Question {
+  /** TEXT in the database: the id belongs to the imported CSV, so it may be any shape. */
+  id: string;
+  text: string;
+  /** Canonical spelling, e.g. 'Home Life'. A CSV can add categories of its own. */
+  category: string;
+  /** 1 is the lightest, 5 the heaviest. */
+  seriousness: number;
+  input_type: QuestionInputType;
+  /** Option labels for choice / multi_choice / ranking; null for text and slider. */
+  options: string[] | null;
+  /** 18+: invisible to a couple until both partners turn the category on. */
+  is_adult: boolean;
+}
+
+export interface QuestionSession {
+  id: string;
+  couple_id: string;
+  question_id: string;
+  /** Who tapped "Ask my partner"; null if that account was later deleted. */
+  started_by: string | null;
+  created_at: string;
+  /** Trigger-maintained: how many of the two partners have answered (0, 1 or 2). */
+  answer_count: number;
+  /** Stamped when the second answer lands — the moment both answers become readable. */
+  completed_at: string | null;
+}
+
+/**
+ * A stored answer: free text, one label, several labels, an ordered list of labels, or a
+ * number from 1 to 10. The database checks the shape against the question before it lands.
+ */
+export type AnswerValue = string | string[] | number;
+
+export interface QuestionAnswer {
+  id: string;
+  session_id: string;
+  user_id: string;
+  answer: AnswerValue;
+  created_at: string;
+}
+
+/** The five reactions a partner can leave after a reveal. */
+export type ReactionKind = 'happy' | 'funny' | 'sad' | 'angry' | 'disappointed';
+
+export const REACTION_KINDS: ReactionKind[] = ['happy', 'funny', 'sad', 'angry', 'disappointed'];
+
+export interface AnswerReaction {
+  id: string;
+  session_id: string;
+  user_id: string;
+  reaction: ReactionKind;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One row per partner. The 18+ category opens only when both partners of a couple have
+ * `adult_questions_enabled`, and closes again the moment either of them turns it off.
+ */
+export interface CoupleSettings {
+  couple_id: string;
+  user_id: string;
+  adult_questions_enabled: boolean;
+  updated_at: string;
+}

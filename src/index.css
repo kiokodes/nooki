@@ -271,3 +271,46 @@ html, body {
     animation: none !important;
   }
 }
+
+/* Discuss: the reveal. Both answers rise into place, the partner's a beat later, and the
+   "you both answered" pill pops in first. A small moment for something that was sealed. */
+.nooki-reveal-badge {
+  animation: nooki-reveal-pop 0.34s cubic-bezier(0.22, 1.4, 0.36, 1) both;
+}
+
+.nooki-reveal-card {
+  animation: nooki-reveal-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
+.nooki-reveal-card[data-reveal-card='partner'] {
+  animation-delay: 0.22s;
+}
+
+@keyframes nooki-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes nooki-reveal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-reveal-card,
+  .nooki-reveal-badge {
+    animation: none !important;
+  }
+}
