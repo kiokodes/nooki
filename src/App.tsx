@@ -499,6 +499,7 @@ export const App: React.FC = () => {
             onOpenCalendar={() => setShowCalendar(true)}
             userName={profile.name}
             partnerName={partner.name}
+            partnerOnline={partnerOnline}
             userWins={games.data?.wins[currentUser.id] ?? 0}
             partnerWins={games.data?.wins[partner.id] ?? 0}
             dailyStatus={games.data?.matches.find(m => m.daily_date === games.data?.today)?.finished ? 'Completed today · next challenge at midnight UTC' : 'One shared match a day · resets at midnight UTC'}

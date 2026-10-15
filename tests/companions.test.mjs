@@ -106,8 +106,13 @@ test('HomeNookiCompanions: reserved slot placement, idle animation, and real loo
     assert(scenePlaceholder, 'reserved scene placeholder exists');
     assert.equal(home.lastElementChild, scenePlaceholder, 'scene placeholder is the last element above bottom navigation');
 
-    // The reserved area has empty text content for screen readers / accessibility
-    assert.equal(scenePlaceholder.textContent, '', 'reserved area has empty text content');
+    const nookCaption = scenePlaceholder.querySelector('[data-nooki-caption]');
+    assert.equal(nookCaption?.textContent.trim(), 'Our little nook', 'caption uses the shared "our little nook" wording');
+    assert.equal(nookCaption?.style.position, 'absolute', 'caption is overlaid on the nook card');
+    assert.equal(nookCaption?.style.top, '10px', 'caption sits at the top of the nook');
+    assert.equal(nookCaption?.style.right, '12px', 'caption sits at the right of the nook');
+    assert.equal(scenePlaceholder.getAttribute('aria-label'), 'Our little nook — watch the Nookis sharing a cozy moment',
+      'the nook region has an accessible shared-space label');
 
     const companions = scenePlaceholder.querySelector('[data-component="home-nooki-companions"]');
     assert(companions, 'HomeNookiCompanions component renders inside reserved slot');
@@ -116,7 +121,8 @@ test('HomeNookiCompanions: reserved slot placement, idle animation, and real loo
 
     const artwork = companions.querySelector('img[data-nooki-pair]');
     assert(artwork, 'renders pair illustration');
-    assert.equal(artwork.getAttribute('data-expression'), 'happy', 'uses happy expression by default');
+    assert.equal(artwork.getAttribute('data-expression'), 'happy', 'uses a calm happy expression while the partner is away');
+    assert.equal(companions.getAttribute('data-partner-online'), 'false', 'starts in partner-away mode by default');
     assert.equal(artwork.style.aspectRatio, '1 / 1', 'preserves 1:1 aspect ratio');
     assert.equal(artwork.style.objectFit, 'contain', 'uses object-fit contain');
 
@@ -126,6 +132,22 @@ test('HomeNookiCompanions: reserved slot placement, idle animation, and real loo
     const artContainer = companions.querySelector('.nooki-companions-art');
     assert(artContainer, 'art container present');
     assert.equal(artContainer.style.transformOrigin, '50% 83.5%', 'anchored near feet (y=83.5%)');
+
+    // Realtime partner availability changes the context image and its ambient expression pool.
+    await act(async () => {
+      root.render(React.createElement(HomeView, {
+        events: [],
+        anniversaryDate: '2024-01-01',
+        eventsLoading: false,
+        eventsError: null,
+        onOpenCalendar: () => {},
+        partnerOnline: true,
+      }));
+    });
+    const togetherCompanions = dom.window.document.querySelector('[data-component="home-nooki-companions"]');
+    assert.equal(togetherCompanions?.getAttribute('data-partner-online'), 'true', 'updates to together mode when the partner comes online');
+    assert.equal(togetherCompanions?.querySelector('[data-layer="overlay"] img[data-nooki-pair]')?.getAttribute('data-expression'),
+      'affectionate', 'crossfades to affectionate art when both partners are available');
 
     // 3. Paused prop stops animation
     await act(async () => {

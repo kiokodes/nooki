@@ -233,12 +233,20 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert(document.body.textContent.includes('Daily challenge'), 'the daily match loads');
     await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
 
-    // Reserved empty rounded area at the bottom of the Home screen for a future animated scene.
-    const sceneArea = home.querySelector('[data-scene-placeholder]');
-    assert(sceneArea, 'the Home tab includes a reserved area for a future animated scene');
-    assert.equal(home.lastElementChild, sceneArea, 'the reserved scene area sits at the bottom of the Home screen');
-    assert.equal(sceneArea.textContent, '', 'the reserved scene area is left empty');
-    assert(sceneArea.style.borderRadius, 'the reserved scene area is rounded');
+    // The shared nook stays at the bottom of Home, with its caption pinned to the top-right.
+    const currentHome = document.querySelector('[data-screen="home"]');
+    assert(currentHome, 'the Home tab is visible again after the daily game');
+    const sceneArea = currentHome.querySelector('[data-scene-placeholder]');
+    assert(sceneArea, 'the Home tab includes the shared Nooki scene');
+    assert.equal(currentHome.lastElementChild, sceneArea, 'the shared nook stays at the bottom of the Home screen');
+    const nookCaption = sceneArea.querySelector('[data-nooki-caption]');
+    assert.equal(nookCaption?.textContent.trim(), 'Our little nook');
+    assert.equal(nookCaption?.style.top, '10px');
+    assert.equal(nookCaption?.style.right, '12px');
+    assert.equal(sceneArea.dataset.partnerOnline, 'false', 'starts with the partner marked away');
+    assert.equal(sceneArea.querySelector('img[data-nooki-pair]')?.dataset.expression, 'happy',
+      'uses the calm default artwork while the partner is away');
+    assert(sceneArea.style.borderRadius, 'the shared nook is rounded');
 
     // Presence: tracked on the couple channel, keyed by the signed-in account.
     assert.equal(presence.topic, `nooki-couple-${couple.id}`, 'presence stays scoped to the couple');
@@ -257,6 +265,11 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(dot().dataset.presence, 'online');
     assert.notEqual(dot().style.backgroundColor, offlineDotColor, 'an online partner turns the ticker green');
     assert(dot().getAttribute('aria-label').includes('is online'), 'the online dot announces itself');
+    assert.equal(sceneArea.dataset.partnerOnline, 'true', 'the Home nook receives live partner availability');
+    await waitFor(
+      () => sceneArea.querySelector('[data-layer="overlay"] img[data-expression="affectionate"]'),
+      'the Nookis crossfade to affectionate art when both partners are online',
+    );
 
     // Partner leaves: the ticker greys out and re-reads the freshest database timestamp.
     const bobLeftAt = new Date(Date.now() - 7 * 60_000).toISOString();
@@ -267,6 +280,11 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await emitPresenceSync();
     assert.equal(dot().dataset.presence, 'offline');
     assert.equal(dot().style.backgroundColor, offlineDotColor, 'the ticker greys back out');
+    assert.equal(sceneArea.dataset.partnerOnline, 'false', 'the Home nook returns to partner-away mode');
+    await waitFor(
+      () => sceneArea.querySelector('[data-layer="overlay"] img[data-expression="happy"]'),
+      'the Nookis return to calm happy art when the partner leaves',
+    );
     await waitFor(() => dot().getAttribute('aria-label').includes('Last seen 7m ago'),
       'leaving the app re-reads the stored last_seen_at');
 

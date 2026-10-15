@@ -350,7 +350,7 @@ html, body {
   }
 }
 
-/* Cozy nook — the little box is their room, not a card */
+/* Cozy nook — the little box is our shared room, not a card */
 .nooki-cozy-nook {
   background: linear-gradient(180deg, #FFFBF2 0%, #FFFBF2 58%, #FAF6EE 100%);
 }
@@ -361,23 +361,6 @@ html, body {
   inset: 0;
   background: radial-gradient(ellipse 92% 74% at 50% 46%, rgba(255,255,255,0.85) 0%, transparent 70%);
   pointer-events: none;
-}
-
-.nooki-cozy-nook::after {
-  content: 'their little nook';
-  position: absolute;
-  bottom: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 8.5px;
-  letter-spacing: 1.2px;
-  font-weight: 700;
-  color: #A89E96;
-  opacity: 0.85;
-  text-transform: uppercase;
-  pointer-events: none;
-  white-space: nowrap;
-  font-family: var(--font-family);
 }
 
 /* Living theatre — two flattened illustrations crossfading inside the same breathing wrapper */
