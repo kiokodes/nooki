@@ -40,8 +40,10 @@ export const BOOK_URL_TTL_SECONDS = 60 * 60;
 /** Shown whenever a file is refused — DRM-protected books won't open in any reader. */
 export const BOOK_FILE_HELP = 'Please choose a DRM-free EPUB or PDF.';
 
-/** The couple may only have one book in play at a time. */
-export const ONE_ACTIVE_BOOK_HELP = 'Leave or delete current book first.';
+/** The couple may only keep two books on the shelf at a time. */
+export const MAX_BOOKS_ON_SHELF = 2;
+
+export const SHELF_FULL_HELP = `Your shelf holds ${MAX_BOOKS_ON_SHELF} books at a time. Delete one to make room.`;
 
 export function isBookFileType(value: string): value is BookFileType {
   return value === 'epub' || value === 'pdf';
@@ -136,17 +138,22 @@ function toHighlight(row: Record<string, unknown>): Highlight {
   };
 }
 
-/** The database refuses a second active book; the couple reads that as a rule. */
+/**
+ * The database has two guards:
+ *   - A unique index that allows only one book in status 'reading' per couple.
+ *   - A trigger that limits the total shelf to two books.
+ * The app-level count check in createBook() catches the shelf-full case for a
+ * friendlier message; this handler covers the one-reading-per-couple index.
+ */
 function rethrowBookConflict(error: { message: string; code?: string }): never {
-  if (error.code === '23505') throw new Error(ONE_ACTIVE_BOOK_HELP);
+  if (error.code === '23505') throw new Error('Pause or finish the book you are reading first.');
   throw new Error(describeDatabaseError(error));
 }
 
 /**
  * Creates the shelf row first — before a single byte uploads — so a couple that
- * already has an active book is told "Leave or delete current book first." without
- * having wasted a 40 MB upload. The caller uploads the file next and removes the
- * row again if that upload fails.
+ * already has two books is told to delete one without having wasted a 40 MB upload.
+ * The caller uploads the file next and removes the row again if that upload fails.
  */
 export async function createBook(
   coupleId: string,
@@ -155,6 +162,17 @@ export async function createBook(
 ): Promise<SharedBook> {
   const title = options.title.trim();
   if (!title) throw new Error('Please give the book a title.');
+
+  // The shelf holds a strict two-book maximum. Check before inserting so the user
+  // gets a clear message instead of a database constraint violation.
+  const { data: shelfBooks, error: countError } = await requireSupabase().from('shared_books')
+    .select('id')
+    .eq('couple_id', coupleId);
+  if (countError) throw new Error(describeDatabaseError(countError));
+  if ((shelfBooks?.length ?? 0) >= MAX_BOOKS_ON_SHELF) {
+    throw new Error(SHELF_FULL_HELP);
+  }
+
   const { data, error } = await requireSupabase().from('shared_books')
     .insert({
       id: options.id,

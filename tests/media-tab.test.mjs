@@ -5,7 +5,7 @@ import { createServer } from 'vite';
 
 // The Media tab's shelf card states, and the chat's quote card for shared highlights.
 // Both are presentational: the database rules are covered in books-database.test.mjs.
-test('media tab: read-together card, both progress bars, and the one-active-book notice', async () => {
+test('media tab: read-together card, both progress bars, and the two-book shelf limit', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'File', 'FileReader']) {
     globalThis[key] = dom.window[key];
@@ -55,6 +55,7 @@ test('media tab: read-together card, both progress bars, and the one-active-book
     assert(body().includes('40 MB'));
     assert(button('Upload book'));
     assert(document.querySelector('[data-upload-input]'), 'the file picker is wired');
+    assert(body().includes('up to 2 at a time'), 'the empty shelf mentions the limit');
 
     // --- One book in play: title, both progress bars, Continue reading ---------------
     const reading = {
@@ -62,9 +63,8 @@ test('media tab: read-together card, both progress bars, and the one-active-book
       file_type: 'epub', status: 'reading', uploaded_by: 'me', created_at: '', updated_at: '',
     };
     const paused = { ...reading, id: 'b2', title: 'Dune', status: 'left' };
-    const finished = { ...reading, id: 'b3', title: 'Emma', status: 'finished' };
     await render(makeState({
-      books: [reading, paused, finished],
+      books: [reading],
       progress: [
         { book_id: 'b1', user_id: 'me', location: 'x', percent: 42, updated_at: '' },
         { book_id: 'b1', user_id: 'you', location: 'y', percent: 37, updated_at: '' },
@@ -73,19 +73,23 @@ test('media tab: read-together card, both progress bars, and the one-active-book
     assert(body().includes('Currently reading together'));
     assert(body().includes('The Hobbit'));
     const bars = [...document.querySelectorAll('[role="progressbar"]')].map((bar) => bar.getAttribute('aria-label'));
-    assert(bars.includes('Alice is at 42 percent'), 'the reader’s own place is on the card');
+    assert(bars.includes('Alice is at 42 percent'), "the reader's own place is on the card");
     assert(bars.includes('Ana is at 37 percent'), "and the partner's place too");
-    assert(body().includes('Paused'));
-    assert(body().includes('Finished'));
+    assert(document.querySelector('[data-upload-book]'), 'upload button shows when shelf has room');
     await act(async () => button('Continue reading').click());
     assert.deepEqual(calls.pop(), ['openReader', 'b1'], 'Continue reading opens the reader');
 
-    // --- Upload new while a book is in play: the friendly refusal --------------------
-    const uploadNew = document.querySelector('[data-upload-new]');
-    assert(uploadNew, 'the paused card offers Upload new');
-    await act(async () => uploadNew.click());
-    assert(body().includes('Leave or delete current book first.'));
-    assert.equal(calls.some(([name]) => name === 'upload'), false, 'no file was even picked');
+    // --- Two books on the shelf: the two-book limit kicks in -------------------------
+    // With 2 books (reading + paused), Upload new is hidden on cards and at the bottom.
+    await render(makeState({
+      books: [reading, paused],
+      progress: [],
+    }));
+    assert(body().includes('Paused'));
+    assert.equal(document.querySelector('[data-upload-new]'), null,
+      'Upload new is hidden on the paused card when shelf is full');
+    assert.equal(document.querySelector('[data-upload-book]'), null,
+      'the bottom upload button is hidden when shelf is full');
 
     // --- Delete asks first, then removes --------------------------------------------
     let confirmations = [];
@@ -142,7 +146,7 @@ test('chat tab: a shared highlight quotes the passage and jumps back into the bo
     ];
     const highlightById = {
       h1: { quote_text: quote, book_id: 'b1', book_title: 'The Hobbit' },
-      h2: { quote_text: 'It is a dangerous business…', book_id: 'b1', book_title: 'The Hobbit' },
+      h2: { quote_text: 'It is a dangerous business\u2026', book_id: 'b1', book_title: 'The Hobbit' },
       h3: { quote_text: quote, book_id: null, book_title: null },
     };
 

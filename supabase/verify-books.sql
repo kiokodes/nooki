@@ -1,4 +1,4 @@
--- Read-only books preflight; run after verify.sql and migration 008.
+-- Read-only books preflight; run after verify.sql and migrations 008 + 009.
 BEGIN TRANSACTION READ ONLY;
 DO $$
 BEGIN
@@ -30,6 +30,15 @@ BEGIN
     RAISE EXCEPTION 'The one-active-book index is missing: rerun migration 008.';
   END IF;
 
+  -- Two-book shelf limit: the BEFORE INSERT trigger from migration 009.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'shared_books_guard_limit'
+      AND tgisinternal = false
+  ) THEN
+    RAISE EXCEPTION 'The two-book shelf limit trigger is missing: rerun migration 009.';
+  END IF;
+
   -- The chat bridge: messages.highlight_id, and the definer-side couple check.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -55,5 +64,5 @@ BEGIN
     END IF;
   END IF;
 END $$;
-SELECT 'PASS: shared books, progress, highlights and the private book bucket are configured. Test both devices before release.' AS result;
+SELECT 'PASS: shared books, progress, highlights, the two-book shelf limit and the private book bucket are configured. Test both devices before release.' AS result;
 COMMIT;
