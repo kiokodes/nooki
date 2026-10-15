@@ -314,3 +314,47 @@ html, body {
     animation: none !important;
   }
 }
+
+/* =========================================================================
+   Home Nooki Companions: Restrained idle presence
+   A calm 5-second ease-in-out breathing cycle with subtle vertical motion
+   (1.5px) and minute scale (~0.8%), anchored near their feet.
+   ========================================================================= */
+
+.nooki-companions-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.nooki-companions-idle .nooki-companions-art {
+  transform-origin: 50% 83.5%;
+  animation: nooki-companions-idle 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.nooki-companions-paused .nooki-companions-art {
+  animation: none !important;
+  transform: none !important;
+}
+
+@keyframes nooki-companions-idle {
+  0%,
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-1.5px) scale(1.008);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-companions-art,
+  .nooki-companions-idle .nooki-companions-art {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+

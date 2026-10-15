@@ -1,6 +1,7 @@
 import React from 'react';
 import { TodayCard } from './TodayCard';
 import { DailyGameCard } from './DailyGameCard';
+import { HomeNookiCompanions } from './HomeNookiCompanions';
 import { useNow } from '../../hooks/useNow';
 import { tokens } from '../../tokens/designTokens';
 import type { CoupleEvent } from '../../types/database';
@@ -79,7 +80,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         playLabel={dailyLabel}
       />
 
-      {/* Empty rounded area at the bottom of the screen, reserved for a future animated scene */}
+      {/* Reserved area for animated scene / companions */}
       <div
         data-scene-placeholder
         data-area="animated-scene"
@@ -93,8 +94,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
           backgroundColor: tokens.colors.bgSurfaceSubtle,
           border: `1.5px dashed ${tokens.colors.borderSoft}`,
           boxShadow: tokens.shadows.subtle,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          padding: '4px',
         }}
-      />
+      >
+        <HomeNookiCompanions />
+      </div>
     </section>
   );
 };
