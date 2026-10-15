@@ -618,7 +618,7 @@ export const App: React.FC = () => {
             partner={partner}
             adultQuestionsEnabled={discuss.myAdultEnabled}
             partnerAdultQuestionsEnabled={discuss.partnerAdultEnabled}
-            adultQuestionsSaving={discuss.busy}
+            adultQuestionsSaving={discuss.adultSaving}
             onToggleAdultQuestions={(enabled) => discuss.setAdultEnabled(enabled).then(() => undefined)}
             onClose={() => setShowSettings(false)}
             onCoupleEnded={() => {

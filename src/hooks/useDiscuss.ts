@@ -59,6 +59,8 @@ export interface DiscussState {
   loading: boolean;
   /** An ask, an answer or a reaction is on its way. */
   busy: boolean;
+  /** The 18+ consent toggle is saving. Separate from busy so discuss operations don't block it. */
+  adultSaving: boolean;
   error: string | null;
   /** The library exists but holds no rows: the owner has not imported the CSV yet. */
   libraryEmpty: boolean;
@@ -117,6 +119,7 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
   const [loaded, setLoaded] = useState<LoadedState | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [adultSaving, setAdultSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reloadTimer = useRef<number | null>(null);
 
@@ -326,7 +329,7 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
 
   const setAdultEnabled = useCallback(async (enabled: boolean) => {
     if (!coupleId || !userId) throw new Error('Please sign in again to change this setting.');
-    setBusy(true);
+    setAdultSaving(true);
     try {
       const saved = await saveAdultPreference(coupleId, userId, enabled);
       // Show the new state at once, then re-read: turning the category on or off changes
@@ -341,7 +344,7 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
       setError(message);
       throw new Error(message);
     } finally {
-      setBusy(false);
+      setAdultSaving(false);
     }
   }, [coupleId, runLoad, userId]);
 
@@ -350,6 +353,7 @@ export function useDiscuss({ coupleId, userId }: UseDiscussOptions): DiscussStat
     sessions,
     loading,
     busy,
+    adultSaving,
     error,
     libraryEmpty,
     migrationMissing,
