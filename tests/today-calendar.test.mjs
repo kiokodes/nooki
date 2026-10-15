@@ -314,6 +314,128 @@ test('verify.sql spots a live project that is missing the calendar migration', a
   }
 });
 
+test('deployment paths: empty project, existing project, legacy upgrade and a blocking preflight', async () => {
+  const paths = await server_paths();
+  console.log(`  (scenarios) ${paths.summary}`);
+});
+
+/** Every way a real Supabase project can meet this release. */
+async function server_paths() {
+  const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
+  const schema = await read('../supabase/schema.sql');
+  const pairing = await read('../supabase/migrations/202610150001_pairing_flow.sql');
+  const calendar = await read('../supabase/migrations/202610150002_couple_events.sql');
+  const verify = await read('../supabase/verify.sql');
+  const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
+
+  const base = `
+    CREATE ROLE authenticated NOLOGIN; CREATE ROLE anon NOLOGIN; CREATE SCHEMA auth;
+    CREATE TABLE auth.users (id UUID PRIMARY KEY);
+    CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE SQL STABLE AS $$
+      SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::UUID; $$;
+    CREATE FUNCTION auth.role() RETURNS TEXT LANGUAGE SQL STABLE AS $$ SELECT current_user::TEXT; $$;
+    GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
+  `;
+  // Supabase used to auto-grant every new table in public to the API roles. Projects from
+  // 2026-05-30 never had it, and every project loses it for new tables from 2026-10-30, so
+  // both worlds must work.
+  const legacyDefaults = `
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;
+  `;
+  const legacyCalendar = `
+    CREATE TABLE public.couple_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      couple_id UUID NOT NULL REFERENCES public.couples(id) ON DELETE CASCADE,
+      created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+      title TEXT NOT NULL, event_date DATE NOT NULL,
+      repeats_yearly BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    );
+    ALTER TABLE public.couple_events ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY "Couple members can view their events" ON public.couple_events FOR SELECT TO authenticated
+      USING (couple_id = public.get_user_couple_id(auth.uid()));
+    CREATE POLICY "Couple members can add events" ON public.couple_events FOR INSERT TO authenticated
+      WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()) AND created_by = auth.uid());
+    CREATE POLICY "Couple members can edit their events" ON public.couple_events FOR UPDATE TO authenticated
+      USING (couple_id = public.get_user_couple_id(auth.uid()))
+      WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()));
+    CREATE POLICY "Couple members can delete their events" ON public.couple_events FOR DELETE TO authenticated
+      USING (couple_id = public.get_user_couple_id(auth.uid()));
+    CREATE FUNCTION public.set_couple_event_updated_at() RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public
+      AS $$ BEGIN NEW.updated_at := timezone('utc'::text, now()); RETURN NEW; END; $$;
+    CREATE TRIGGER couple_events_set_updated_at BEFORE UPDATE ON public.couple_events
+      FOR EACH ROW EXECUTE FUNCTION public.set_couple_event_updated_at();
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.couple_events TO authenticated;
+    INSERT INTO auth.users (id) VALUES ('00000000-0000-4000-8000-000000000001');
+    INSERT INTO public.couples (id, invite_code, anniversary_date)
+      VALUES ('00000000-0000-4000-8000-0000000000aa', 'ABC123', '2020-02-14');
+    INSERT INTO public.profiles (id, couple_id, name)
+      VALUES ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-0000000000aa', 'Alice');
+    INSERT INTO public.couple_events (couple_id, created_by, title, event_date, repeats_yearly)
+      VALUES ('00000000-0000-4000-8000-0000000000aa', '00000000-0000-4000-8000-000000000001',
+              'Legacy birthday', '2020-05-05', TRUE);
+  `;
+
+  async function run({ defaults, steps, post }) {
+    const db = new PGlite();
+    try {
+      await db.exec(base + defaults);
+      for (const sql of steps) await db.exec(sql);
+      if (post) await db.exec(post);
+      await db.exec(verify);
+      return { passed: true, db };
+    } catch (error) {
+      return { passed: false, message: error.message, db };
+    }
+  }
+
+  const results = [];
+  const check = (label, result, expected) => {
+    assert.equal(result.passed, expected, `${label}: ${result.message ?? 'passed'}`);
+    results.push(label);
+    return result;
+  };
+
+  const freshOld = await run({ defaults: legacyDefaults, steps: [schema] });
+  check('schema.sql on a project with the old auto-grant', freshOld, true);
+  await freshOld.db.close();
+
+  const freshNew = await run({ defaults: '', steps: [schema] });
+  check('schema.sql on a project with no auto-grant', freshNew, true);
+  await freshNew.db.close();
+
+  const existingOld = await run({ defaults: legacyDefaults, steps: [schemaBeforeCalendar, pairing, calendar, pairing, calendar] });
+  check('existing project, both migrations run twice', existingOld, true);
+  await existingOld.db.close();
+
+  const existingNew = await run({ defaults: '', steps: [schemaBeforeCalendar, pairing, calendar, pairing, calendar] });
+  check('existing project with no auto-grant', existingNew, true);
+  await existingNew.db.close();
+
+  const upgraded = await run({
+    defaults: legacyDefaults,
+    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, calendar],
+  });
+  check('project on the earlier calendar revision upgrades in place', upgraded, true);
+  const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
+  assert.equal(rows.rows[0]?.repeat_frequency, 'yearly', 'the legacy yearly event survives the upgrade');
+  await upgraded.db.close();
+
+  // The preflight must block a project that lost its API-role grants.
+  const broken = await run({
+    defaults: '',
+    steps: [schema],
+    post: 'REVOKE ALL ON public.profiles, public.couples FROM authenticated;',
+  });
+  check('preflight blocks a project without table grants', broken, false);
+  assert.match(broken.message, /table permissions/, 'the message says what is wrong');
+  await broken.db.close();
+
+  return { summary: `${results.length} deployment paths verified` };
+}
+
 test('today card and calendar modal: browse, add, edit, delete without leaving Home', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'FormData', 'localStorage']) {

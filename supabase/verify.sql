@@ -49,6 +49,10 @@ BEGIN
   IF has_table_privilege('anon', 'public.couple_events', 'SELECT') THEN
     RAISE EXCEPTION 'Anonymous users must not be able to read couple_events.';
   END IF;
+  IF has_table_privilege('anon', 'public.profiles', 'SELECT')
+     OR has_table_privilege('anon', 'public.couples', 'SELECT') THEN
+    RAISE EXCEPTION 'Anonymous users must not be able to read profiles or couples. Rerun the pairing migration.';
+  END IF;
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'couple_events' AND column_name = 'repeat_frequency'

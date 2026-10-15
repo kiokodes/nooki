@@ -161,6 +161,71 @@ on the fail-closed connection screen. Once real values are in `.env.local`, `/` 
 app as usual. The dev port is pinned with `strictPort` so it cannot silently drift off
 5173.
 
+## Deploying this release — exact steps
+
+### 1. Database (Supabase dashboard → SQL Editor)
+
+Run **one** of these, depending on the project:
+
+| Project state | Run this |
+| --- | --- |
+| Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
+| Live project with real couples | `supabase/migrations/202610150001_pairing_flow.sql`, then `supabase/migrations/202610150002_couple_events.sql`, then `supabase/verify.sql` |
+
+Both migrations are idempotent and safe to rerun; they never drop or rewrite existing data
+(the pairing migration only changes policies, and the calendar migration only adds a table,
+or converts an older one in place). Take a snapshot first anyway.
+
+`supabase/verify.sql` is read-only and must print **PASS**. It checks the pairing RPCs,
+RLS on every table, the anniversary-lock trigger, the `couple_events` calendar, the repeat
+column, and that `anon` cannot reach couple data. If it raises, it names the file to rerun.
+
+**If you already ran the calendar migration before the repeat control existed**, rerun
+`202610150002_couple_events.sql`: it upgrades `repeats_yearly` to `repeat_frequency` in
+place, converting `true` rows to `'yearly'`, then drops the old column.
+
+### 2. Project settings (Supabase dashboard)
+
+- **Authentication → Providers**: Email enabled.
+- **Authentication → URL Configuration**: Site URL = your production origin, and the
+  production plus preview callback URLs in the redirect allowlist.
+- **Authentication → Emails → SMTP**: configure custom SMTP before real users sign up. The
+  built-in sender is capped at **2 emails/hour for the whole project**, only delivers to
+  your organisation's team members, and is the cause of the `over_email_send_rate_limit`
+  error. With your own sender the cap starts at 30/hour and is yours to raise under
+  **Authentication → Rate Limits**.
+- **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
+  and `last_seen_at` writes ride on the existing "update own profile" policy. Optionally
+  enable Realtime Authorization to lock channels down at the database level.
+- **Table privileges**: no action needed. The migrations now grant `profiles`, `couples` and
+  `couple_events` to `authenticated` explicitly and revoke `anon`, so the app works whether
+  or not the project still hands out Supabase's legacy automatic grants (projects created
+  since 2026-05-30, and every project from 2026-10-30, need the explicit grants).
+
+### 3. Environment (Vercel → Project Settings → Environment Variables)
+
+- `VITE_SUPABASE_URL` — the HTTPS project URL.
+- `VITE_SUPABASE_ANON_KEY` — the **public anon or publishable** key only, never a
+  service-role/secret key.
+
+Set them for Production and any Preview environment you test, then **redeploy**: the values
+are inlined at build time, so an existing deployment keeps the old ones. A preview pointing
+at the production project uses real production data.
+
+### 4. Verify before pushing
+
+```sh
+cp .env.example .env.local   # fill in the two values
+npm ci
+npm run check:env            # fails closed without valid public config
+npm test                     # 11 tests, no live project contacted
+npm run lint
+npm run build
+```
+
+A green build does **not** prove the live database, key validity, email delivery or
+two-device behaviour — run the acceptance test below as well.
+
 ## Checks before pushing
 
 With your real project settings in `.env.local`:

@@ -90,4 +90,13 @@ FOR EACH ROW EXECUTE FUNCTION public.set_couple_event_updated_at();
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.couple_events TO authenticated;
 REVOKE ALL ON public.couple_events FROM anon;
 
+-- Pin the API-role privileges explicitly. Supabase used to auto-grant every new table in
+-- public to anon/authenticated; projects created since 2026-05-30 never had that, and all
+-- projects stop getting it for new tables from 2026-10-30. Without these statements a
+-- project on the new behaviour would leave authenticated with no access to these tables.
+GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
+GRANT SELECT, UPDATE ON public.couples TO authenticated;
+REVOKE ALL ON public.profiles, public.couples FROM anon;
+
+
 COMMIT;
