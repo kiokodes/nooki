@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MESSAGE_PAGE_SIZE,
+  editMessage,
   fetchMessages,
   markMessagesRead,
   normalizeMessageContent,
@@ -34,8 +35,18 @@ export interface ChatState {
   /** The partner is composing right now. */
   partnerTyping: boolean;
   sending: boolean;
-  /** `sessionId` marks a "Say more" message: which Discuss question it continues from. */
-  send: (content: string, type?: MessageType, sessionId?: string | null) => Promise<void>;
+  /**
+   * `sessionId` marks a "Say more" message: which Discuss question it continues from.
+   * `replyToId` marks a swipe-to-reply: which earlier message this one answers.
+   */
+  send: (
+    content: string,
+    type?: MessageType,
+    sessionId?: string | null,
+    replyToId?: string | null,
+  ) => Promise<void>;
+  /** Rewrites the words of a message this phone sent. There is no delete. */
+  edit: (messageId: string, content: string) => Promise<void>;
   retry: (entryId: string) => Promise<void>;
   /** Call on every keystroke; the throttle lives here. */
   notifyTyping: () => void;
@@ -142,10 +153,16 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
         onMessageInserted: (message) => {
           applyStored(coupleId, (items) => upsert(items, toEntry(message)));
           // Realtime usually beats the send response back. Drop our own optimistic copy
-          // of the message that just landed so it never shows twice.
+          // of the message that just landed so it never shows twice — matching on the
+          // links too, so two identical replies (or two identical "Say more" notes)
+          // do not collapse into one.
           if (message.sender_id === userId) {
             setPending((items) => items.filter((item) => !(
-              item.sender_id === userId && item.content === message.content && item.delivery === 'sending'
+              item.sender_id === userId
+              && item.content === message.content
+              && (item.session_id ?? null) === message.session_id
+              && (item.reply_to_id ?? null) === message.reply_to_id
+              && item.delivery === 'sending'
             )));
           }
         },
@@ -227,7 +244,14 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     if (!coupleId || !userId) return;
     setSending(true);
     try {
-      const saved = await sendMessage(coupleId, userId, entry.content, type, entry.session_id);
+      const saved = await sendMessage(
+        coupleId,
+        userId,
+        entry.content,
+        type,
+        entry.session_id,
+        entry.reply_to_id,
+      );
       // Replace the optimistic bubble with the stored row.
       setPending((items) => items.filter((item) => item.id !== entry.id));
       applyStored(coupleId, (items) => upsert(items, toEntry(saved)));
@@ -240,7 +264,12 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     }
   }, [applyStored, coupleId, setPending, userId]);
 
-  const send = useCallback(async (content: string, type: MessageType = 'text', sessionId: string | null = null) => {
+  const send = useCallback(async (
+    content: string,
+    type: MessageType = 'text',
+    sessionId: string | null = null,
+    replyToId: string | null = null,
+  ) => {
     if (!coupleId || !userId) return;
     const clean = normalizeMessageContent(content);
     if (!clean) return;
@@ -251,14 +280,30 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
       content: clean,
       type,
       session_id: sessionId ?? null,
+      reply_to_id: replyToId ?? null,
       created_at: new Date().toISOString(),
       read_at: null,
+      edited_at: null,
       delivery: 'sending',
     };
     setPending((items) => [...items, entry]);
     channelRef.current?.notifyStoppedTyping({ user_id: userId });
     await deliver(entry, type);
   }, [coupleId, deliver, setPending, userId]);
+
+  // --- Editing (only your own, and the words only; the database keeps the rest) ----
+  const edit = useCallback(async (messageId: string, content: string) => {
+    if (!coupleId || !userId) return;
+    const clean = normalizeMessageContent(content);
+    if (!clean) return;
+    try {
+      const saved = await editMessage(coupleId, userId, messageId, clean);
+      applyStored(coupleId, (items) => upsert(items, toEntry(saved)));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Your message could not be edited.');
+    }
+  }, [applyStored, coupleId, userId]);
 
   const retry = useCallback(async (entryId: string) => {
     const entry = pending.find((item) => item.id === entryId);
@@ -289,6 +334,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     partnerTyping: Boolean(scope && partnerTyping),
     sending,
     send,
+    edit,
     retry,
     notifyTyping,
     notifyStoppedTyping,

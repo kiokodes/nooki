@@ -85,9 +85,11 @@ BEGIN
      OR has_table_privilege('anon', 'public.messages', 'INSERT') THEN
     RAISE EXCEPTION 'Anonymous users must not be able to read or write messages.';
   END IF;
+  -- The update policy is called "mark messages read" before the replies-and-edits
+  -- migration and "update their chat" after it; either way there are three rules.
   IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'messages' AND (
     policyname IN ('Couple members can read their messages', 'Couple members can send messages',
-                   'Couple members can mark messages read')
+                   'Couple members can mark messages read', 'Couple members can update their chat')
   )) <> 3 THEN RAISE EXCEPTION 'Required messages RLS policies are missing. Rerun supabase/migrations/202610150003_messages.sql.'; END IF;
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -231,6 +233,20 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'session_id'
   ) THEN RAISE EXCEPTION 'messages.session_id is missing. Apply supabase/migrations/202610150005_discuss_comments_chat_links.sql.'; END IF;
+  -- Swipe-to-reply and the author's edit, and the update policy that opened up for them.
+  -- Newest chat migration, so checked last.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'reply_to_id'
+  ) THEN RAISE EXCEPTION 'messages.reply_to_id is missing. Apply supabase/migrations/202610150006_chat_replies_edits.sql.'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'edited_at'
+  ) THEN RAISE EXCEPTION 'messages.edited_at is missing. Apply supabase/migrations/202610150006_chat_replies_edits.sql.'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'messages'
+      AND policyname = 'Couple members can update their chat'
+  ) THEN RAISE EXCEPTION 'The messages update policy predates replies and edits. Apply supabase/migrations/202610150006_chat_replies_edits.sql.'; END IF;
   IF (SELECT count(*) FROM pg_constraint WHERE conname IN (
     'questions_seriousness_check', 'questions_input_type_check', 'questions_options_shape',
     'answers_shape_check', 'answer_comments_comment_length'

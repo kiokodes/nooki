@@ -1678,3 +1678,103 @@ WITH CHECK (
   AND (sender_id = auth.uid() OR (sender_id IS NULL AND type = 'system'))
   AND (session_id IS NULL OR public.get_session_couple_id(session_id) = couple_id)
 );
+
+-- ============================================================================
+-- 15. Chat replies and edits
+-- Mirrors supabase/migrations/202610150006_chat_replies_edits.sql for brand-new
+-- projects. Swipe-to-reply quotes the answered message (couple-scoped, frozen on
+-- insert), and the author — and only the author — can edit the words later, with the
+-- server stamping edited_at. There is still no delete and no reactions.
+-- ============================================================================
+
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES public.messages(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.messages.reply_to_id IS
+  'The message this one answers (set by swipe-to-reply). NULL for ordinary messages.';
+
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN public.messages.edited_at IS
+  'When the author last rewrote the content. NULL while the message is unedited.';
+
+CREATE OR REPLACE FUNCTION public.guard_message_immutable()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.id <> OLD.id
+     OR NEW.couple_id <> OLD.couple_id
+     OR NEW.sender_id IS DISTINCT FROM OLD.sender_id
+     OR NEW.type IS DISTINCT FROM OLD.type
+     OR NEW.session_id IS DISTINCT FROM OLD.session_id
+     OR NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id
+     OR NEW.created_at <> OLD.created_at THEN
+    RAISE EXCEPTION 'Most of a message is frozen: only its author can edit the words, and only the recipient can stamp the receipt.';
+  END IF;
+
+  IF NEW.read_at IS DISTINCT FROM OLD.read_at THEN
+    IF OLD.sender_id IS NOT DISTINCT FROM auth.uid() THEN
+      RAISE EXCEPTION 'You cannot mark your own message as read.';
+    END IF;
+    IF OLD.read_at IS NOT NULL OR NEW.read_at IS NULL THEN
+      RAISE EXCEPTION 'A read receipt cannot be taken back.';
+    END IF;
+  END IF;
+
+  IF NEW.content IS DISTINCT FROM OLD.content THEN
+    IF OLD.sender_id IS DISTINCT FROM auth.uid() THEN
+      RAISE EXCEPTION 'You can only edit your own messages.';
+    END IF;
+    -- The server stamps the edit: a phone's clock never writes edited_at.
+    NEW.edited_at := timezone('utc'::text, now());
+  ELSIF NEW.edited_at IS DISTINCT FROM OLD.edited_at THEN
+    -- Silently keeping an edited_at the client sent would let it look forged.
+    RAISE EXCEPTION 'The edit stamp only moves when the words do.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS messages_guard_immutable ON public.messages;
+CREATE TRIGGER messages_guard_immutable
+BEFORE UPDATE ON public.messages
+FOR EACH ROW EXECUTE FUNCTION public.guard_message_immutable();
+
+-- Same definer-side reason as the migration: quoting must not recurse the read policy
+-- into the send policy, so the couple check reads as the owner.
+CREATE OR REPLACE FUNCTION public.message_is_in_couple(p_message_id UUID, p_couple_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p_message_id IS NOT NULL
+     AND p_couple_id IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM public.messages parent
+       WHERE parent.id = p_message_id AND parent.couple_id = p_couple_id
+     );
+$$;
+
+DROP POLICY IF EXISTS "Couple members can send messages" ON public.messages;
+CREATE POLICY "Couple members can send messages" ON public.messages
+FOR INSERT TO authenticated
+WITH CHECK (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND (sender_id = auth.uid() OR (sender_id IS NULL AND type = 'system'))
+  AND (session_id IS NULL OR public.get_session_couple_id(session_id) = couple_id)
+  AND (reply_to_id IS NULL OR public.message_is_in_couple(reply_to_id, couple_id))
+);
+
+DROP POLICY IF EXISTS "Couple members can mark messages read" ON public.messages;
+DROP POLICY IF EXISTS "Couple members can update their chat" ON public.messages;
+CREATE POLICY "Couple members can update their chat" ON public.messages
+FOR UPDATE TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()))
+WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()));

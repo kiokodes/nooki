@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, CheckCheck, CircleAlert, Clock, MessageSquare, Phone, Send, Video, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, CheckCheck, CircleAlert, Clock, MessageSquare, Pencil, Phone, Reply as ReplyIcon, Send, Video, X } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { useNow } from '../../hooks/useNow';
 import { getInitial, formatLastSeen } from '../../lib/coupleTime';
@@ -23,10 +23,15 @@ interface ChatViewProps {
   partnerTyping: boolean;
   loading: boolean;
   error: string | null;
-  /** `sessionId` links the message to the Discuss question it continues ("Say more"). */
-  onSend: (content: string, sessionId: string | null) => Promise<void> | void;
+  /**
+   * `sessionId` links the message to the Discuss question it continues ("Say more");
+   * `replyToId` quotes the message it answers (swipe-to-reply).
+   */
+  onSend: (content: string, sessionId: string | null, replyToId?: string | null) => Promise<void> | void;
   onTyping: () => void;
   onStopTyping: () => void;
+  /** Edit one of your own messages. Optional: without it the action menu hides Edit. */
+  onEditMessage?: (messageId: string, content: string) => Promise<void> | void;
   onRetry: (entryId: string) => void;
   onDismissError: () => void;
   /** What a linked session asked, so a bubble can quote its question. */
@@ -40,6 +45,14 @@ interface ChatViewProps {
 
 const TOAST_MS = 2_000;
 const COMPOSER_MAX_HEIGHT = 132;
+/** Hold this long without moving to open the action menu. */
+const LONG_PRESS_MS = 450;
+/** A horizontal drag past this triggers the reply; beyond this the drag stops moving. */
+const SWIPE_TRIGGER_PX = 52;
+const SWIPE_MAX_PX = 82;
+/** Small enough that a tap never reads as either gesture. */
+const MOVE_SLOP_PX = 10;
+const HIGHLIGHT_MS = 1_400;
 
 const statusRowStyle: React.CSSProperties = {
   display: 'flex',
@@ -87,13 +100,47 @@ const Receipt: React.FC<{ delivery: ChatEntry['delivery'] }> = ({ delivery }) =>
   );
 };
 
+interface ReplyQuote {
+  senderName: string;
+  snippet: string;
+}
+
+interface GestureState {
+  startX: number;
+  startY: number;
+  dragging: boolean;
+  longPressTimer: number | null;
+}
+
 const Bubble: React.FC<{
   entry: ChatEntry;
   mine: boolean;
   onRetry: (entryId: string) => void;
   questionBySessionId?: Record<string, { text: string; category: string }>;
   onOpenQuestion?: (sessionId: string) => void;
-}> = ({ entry, mine, onRetry, questionBySessionId, onOpenQuestion }) => {
+  /** What this bubble answers, looked up by the transcript; undefined when unknown. */
+  replyOf?: ReplyQuote;
+  onSwipeReply: (entry: ChatEntry) => void;
+  onOpenActions: (entry: ChatEntry) => void;
+  onJumpTo: (messageId: string) => void;
+  highlighted: boolean;
+}> = ({
+  entry,
+  mine,
+  onRetry,
+  questionBySessionId,
+  onOpenQuestion,
+  replyOf,
+  onSwipeReply,
+  onOpenActions,
+  onJumpTo,
+  highlighted,
+}) => {
+  // A horizontal drag in progress: the bubble slides and the reply icon rises.
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const gestureRef = useRef<GestureState | null>(null);
+
   // System notes (the Discuss tab's automatic lines) read as a quiet centred pill.
   if (entry.type === 'system') {
     return (
@@ -122,116 +169,287 @@ const Bubble: React.FC<{
   // to the revealed answers for whichever partner taps it.
   const quoted = entry.session_id ? questionBySessionId?.[entry.session_id]?.text : undefined;
 
+  // Swiping and long-pressing live on delivered bubbles only: a pending quote would
+  // point at an id the database does not have yet, and a failed one has the retry.
+  const interactive = entry.delivery === 'sent' || entry.delivery === 'read';
+  const direction = mine ? -1 : 1;
+
+  const endGesture = (applySwipe: boolean) => {
+    const gesture = gestureRef.current;
+    gestureRef.current = null;
+    if (gesture?.longPressTimer !== null && gesture) window.clearTimeout(gesture.longPressTimer);
+    if (applySwipe && gesture?.dragging && Math.abs(dragX) >= SWIPE_TRIGGER_PX) {
+      onSwipeReply(entry);
+    }
+    setDragging(false);
+    setDragX(0);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent) => {
+    if (!interactive) return;
+    const gesture: GestureState = {
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+      longPressTimer: window.setTimeout(() => {
+        if (gestureRef.current === gesture && !gesture.dragging) {
+          gestureRef.current = null;
+          gesture.longPressTimer = null;
+          onOpenActions(entry);
+        }
+      }, LONG_PRESS_MS),
+    };
+    gestureRef.current = gesture;
+  };
+
+  const handlePointerMove = (event: React.PointerEvent) => {
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.dragging) {
+      if (Math.abs(dx) > MOVE_SLOP_PX && Math.abs(dx) >= Math.abs(dy)) {
+        // A clearly-horizontal drag owns the gesture; the long press is off.
+        gesture.dragging = true;
+        setDragging(true);
+        if (gesture.longPressTimer !== null) {
+          window.clearTimeout(gesture.longPressTimer);
+          gesture.longPressTimer = null;
+        }
+      } else if (Math.abs(dy) > MOVE_SLOP_PX) {
+        // Scrolling past a bubble must not answer it.
+        endGesture(false);
+        return;
+      } else {
+        return;
+      }
+    }
+    // Swipe toward the transcript centre: left on your bubbles, right on theirs.
+    const projected = Math.max(0, Math.min(dx * direction, SWIPE_MAX_PX)) * direction;
+    setDragX(projected);
+  };
+
+  const handlePointerUp = () => endGesture(true);
+  const handlePointerCancel = () => endGesture(false);
+
+  const handleContextMenu = (event: React.MouseEvent) => {
+    if (!interactive) return;
+    event.preventDefault();
+    endGesture(false);
+    onOpenActions(entry);
+  };
+
+  const swipeProgress = Math.min(1, Math.abs(dragX) / SWIPE_TRIGGER_PX);
+
   return (
     <div
       style={{
+        position: 'relative',
         alignSelf: mine ? 'flex-end' : 'flex-start',
         maxWidth: '78%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: mine ? 'flex-end' : 'flex-start',
-        gap: '2px',
       }}
     >
+      {dragging && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: '50%',
+            transform: `translateY(-50%) scale(${0.7 + swipeProgress * 0.3})`,
+            opacity: 0.25 + swipeProgress * 0.75,
+            [mine ? 'right' : 'left']: '-34px',
+            width: '26px',
+            height: '26px',
+            borderRadius: tokens.radii.full,
+            backgroundColor: swipeProgress >= 1 ? tokens.colors.primaryPink : tokens.colors.bgSurface,
+            border: `1px solid ${tokens.colors.borderSubtle}`,
+            color: swipeProgress >= 1 ? tokens.colors.textWhite : tokens.colors.textMuted,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background-color 0.1s ease',
+          }}
+        >
+          <ReplyIcon size={13} />
+        </span>
+      )}
+
       <div
-        data-message-id={entry.id}
-        data-mine={mine ? 'true' : 'false'}
-        data-message-type={entry.type}
+        data-message-row={entry.id}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onContextMenu={handleContextMenu}
         style={{
-          padding: '8px 12px',
-          borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-          backgroundColor: mine ? tokens.colors.primaryPink : tokens.colors.bgSurface,
-          color: tokens.colors.textPrimary,
-          border: mine ? '1px solid transparent' : `1px solid ${tokens.colors.borderSubtle}`,
-          boxShadow: tokens.shadows.subtle,
-          // Newlines are paragraphs the sender typed: the bubble keeps them.
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'anywhere',
-          fontSize: '0.87rem',
-          lineHeight: 1.45,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: mine ? 'flex-end' : 'flex-start',
+          gap: '2px',
+          transform: dragX ? `translateX(${dragX}px)` : undefined,
+          // While a drag owns the bubble the page must not fight it for the gesture.
+          touchAction: 'pan-y',
         }}
       >
-        {entry.session_id && (
-          <button
-            type="button"
-            data-question-link={entry.session_id}
-            aria-label="Open this question"
-            onClick={() => onOpenQuestion?.(entry.session_id as string)}
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '6px',
-              width: '100%',
-              margin: '0 0 6px 0',
-              padding: '6px 9px',
-              borderRadius: tokens.radii.sm,
-              border: 'none',
-              backgroundColor: mine ? 'rgba(255, 255, 255, 0.55)' : tokens.colors.accentSageSoft,
-              color: mine ? tokens.colors.textPrimary : tokens.colors.accentSageDeep,
-              cursor: 'pointer',
-              fontFamily: tokens.typography.fontFamily,
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              lineHeight: 1.4,
-              textAlign: 'left',
-            }}
-          >
-            <MessageSquare size={12} style={{ flexShrink: 0, marginTop: '2px' }} aria-hidden="true" />
-            <span
+        <div
+          data-message-id={entry.id}
+          data-mine={mine ? 'true' : 'false'}
+          data-message-type={entry.type}
+          data-highlighted={highlighted ? 'true' : undefined}
+          style={{
+            padding: '8px 12px',
+            borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+            backgroundColor: mine ? tokens.colors.primaryPink : tokens.colors.bgSurface,
+            color: tokens.colors.textPrimary,
+            border: mine ? '1px solid transparent' : `1px solid ${tokens.colors.borderSubtle}`,
+            boxShadow: highlighted
+              ? `0 0 0 2px ${tokens.colors.primaryPinkDeep}, ${tokens.shadows.subtle}`
+              : tokens.shadows.subtle,
+            transition: 'box-shadow 0.3s ease',
+            // Newlines are paragraphs the sender typed: the bubble keeps them.
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere',
+            fontSize: '0.87rem',
+            lineHeight: 1.45,
+          }}
+        >
+          {entry.session_id && (
+            <button
+              type="button"
+              data-question-link={entry.session_id}
+              aria-label="Open this question"
+              onClick={() => onOpenQuestion?.(entry.session_id as string)}
               style={{
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '6px',
+                width: '100%',
+                margin: '0 0 6px 0',
+                padding: '6px 9px',
+                borderRadius: tokens.radii.sm,
+                border: 'none',
+                backgroundColor: mine ? 'rgba(255, 255, 255, 0.55)' : tokens.colors.accentSageSoft,
+                color: mine ? tokens.colors.textPrimary : tokens.colors.accentSageDeep,
+                cursor: 'pointer',
+                fontFamily: tokens.typography.fontFamily,
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                lineHeight: 1.4,
+                textAlign: 'left',
               }}
             >
-              {quoted ?? 'A question you both answered'}
-            </span>
+              <MessageSquare size={12} style={{ flexShrink: 0, marginTop: '2px' }} aria-hidden="true" />
+              <span
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {quoted ?? 'A question you both answered'}
+              </span>
+            </button>
+          )}
+
+          {entry.reply_to_id && (
+            <button
+              type="button"
+              data-reply-quote={entry.reply_to_id}
+              aria-label="Jump to the original message"
+              title="Jump to the original message"
+              onClick={() => onJumpTo(entry.reply_to_id as string)}
+              style={{
+                display: 'block',
+                width: '100%',
+                margin: '0 0 6px 0',
+                padding: '5px 8px',
+                borderRadius: tokens.radii.sm,
+                border: 'none',
+                borderLeft: `3px solid ${tokens.colors.primaryPinkDeep}`,
+                backgroundColor: mine ? 'rgba(255, 255, 255, 0.55)' : tokens.colors.bgCanvas,
+                cursor: replyOf ? 'pointer' : 'default',
+                fontFamily: tokens.typography.fontFamily,
+                textAlign: 'left',
+              }}
+            >
+              <span
+                style={{
+                  display: 'block',
+                  fontSize: '0.68rem',
+                  fontWeight: 800,
+                  color: tokens.colors.primaryPinkDeep,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {replyOf?.senderName ?? 'Original message'}
+              </span>
+              <span
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  fontSize: '0.76rem',
+                  fontWeight: 500,
+                  color: tokens.colors.textSecondary,
+                  lineHeight: 1.35,
+                }}
+              >
+                {replyOf?.snippet ?? 'This message is further back in your chat.'}
+              </span>
+            </button>
+          )}
+
+          {entry.content}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              marginLeft: '8px',
+              float: 'right',
+              marginTop: '6px',
+              fontSize: '0.62rem',
+              fontWeight: 600,
+              color: mine ? '#7A4159' : tokens.colors.textMuted,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {entry.edited_at && (
+              <span data-edited="true" style={{ fontStyle: 'italic' }}>edited</span>
+            )}
+            {formatMessageTime(entry.created_at)}
+            {mine && entry.delivery !== 'failed' && <Receipt delivery={entry.delivery} />}
+          </span>
+        </div>
+
+        {mine && entry.delivery === 'failed' && (
+          <button
+            type="button"
+            data-retry-message={entry.id}
+            onClick={() => onRetry(entry.id)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              color: tokens.colors.primaryPinkDeep,
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              fontFamily: tokens.typography.fontFamily,
+            }}
+          >
+            <CircleAlert size={12} aria-hidden="true" />
+            Not sent — tap to retry
           </button>
         )}
-        {entry.content}
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '3px',
-            marginLeft: '8px',
-            float: 'right',
-            marginTop: '6px',
-            fontSize: '0.62rem',
-            fontWeight: 600,
-            color: mine ? '#7A4159' : tokens.colors.textMuted,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {formatMessageTime(entry.created_at)}
-          {mine && entry.delivery !== 'failed' && <Receipt delivery={entry.delivery} />}
-        </span>
       </div>
-
-      {mine && entry.delivery === 'failed' && (
-        <button
-          type="button"
-          data-retry-message={entry.id}
-          onClick={() => onRetry(entry.id)}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            color: tokens.colors.primaryPinkDeep,
-            fontSize: '0.68rem',
-            fontWeight: 700,
-            fontFamily: tokens.typography.fontFamily,
-          }}
-        >
-          <CircleAlert size={12} aria-hidden="true" />
-          Not sent — tap to retry
-        </button>
-      )}
     </div>
   );
 };
@@ -242,6 +460,10 @@ const Bubble: React.FC<{
  * Bubbles from this phone sit on the right in Nooki's blush pink, the partner's on the
  * left in white; the transcript is split into days, receipts show sent/read, and the
  * list keeps itself pinned to the newest message.
+ *
+ * Replying is a swipe (left on your bubbles, right on theirs) or a long press, and
+ * editing your own words lives in the long-press menu. There is no delete and there
+ * are no reactions: the log is permanent, in two voices.
  *
  * The partner's name, presence and the two call buttons live in the conversation bar at
  * the top of the tab. The call buttons are deliberately inert for now.
@@ -258,6 +480,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onSend,
   onTyping,
   onStopTyping,
+  onEditMessage,
   onRetry,
   onDismissError,
   questionBySessionId,
@@ -267,14 +490,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
 }) => {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ChatEntry | null>(null);
+  const [editing, setEditing] = useState<ChatEntry | null>(null);
+  const [actionTarget, setActionTarget] = useState<ChatEntry | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
   // Minute granularity: enough for "Today"/"Yesterday" to roll over, and cheap.
   const now = useNow(60_000);
 
-  // Auto-scroll: pin to the newest message whenever the transcript or the typing
-  // indicator changes, which is also what happens when the tab opens.
+  const messageById = useMemo(() => {
+    const map = new Map<string, ChatEntry>();
+    for (const message of messages) map.set(message.id, message);
+    return map;
+  }, [messages]);
+
+  // Auto-scroll: pin to the newest message whenever the transcript grows or the typing
+  // indicator changes, which is also what happens when the tab opens. An edit or a
+  // receipt does not change the count, so it never yanks the reader back down.
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
@@ -289,6 +524,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   useEffect(() => () => {
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current);
   }, []);
 
   const resizeInput = useCallback(() => {
@@ -304,20 +540,78 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (questionContext) inputRef.current?.focus();
   }, [questionContext]);
 
+  const clearReply = useCallback(() => setReplyTarget(null), []);
+
+  const startReply = useCallback((entry: ChatEntry) => {
+    setEditing(null);
+    setActionTarget(null);
+    setReplyTarget(entry);
+    inputRef.current?.focus();
+  }, []);
+
+  // Choosing Edit swaps the composer into edit mode: the box starts with the message's
+  // own words, and the send button becomes a save. Reply and edit never coexist.
+  const startEdit = useCallback((entry: ChatEntry) => {
+    setReplyTarget(null);
+    setActionTarget(null);
+    setEditing(entry);
+    setDraft(entry.content);
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      resizeInput();
+    }, 0);
+  }, [resizeInput]);
+
+  const cancelEdit = useCallback(() => {
+    setEditing(null);
+    setDraft('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';
+    inputRef.current?.focus();
+  }, []);
+
+  const jumpToMessage = useCallback((messageId: string) => {
+    const element = listRef.current?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!element) return;
+    (element as HTMLElement).scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    setHighlightId(messageId);
+    if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightId((current) => (current === messageId ? null : current));
+    }, HIGHLIGHT_MS);
+  }, []);
+
+  const replySenderName = useCallback((entry: ChatEntry): string => {
+    if (entry.sender_id === currentUserId) return 'You';
+    return entry.sender_id ? partnerName : '';
+  }, [currentUserId, partnerName]);
+
   const handleSubmit = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
     const content = draft;
     // Enter starts a new paragraph, so the send button is the only way to send.
     if (!content.trim()) return;
+
+    if (editing) {
+      // Saving an unchanged message is just closing the composer.
+      if (content !== editing.content) await onEditMessage?.(editing.id, content);
+      setEditing(null);
+      setDraft('');
+      onStopTyping();
+      if (inputRef.current) inputRef.current.style.height = 'auto';
+      inputRef.current?.focus();
+      return;
+    }
+
     setDraft('');
     onStopTyping();
     if (inputRef.current) inputRef.current.style.height = 'auto';
-    // "Say more" attaches its question to this one message only; the quote then lives
-    // on the bubble itself, so the banner can clear as soon as it is sent.
-    await onSend(content, questionContext?.sessionId ?? null);
+    // Both attachments are one-shot: the question and the quote live on the bubble
+    // itself after this one message, so the banners clear as soon as it is sent.
+    await onSend(content, questionContext?.sessionId ?? null, replyTarget?.id ?? null);
     onClearQuestionContext?.();
+    setReplyTarget(null);
     inputRef.current?.focus();
-  }, [draft, onSend, onStopTyping, onClearQuestionContext, questionContext]);
+  }, [draft, editing, onSend, onEditMessage, onStopTyping, onClearQuestionContext, questionContext, replyTarget]);
 
   const groups = groupMessagesByDay(messages, now);
   const statusColor = partnerTyping
@@ -330,6 +624,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
     : partnerOnline
       ? 'Online'
       : formatLastSeen(partnerLastSeenAt, now);
+
+  // Only a delivered message of yours, in your own words, is editable: nothing pending,
+  // nothing failed (that is what retry is for), nothing the partner typed.
+  const canEditAction = (entry: ChatEntry): boolean => (
+    Boolean(onEditMessage)
+    && entry.sender_id === currentUserId
+    && entry.type === 'text'
+    && (entry.delivery === 'sent' || entry.delivery === 'read')
+  );
+
+  const replyingToName = replyTarget ? replySenderName(replyTarget) : '';
 
   return (
     <section
@@ -498,6 +803,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 onRetry={onRetry}
                 questionBySessionId={questionBySessionId}
                 onOpenQuestion={onOpenQuestion}
+                replyOf={entry.reply_to_id ? {
+                  senderName: messageById.has(entry.reply_to_id)
+                    ? replySenderName(messageById.get(entry.reply_to_id) as ChatEntry)
+                    : 'Original message',
+                  snippet: messageById.get(entry.reply_to_id)?.content
+                    ?? 'This message is further back in your chat.',
+                } : undefined}
+                onSwipeReply={startReply}
+                onOpenActions={setActionTarget}
+                onJumpTo={jumpToMessage}
+                highlighted={highlightId === entry.id}
               />
             ))}
           </React.Fragment>
@@ -633,6 +949,140 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       )}
 
+      {/* Swipe-to-reply lands here: who you are answering and what they said. */}
+      {replyTarget && (
+        <div
+          data-reply-context
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            margin: '0 14px 6px 14px',
+            padding: '8px 10px 8px 12px',
+            borderRadius: tokens.radii.md,
+            backgroundColor: tokens.colors.primaryPinkSoft,
+            border: `1px solid ${tokens.colors.primaryPink}`,
+            flexShrink: 0,
+          }}
+        >
+          <ReplyIcon size={14} color={tokens.colors.primaryPinkDeep} style={{ flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span
+              style={{
+                display: 'block',
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                color: tokens.colors.primaryPinkDeep,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {`Replying to ${replyingToName || 'a note'}`}
+            </span>
+            <span
+              style={{
+                display: 'block',
+                fontSize: '0.76rem',
+                fontWeight: 700,
+                color: tokens.colors.textPrimary,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {replyTarget.content}
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label="Clear reply"
+            onClick={clearReply}
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: tokens.radii.full,
+              border: 'none',
+              backgroundColor: 'transparent',
+              color: tokens.colors.primaryPinkDeep,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <X size={13} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {/* Edit mode: the box holds the original words and the send button saves. */}
+      {editing && (
+        <div
+          data-edit-context
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            margin: '0 14px 6px 14px',
+            padding: '8px 10px 8px 12px',
+            borderRadius: tokens.radii.md,
+            backgroundColor: tokens.colors.primaryPinkSoft,
+            border: `1px solid ${tokens.colors.primaryPink}`,
+            flexShrink: 0,
+          }}
+        >
+          <Pencil size={14} color={tokens.colors.primaryPinkDeep} style={{ flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span
+              style={{
+                display: 'block',
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                color: tokens.colors.primaryPinkDeep,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Editing message
+            </span>
+            <span
+              style={{
+                display: 'block',
+                fontSize: '0.76rem',
+                fontWeight: 700,
+                color: tokens.colors.textPrimary,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {editing.content}
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label="Cancel edit"
+            onClick={cancelEdit}
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: tokens.radii.full,
+              border: 'none',
+              backgroundColor: 'transparent',
+              color: tokens.colors.primaryPinkDeep,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <X size={13} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       {/* Composer. Enter inserts a paragraph break; only the send button sends. */}
       <form
         data-chat-composer
@@ -659,6 +1109,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
             if (event.target.value.trim()) onTyping();
             else onStopTyping();
           }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && (editing || replyTarget)) {
+              event.preventDefault();
+              if (editing) cancelEdit();
+              else clearReply();
+            }
+          }}
           onBlur={onStopTyping}
           style={{
             flex: 1,
@@ -678,7 +1135,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         />
         <button
           type="submit"
-          aria-label="Send message"
+          aria-label={editing ? 'Save edit' : 'Send message'}
           disabled={!draft.trim()}
           style={{
             width: '42px',
@@ -696,9 +1153,118 @@ export const ChatView: React.FC<ChatViewProps> = ({
             transition: 'background-color 0.15s ease',
           }}
         >
-          <Send size={17} aria-hidden="true" />
+          {editing ? <Check size={17} aria-hidden="true" /> : <Send size={17} aria-hidden="true" />}
         </button>
       </form>
+
+      {/* Long press (or a right click) opens the only two actions a message gets:
+          answer it, or correct it if it is yours. There is no delete and no reaction —
+          those were asked away on purpose. */}
+      {actionTarget && (
+        <div
+          data-actions-backdrop
+          onClick={() => setActionTarget(null)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 20,
+            backgroundColor: 'rgba(87, 55, 70, 0.22)',
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            padding: '0 20px 24px 20px',
+          }}
+        >
+          <div
+            data-message-actions={actionTarget.id}
+            role="menu"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '260px',
+              borderRadius: tokens.radii.lg,
+              backgroundColor: tokens.colors.bgSurface,
+              border: `1px solid ${tokens.colors.borderSubtle}`,
+              boxShadow: tokens.shadows.soft,
+              overflow: 'hidden',
+            }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="Reply"
+              data-action-reply
+              onClick={() => startReply(actionTarget)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                width: '100%',
+                padding: '13px 16px',
+                border: 'none',
+                borderBottom: canEditAction(actionTarget) ? `1px solid ${tokens.colors.borderSubtle}` : 'none',
+                backgroundColor: 'transparent',
+                color: tokens.colors.textPrimary,
+                fontFamily: tokens.typography.fontFamily,
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <ReplyIcon size={16} color={tokens.colors.primaryPinkDeep} aria-hidden="true" />
+              Reply
+            </button>
+            {canEditAction(actionTarget) && (
+              <button
+                type="button"
+                role="menuitem"
+                aria-label="Edit"
+                data-action-edit
+                onClick={() => startEdit(actionTarget)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  padding: '13px 16px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: tokens.colors.textPrimary,
+                  fontFamily: tokens.typography.fontFamily,
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <Pencil size={16} color={tokens.colors.primaryPinkDeep} aria-hidden="true" />
+                Edit
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setActionTarget(null)}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '10px 16px',
+                border: 'none',
+                borderTop: `1px solid ${tokens.colors.borderSubtle}`,
+                backgroundColor: 'transparent',
+                color: tokens.colors.textMuted,
+                fontFamily: tokens.typography.fontFamily,
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

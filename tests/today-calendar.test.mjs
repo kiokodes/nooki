@@ -295,6 +295,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const chatMigration = await readFile(new URL('../supabase/migrations/202610150003_messages.sql', import.meta.url), 'utf8');
   const discussMigration = await readFile(new URL('../supabase/migrations/202610150004_discuss_questions.sql', import.meta.url), 'utf8');
   const linksMigration = await readFile(new URL('../supabase/migrations/202610150005_discuss_comments_chat_links.sql', import.meta.url), 'utf8');
+  const repliesMigration = await readFile(new URL('../supabase/migrations/202610150006_chat_replies_edits.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -329,6 +330,12 @@ test('verify.sql spots a live project that is missing a migration', async () => 
 
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(linksMigration);
+    // The comments are in place but replies and edits are not: the preflight names that too.
+    await assert.rejects(db.exec(verification), /reply_to_id/,
+      'the preflight must send the owner to the replies migration');
+
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(repliesMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -350,6 +357,7 @@ async function server_paths() {
   const chat = await read('../supabase/migrations/202610150003_messages.sql');
   const discuss = await read('../supabase/migrations/202610150004_discuss_questions.sql');
   const links = await read('../supabase/migrations/202610150005_discuss_comments_chat_links.sql');
+  const replies = await read('../supabase/migrations/202610150006_chat_replies_edits.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -435,24 +443,24 @@ async function server_paths() {
 
   const existingOld = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links,
-            pairing, calendar, chat, discuss, links],
+    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links, replies,
+            pairing, calendar, chat, discuss, links, replies],
   });
   check('existing project, all migrations run twice', existingOld, true);
   await existingOld.db.close();
 
   const existingNew = await run({
     defaults: '',
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links,
-            pairing, calendar, chat, discuss, links],
+    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links, replies,
+            pairing, calendar, chat, discuss, links, replies],
   });
   check('existing project with no auto-grant', existingNew, true);
   await existingNew.db.close();
 
   const upgraded = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, chat, discuss, links,
-            calendar, chat, discuss, links],
+    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, chat, discuss, links, replies,
+            calendar, chat, discuss, links, replies],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -485,6 +493,17 @@ async function server_paths() {
   assert.match(missingLinks.message, /answer_comments/, 'the message names the missing comments table');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(links);
+  // The comments landed, but replies and edits have not: the preflight says that too.
+  let stillBlocked = true;
+  try {
+    await missingLinks.db.exec(verify);
+    stillBlocked = false;
+  } catch (error) {
+    assert.match(error.message, /reply_to_id/, 'the message names the missing reply column');
+  }
+  assert(stillBlocked, 'the preflight keeps pressing until replies and edits land');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(replies);
   await missingLinks.db.exec(verify);
   await missingLinks.db.close();
 

@@ -36,10 +36,13 @@ and public-key format, not the remote key's validity or the database's health.
 2. Run `supabase/migrations/202610150001_pairing_flow.sql` in that project's SQL Editor.
    Then run `supabase/migrations/202610150002_couple_events.sql`, then
    `supabase/migrations/202610150003_messages.sql`, then
-   `supabase/migrations/202610150004_discuss_questions.sql`, the same way. All four are
+   `supabase/migrations/202610150004_discuss_questions.sql`, then
+   `supabase/migrations/202610150005_discuss_comments_chat_links.sql`, then
+   `supabase/migrations/202610150006_chat_replies_edits.sql`, the same way. All six are
    safe to rerun and change nothing that already exists: the second adds the shared
-   calendar, the third adds the chat log, and the fourth adds the Discuss question engine
-   (plus their Realtime publication membership).
+   calendar, the third adds the chat log, the fourth adds the Discuss question engine,
+   the fifth rewrites reactions into comments and links chat messages to questions, and
+   the sixth adds chat replies and edits (plus their Realtime publication membership).
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
    anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat
@@ -169,6 +172,7 @@ left, live, with no refresh anywhere. It is built from:
 | Transport: queries, the Realtime channel, validation | `src/lib/chatService.ts` |
 | Day separators and bubble times (pure functions) | `src/lib/chatTime.ts` |
 | The table, its RLS and its Realtime membership | `supabase/migrations/202610150003_messages.sql` |
+| Replies and the author's edit | `supabase/migrations/202610150006_chat_replies_edits.sql` |
 
 - **Bubbles** — your messages sit on the right in Nooki's blush pink, the partner's on the
   left in white, each with its timestamp inside the bubble. The transcript is split into
@@ -177,6 +181,16 @@ left, live, with no refresh anywhere. It is built from:
 - **Sending** — the composer is a growing multi-line box. **Enter starts a new
   paragraph**; only the send button sends, so a long message can be written properly on a
   phone. A sent message appears instantly, then its real row replaces it.
+- **Replies** — swipe a message toward the centre of the chat (left on yours, right on
+  theirs) or long-press (right-click) it and tap **Reply**: the composer shows
+  *"Replying to Bob"* with their words until it is sent or dismissed. The bubble then
+  quotes the original above its own text — tap the quote to jump back to the original,
+  which lights up so you can see what you landed on.
+- **Edits** — the same long-press menu offers **Edit** on your own delivered messages:
+  the composer refills with the original words and the send button becomes a save. An
+  edited bubble is marked *edited* next to its time. Only the author can edit, only the
+  words can change, and the edit stamp is set by the database, not the phone. There is
+  deliberately **no delete and no reactions**: the log is permanent, in two voices.
 - **Receipts** — a small clock while it is on its way, one check once the database has it
   (single check = sent), and two pink checks once the partner's phone has actually read it
   (double check = read). A send that fails stays on screen as a bubble with
@@ -203,10 +217,14 @@ left, live, with no refresh anywhere. It is built from:
 - **Realtime** — one channel per couple (`nooki-chat-<coupleId>`) carries Postgres Changes
   for `INSERT` and `UPDATE` filtered by `couple_id`, plus the typing broadcast. RLS applies
   to the stream as well, so the other couple never receives these rows.
-- **What the database enforces** — messages are a permanent log: an update may only stamp
-  `read_at` (a trigger rejects edits to the words, type, author or time), there is no
-  delete policy, and rows cascade away with the couple. Only the couple's two accounts can
-  read or write them, and the last 200 messages are loaded (`MESSAGE_PAGE_SIZE`).
+- **What the database enforces** — messages are a permanent log in two voices: a read
+  receipt may only be stamped once and only by the recipient, the words may only change
+  at the author's hand (the trigger then stamps `edited_at` itself), and the id, couple,
+  author, type, question link and quoted reply are frozen. There is no delete policy,
+  and rows cascade away with the couple. A reply (`reply_to_id`) may only quote a message
+  inside the same couple, refused row by row by the same policy that scopes "Say more".
+  Only the couple's two accounts can read or write them, and the last 200 messages are
+  loaded (`MESSAGE_PAGE_SIZE`).
 
 Presence runs at app level, so a partner still reads as online while this phone browses
 Chat, Media, Discussion or Games. The app writes its own `last_seen_at` on mount, every
@@ -510,6 +528,12 @@ Use your actual accounts; there is no automatic user creation.
       the chat open; a message sent with the network off shows "Not sent — tap to retry" and
       retries successfully.
 - [ ] Messages from days ago sit under `Yesterday` / weekday separators as you scroll back.
+- [ ] Swiping a message toward the centre of the chat (or long-pressing it and tapping
+      Reply) quotes it above the composer, the sent bubble shows the quote, and tapping
+      the quote jumps back to the original message on either device.
+- [ ] Long-pressing your own message offers Edit; saving it marks the bubble "edited"
+      with the new words on both devices, and the partner's messages never offer Edit.
+      There is no delete option anywhere.
 - [ ] Sending from device B while device A sits on Home shows a pink count on the Chat tab,
       and opening the chat clears it.
 - [ ] A third account cannot read or write the couple's messages.

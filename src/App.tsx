@@ -432,9 +432,10 @@ export const App: React.FC = () => {
             partnerTyping={chat.partnerTyping}
             loading={chat.loading}
             error={chat.error}
-            onSend={(content, sessionId) => chat.send(content, 'text', sessionId)}
+            onSend={(content, sessionId, replyToId) => chat.send(content, 'text', sessionId, replyToId)}
             onTyping={chat.notifyTyping}
             onStopTyping={chat.notifyStoppedTyping}
+            onEditMessage={chat.edit}
             onRetry={chat.retry}
             onDismissError={chat.clearError}
             questionBySessionId={questionBySessionId}

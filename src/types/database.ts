@@ -57,9 +57,21 @@ export interface ChatMessage {
    * ordinary messages.
    */
   session_id: string | null;
+  /**
+   * The message this one answers, set by swipe-to-reply or the long-press menu. The
+   * bubble renders it as a quoted strip and tapping the strip scrolls back to the
+   * original. The database only accepts replies inside the same couple, and the id is
+   * frozen with the rest of the row. NULL for ordinary messages.
+   */
+  reply_to_id: string | null;
   created_at: string;
   /** Set when the *other* partner has seen it — the read receipt. */
   read_at: string | null;
+  /**
+   * Set by the database when the author rewrote the words. The bubble then shows a
+   * small "edited" marker next to its time. NULL while the message is unedited.
+   */
+  edited_at: string | null;
 }
 
 /**
