@@ -678,6 +678,28 @@ to your live project by the frontend build.
 - **Snake Duel · not the daily challenge:** the daily pool stays Tic Tac Toe and Rock
   Paper Scissors (`start_game` never picks snake for a daily match). A duel waits however
   long both partners need, which one UTC day is the wrong container for.
+- **Chess (pass-and-play, no migration yet):** adapted clean-room from
+  [PyChess](https://github.com/Kingcitaldo125/PyChess/tree/main/chess) — its 8×8 cell
+  board, per-piece move generators, line-of-sight blocking and attack-based check test,
+  re-implemented in `src/lib/chess.ts`. No PyChess code or PNG pieces are copied (it is
+  GPL-3.0, and its bishop/queen movement, pawn blocking and checkmate test are broken or
+  missing); the board here is a CSS grid of buttons with Unicode glyphs. The engine plays
+  full normal chess — legal-move filtering (a pinned piece cannot expose its king),
+  castling, en passant, promotion with a picker (underpromotion included), checkmate over
+  all replies, stalemate, insufficient material, fifty-move and threefold draws — plus
+  Nooki's situational layer, chosen before the game: **Classic Duel** (checkmate wins),
+  **Capture Race** (first to capture **7** enemy pieces wins the moment the seventh
+  capture lands) and **Queen Hunt** (capture the opponent's *original* queen — a promoted
+  queen does not count — to win on the spot). In every mode checkmate still wins and
+  being checkmated still loses: goal moves are legal moves, so they can never leave your
+  own king in check, and there is no move after you are mated for a goal to save you.
+  Kings are never captured. It is one-phone pass-and-play for now (the board can flip each
+  turn), with capture trays, a move list, undo and resign. The online version is the
+  natural next migration (`202610150011_chess.sql`): add `'chess'` to the `game_matches`
+  game check, store the board/castling/en-passant/capture counts as columns, and port
+  `chess.ts` into a `play_game` branch the way `snake_replay` mirrors `snake.ts`, so a
+  phone can never claim a capture — or a queen — it did not really make. Chess is not in
+  the daily pool either.
 - **Games:** unlimited rematches; starting a game with an unfinished practice match
   resumes that match, including the original match length. A finished duel stays reachable
   from the library's *Last Snake Duel* row, so its result does not vanish.

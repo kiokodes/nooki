@@ -12,6 +12,12 @@ export const GAMES = [
     description: 'One run each, highest score wins. No pause — leaving forfeits the duel.',
   },
   {
+    id: 'chess',
+    name: 'Chess',
+    icon: '♞',
+    description: 'Classic checkmate, a first-to-7-captures race, or a hunt for their queen.',
+  },
+  {
     id: 'sudoku',
     name: 'Sudoku',
     icon: '9️⃣',

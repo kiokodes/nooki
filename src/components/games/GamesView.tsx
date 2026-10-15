@@ -5,6 +5,7 @@ import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
 import { SnakeBoard } from './SnakeBoard';
 import { SnakeDuel } from './SnakeDuel';
 import { Sudoku } from './Sudoku';
+import { ChessDuel } from './ChessDuel';
 import './games.css';
 
 /** A practice run in progress: its own food, dealt on this phone and never reported. */
@@ -14,6 +15,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   const [bestOf, setBestOf] = useState(3);
   const [warmUp, setWarmUp] = useState<WarmUp | null>(null);
   const [sudokuOpen, setSudokuOpen] = useState(false);
+  const [chessOpen, setChessOpen] = useState(false);
   const m = games.match;
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
@@ -62,6 +64,9 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
         {m.finished && (m.daily_date ? <p>Today’s challenge is complete. Come back after midnight UTC for another, or play freely in Games.</p> : <button disabled={games.busy} onClick={() => void games.start(m.game, false, m.best_of)}>Play again</button>)}
       </div>
       ))}
+    </> : chessOpen ? <>
+      <button className="game-back" onClick={() => setChessOpen(false)}>← All games</button>
+      <ChessDuel partnerName={partnerName} onExit={() => setChessOpen(false)} />
     </> : sudokuOpen ? <>
       <button className="game-back" onClick={() => setSudokuOpen(false)}>← All games</button>
       <Sudoku partnerName={partnerName} onExit={() => setSudokuOpen(false)} />
@@ -71,7 +76,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
     </> : <>
       {games.data?.matches?.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => openMatch(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
       {lastDuel?.finished && <button className="game-card game-resume" onClick={() => openMatch(lastDuel.id)} data-last-duel>Last Snake Duel <small>{lastDuel.winner_id === userId ? 'You won' : lastDuel.winner_id ? `${partnerName} won` : 'A draw'} · You {lastDuel.snake?.mine?.score ?? 0} — {lastDuel.snake?.partner.score ?? 0} {partnerName} →</small></button>}
-      {GAMES.map(game => <article className="game-card" key={game.id}><div className="game-icon" aria-hidden="true">{game.icon}</div><h2>{game.name}</h2><p>{game.description}</p>{game.id === 'rock-paper-scissors' && <fieldset><legend>Match length</legend>{[3,5].map(n => <button key={n} aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}</fieldset>}<button type="button" disabled={games.busy || !games.data} onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : void games.start(game.id, false, bestOf)}>{game.id === 'snake' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play Sudoku →' : `Play with ${partnerName} →`}</button>{game.id === 'snake' && <button className="snake-secondary" disabled={games.busy || !games.data} onClick={startWarmUp} data-action="library-warm-up">Warm-up run (not counted)</button>}
+      {GAMES.map(game => <article className="game-card" key={game.id}><div className="game-icon" aria-hidden="true">{game.icon}</div><h2>{game.name}</h2><p>{game.description}</p>{game.id === 'rock-paper-scissors' && <fieldset><legend>Match length</legend>{[3,5].map(n => <button key={n} aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}</fieldset>}<button type="button" disabled={games.busy || !games.data} onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? setChessOpen(true) : void games.start(game.id, false, bestOf)}>{game.id === 'snake' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play Sudoku →' : game.id === 'chess' ? 'Play Chess →' : `Play with ${partnerName} →`}</button>{game.id === 'snake' && <button className="snake-secondary" disabled={games.busy || !games.data} onClick={startWarmUp} data-action="library-warm-up">Warm-up run (not counted)</button>}
       {game.id === 'sudoku' && <button className="snake-secondary" disabled={games.busy || !games.data} onClick={() => setSudokuOpen(true)} data-action="library-sudoku">Play Sudoku →</button>}</article>)}
       <p className="game-hint">Games are always open for a rematch. Today’s Challenge on Home is one shared match per day.</p>
     </>}
