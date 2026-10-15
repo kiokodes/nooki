@@ -74,9 +74,10 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 ### Brand-new, empty Supabase project only
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
-(including `couple_events`, `messages` and the five Discuss tables), RLS policies, pairing
-and question RPCs, the anniversary and answer-reveal triggers, the Realtime publication
-membership for the chat and Discuss tables, and the mutual-breakup RPCs; it does not
+(including `couple_events`, `messages`, the five Discuss tables and the shared-books
+tables), RLS policies, pairing and question RPCs, the anniversary and answer-reveal
+triggers, the Realtime publication membership for the chat and Discuss tables, the
+mutual-breakup RPCs and the private `shared-books` storage bucket; it does not
 populate user/couple records, and it contains no questions — import those separately.
 
 ## Supabase Auth configuration
@@ -560,6 +561,28 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] With an empty `questions` table, Discuss says "The question library is empty"
       instead of showing bundled questions; after importing the CSV the categories fill up.
 - [ ] A third account cannot read the couple's sessions, answers or comments.
+- [ ] The Media tab's empty shelf shows **Read together** with an Upload book button and
+      the "DRM-free EPUB or PDF only" note; a picked file appears as the reading book.
+- [ ] A second upload while a book is reading says "Leave or delete current book first."
+      and the same rule holds even if the request is forced through.
+- [ ] The reading card shows the title, both people's percentages and Continue reading;
+      the reader opens full-screen, resumes this phone's place, and saves progress a few
+      seconds after page turns (not on every turn).
+- [ ] Tap the middle of the page to hide and show the bars; tap the edges or swipe to
+      turn pages.
+- [ ] Selecting text opens the comment box; **Highlight & share** paints the passage in
+      this phone's colour and sends the quote (and comment) to the chat on both devices.
+- [ ] Tapping the quote card in the chat opens the reader at the passage on both devices.
+- [ ] Both devices see both people's highlights in the book, each in their own colour.
+- [ ] "Jump to {partner}" lands on the partner's saved place, and their percentage on
+      the bottom bar moves live while they read.
+- [ ] Leave pauses the book and the card offers Continue reading again; Mark as finished
+      keeps it with a Finished badge; Delete asks first, removes the file and row, and the
+      quote in the chat keeps its words with the jump disabled ("Book deleted").
+- [ ] A scanned PDF says it has no selectable text and simply cannot highlight — reading
+      and jumping still work.
+- [ ] A third account cannot read the couple's books, bookmarks or highlights, and no
+      book file is reachable without the couple's own signed URL.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.
 - [ ] Refreshing and signing out/in preserve the couple, anniversary and partner names.
@@ -577,8 +600,12 @@ the side-by-side reveal, one comment each under the answers, the **Say more** br
 into the chat (`messages.session_id` quoting the question and linking back to the
 reveal), history and an
 unanswered-question badge, and a both-partners 18+ gate), couple details, sign-out and
-mutual-breakup settings are implemented. Media displays **Coming Soon**; Games includes Tic Tac Toe and Rock Paper Scissors, and
-voice/video calling is still a "coming soon" toast. No sample conversations or questions
+mutual-breakup settings are implemented. Media hosts **Read together** (shared books:
+one EPUB or PDF in play per couple, a full-screen reader, saved places for both
+partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
+back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes
+Tic Tac Toe and Rock Paper Scissors, and voice/video calling is still a "coming soon"
+toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, and the question library is whatever the owner imported into `questions`.
 Scenes and illustrated backgrounds are deliberately out of scope for now: the Discuss tab
@@ -622,3 +649,79 @@ Before release, use two real paired accounts to play each game, verify a secret 
 is absent from the other device's network responses, resume after a reload, finish a
 daily match, and confirm both devices can only view its result until midnight UTC.
 The no-backend development preview remains sample UI, not a local game backend.
+
+## Media tab: Read together (shared books)
+
+The first Media feature: one book the couple reads together, EPUB first and PDF on the
+same flow. Apply **`supabase/migrations/202610150008_shared_books.sql`** to an existing
+project before shipping books, then run **`supabase/verify-books.sql`** in addition to
+the usual `verify.sql`. New projects get books from `schema.sql`. The migration is
+additive and rerunnable; it never touches a couple's existing data. It has not been
+applied to your live project by the frontend build.
+
+### The shelf, the reader and the loop
+
+- **Upload** — a file picker on the Media tab takes a **DRM-free EPUB or PDF, up to
+  40 MB**. The shelf row is created first (so a couple that already has an active book
+  is told "Leave or delete current book first." before a single byte uploads), then the
+  file goes up. The card shows the title, both people's percentages and **Continue
+  reading**; a paused or finished book keeps its card with Continue, Upload new and
+  Delete.
+- **One active book per couple**, enforced by a unique index on `couple_id` where
+  `status = 'reading'` — a second reading row cannot exist even if the app has a bug.
+  Paused (`left`) and `finished` books stay on the shelf until deleted.
+- **The reader** is full-screen over every tab: no chrome, tap the middle to show or
+  hide the bars, tap the edges or swipe to turn pages. Each partner's place is saved on
+  a debounce of a few seconds (never on every page turn) into `reading_progress`.
+- **Jump to {partner}** reads the partner's row and lands there; their percentage on
+  the bottom bar updates live through Realtime.
+- **Highlight to chat** — select text, tap highlight, and the small box asks for an
+  optional comment. That creates the `highlights` row AND sends a chat message carrying
+  the quote and comment (`messages.highlight_id`). With no comment the message carries
+  the quote itself.
+- **Chat to book** — the message card quotes the passage ("from {title}"); tapping it
+  opens the reader and jumps to the highlight's location. When the book has been
+  deleted the card keeps the quote and says **"Book deleted — the quote stays"** with
+  the jump disabled.
+- **Both partners see each other's highlights** in the book, in two fixed colours — one
+  per person (the smaller account id is rose, the other sage), so a passage always
+  reads the same on both phones.
+- **Leave / Finish / Delete** — Leave pauses (`left`) and the card offers Continue
+  reading again; Finish keeps the book with a Finished badge (Keep / Delete / Upload
+  new); Delete removes the file and the row. Deleting a book orphans its highlights on
+  purpose: `book_id` goes NULL, so the quoted words survive in the chat and only the
+  way back into the book goes away.
+
+### Storage and privacy
+
+Files live in the private **`shared-books`** bucket at
+`books/{couple_id}/{book_id}.{epub|pdf}` — the folder name IS the couple id, which is
+exactly what the storage policies check. Only the two partners can upload, read (via
+one-hour signed URLs) or delete their own book's file; the bucket is never public and
+nothing creates a shareable link. The bucket enforces a **40 MB** file-size cap, and
+the phone caches the bytes after the first open (Cache API where available), so a
+second open costs nothing on weak data.
+
+### Know these before shipping
+
+- **DRM-protected EPUBs (Kindle, most store-bought books) will not open.** The UI says
+  "DRM-free EPUB or PDF only" wherever a file is picked; support cannot fix a locked
+  file and the app never attempts to.
+- **PDF highlighting is the weaker half.** It stores the page plus the selection's
+  rectangles (fine at any zoom, but not a text anchor like an EPUB CFI), and a
+  **scanned PDF has no selectable text** — the reader says so and simply does not offer
+  highlighting there. Reading together and jumping still work.
+- **Both partners download the whole file** before anything renders. Large PDFs are
+  slow on weak data on the first open (the cache makes every later open instant).
+- **Copyright**: users upload their own copy. A book is never readable outside the
+  couple and never shareable by link. Do not add public sharing to this bucket.
+- **Mobile browsers**: `epub.js` and `react-pdf` are the two engines (they load on
+  demand, so the main bundle stays small). Both are widely used on mobile web, but
+  verify text selection, page turns and the comment box on real iOS Safari and Android
+  Chrome before release — selection behaviour is where mobile browsers differ.
+
+Before release, use two real paired accounts to upload one EPUB and one PDF, read on
+both devices at once, jump to each other, highlight with and without comments, jump
+from a chat quote back into the passage, then Leave / Finish / Delete (checking the
+chat quote after Delete). Upload a scanned PDF and confirm the no-selectable-text
+note. Finally, check a third account cannot reach any of it in its network responses.

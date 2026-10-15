@@ -273,7 +273,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     // Presence survives browsing other tabs: it is owned by the app, not the Home tab.
     const mediaTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Media'));
     await act(async () => { mediaTab.click(); });
-    assert(body().includes('Coming Soon'), 'tabs without a feature yet stay as placeholders');
+    assert(body().includes('Read together'), 'the Media tab now opens the shared books shelf');
     assert(dot(), 'the header ticker stays visible on every tab');
     assert.equal(removedChannels, 0, 'the presence channel is not torn down on tab switches');
 

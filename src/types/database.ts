@@ -72,6 +72,13 @@ export interface ChatMessage {
    * small "edited" marker next to its time. NULL while the message is unedited.
    */
   edited_at: string | null;
+  /**
+   * The book highlight this message shares ("highlight to chat"): the bubble quotes
+   * the passage and tapping it opens the reader at that spot. When the book is
+   * deleted the highlight survives with `book_id = null`, so the quote stays on the
+   * bubble and only the jump is disabled. NULL for ordinary messages.
+   */
+  highlight_id: string | null;
 }
 
 /**
@@ -173,4 +180,73 @@ export interface CoupleSettings {
   user_id: string;
   adult_questions_enabled: boolean;
   updated_at: string;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared books: the Media tab's "Read together" shelf. One book in play per
+   couple, both partners' places saved in it, and the passages they highlight.
+   See supabase/migrations/202610150008_shared_books.sql.
+   --------------------------------------------------------------------------- */
+
+export type BookFileType = 'epub' | 'pdf';
+
+export const BOOK_FILE_TYPES: BookFileType[] = ['epub', 'pdf'];
+
+/**
+ * The shelf state. 'reading' is the one active book (a partial unique index allows
+ * exactly one per couple); 'left' is paused by a partner; 'finished' is done but
+ * kept until someone deletes it.
+ */
+export type BookStatus = 'reading' | 'left' | 'finished';
+
+export const BOOK_STATUSES: BookStatus[] = ['reading', 'left', 'finished'];
+
+export interface SharedBook {
+  id: string;
+  couple_id: string;
+  title: string;
+  /** Storage path, always `books/{couple_id}/{id}.{epub|pdf}` in the private bucket. */
+  file_path: string;
+  file_type: BookFileType;
+  status: BookStatus;
+  /** Who uploaded it; null if that account was later deleted. */
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Where one partner is in one book. `location` is an EPUB CFI or a PDF page
+ * reference — opaque to everything but the reader that wrote it.
+ */
+export interface ReadingProgress {
+  book_id: string;
+  user_id: string;
+  location: string;
+  /** Whole number 0..100, so the card can say "42%". */
+  percent: number;
+  updated_at: string;
+}
+
+/**
+ * One fixed colour per person, so a passage reads the same on both phones.
+ * The database accepts only these two; the app picks one per partner.
+ */
+export type HighlightColor = 'rose' | 'sage';
+
+export const HIGHLIGHT_COLORS: HighlightColor[] = ['rose', 'sage'];
+
+export interface Highlight {
+  id: string;
+  /** NULL only when the book this passage came from has been deleted. */
+  book_id: string | null;
+  couple_id: string;
+  user_id: string;
+  /** EPUB: the CFI range of the selection. PDF: a page reference (rects carry the paint). */
+  location: string;
+  /** PDF rectangles as fractions (0..1) of the page box; null for EPUB highlights. */
+  rects: unknown;
+  quote_text: string;
+  color: HighlightColor;
+  created_at: string;
 }
