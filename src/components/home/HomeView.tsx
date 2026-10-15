@@ -80,29 +80,55 @@ export const HomeView: React.FC<HomeViewProps> = ({
         playLabel={dailyLabel}
       />
 
-      {/* Reserved area for animated scene / companions */}
+      {/* Cozy living nook — their little box. Watch-only, never interactive. */}
       <div
         data-scene-placeholder
         data-area="animated-scene"
+        data-nooki-nook="cozy"
         role="region"
-        aria-label="Reserved for future animated scene"
+        aria-label="Their cozy nook — watch them just living life together"
+        className="nooki-cozy-nook"
         style={{
-          flex: '1 1 80px',
-          minHeight: '80px',
+          flex: '1 1 145px',
+          minHeight: '145px',
           width: '100%',
           borderRadius: tokens.radii.lg,
-          backgroundColor: tokens.colors.bgSurfaceSubtle,
-          border: `1.5px dashed ${tokens.colors.borderSoft}`,
+          backgroundColor: '#FFFBF2',
+          border: `1px solid ${tokens.colors.borderSubtle}`,
           boxShadow: tokens.shadows.subtle,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
           overflow: 'hidden',
-          padding: '4px',
+          padding: '10px 8px 16px 8px',
         }}
       >
-        <HomeNookiCompanions />
+        {/* Subtle floor + vignette — purely decorative, inside the nook */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: '26px',
+            background: 'linear-gradient(180deg, rgba(240,232,220,0) 0%, rgba(240,232,220,0.55) 100%)',
+            borderTop: '1px solid rgba(240,232,220,0.7)',
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              'radial-gradient(ellipse 85% 70% at 50% 42%, rgba(255,255,255,0.9) 0%, rgba(255,251,242,0) 72%)',
+            pointerEvents: 'none',
+          }}
+        />
+        <HomeNookiCompanions ambient />
       </div>
     </section>
   );
