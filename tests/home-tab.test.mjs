@@ -146,9 +146,21 @@ test('global header: live counter, presence ticker and partner clock', async () 
       });
     };
 
+    const { SPLASH_DURATION_MS } = await server.ssrLoadModule('/src/components/common/SplashScreen.tsx');
+    assert(SPLASH_DURATION_MS < 500, 'splash screen duration must be strictly under 0.5 seconds');
+
     const { default: App } = await server.ssrLoadModule('/src/App.tsx');
     await act(async () => { root.render(React.createElement(App)); });
-    await waitFor(() => body().includes('Together for'), 'the unlocked app should render once the couple is loaded');
+
+    // 0. Splash screen renders initially with the Nooki wordmark and racing pink & green dots, then finishes in < 0.5s.
+    const splash = document.querySelector('[data-screen="splash"]');
+    assert(splash, 'the splash screen renders immediately on launch');
+    assert.equal(splash.querySelector('[data-splash-wordmark]')?.textContent, 'Nooki', 'the splash screen shows the simple Nooki wordmark');
+    assert(splash.querySelector('[data-splash-dot="pink"]'), 'the splash screen includes the racing pink dot');
+    assert(splash.querySelector('[data-splash-dot="green"]'), 'the splash screen includes the racing green dot');
+
+    await waitFor(() => body().includes('Together for'), 'the unlocked app should render once the splash and couple load complete');
+    assert.equal(document.querySelector('[data-screen="splash"]'), null, 'the splash screen dismisses after under 0.5 seconds');
 
     // 1. Global header: names, the live YMD counter, the partner clock and an offline dot.
     const expectedDuration = coupleTime.formatTogetherDuration(
@@ -189,13 +201,43 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert(!appHeader().textContent.includes(`${aliceClock.time} ${aliceClock.weekday}`),
       'the reader never sees their own time');
 
-    // 2. The Home tab shows the Today card and nothing else.
+    // 2. The Home tab shows the Today card, the Daily game card, and the reserved bottom scene area.
+    const shell = document.querySelector('main.nooki-shell');
+    assert(shell, 'the app renders inside the responsive .nooki-shell container');
+    assert.equal(shell.style.width, '100%', 'the app shell uses fluid 100% width instead of a fixed pixel width');
     const home = document.querySelector('[data-screen="home"]');
     assert(home, 'the Home tab renders as the default screen');
     assert(home.querySelector('[data-card="today"]'), 'the Today card is on the Home tab');
     assert(document.querySelector('[data-modal="calendar"]') === null, 'the calendar starts closed');
     assert.equal(body().includes('This phone'), false, 'the old partner-status card is gone');
     assert.equal(body().includes('Partner status'), false, 'no leftover status card');
+
+    // Daily game card: placeholder "Today's challenge" with Play button and 0-to-0 scoreboard.
+    const dailyGameCard = home.querySelector('[data-card="daily-game"]');
+    assert(dailyGameCard, 'the Daily game card is on the Home tab');
+    assert(dailyGameCard.textContent.includes("Today's challenge"), 'the card shows "Today\'s challenge"');
+    const playButton = dailyGameCard.querySelector('[data-action="play-daily-game"]');
+    assert(playButton, 'the Daily game card has a Play button');
+    assert(playButton.textContent.includes('Play'), 'the Play button is labelled Play');
+    const scoreboard = dailyGameCard.querySelector('[data-scoreboard]');
+    assert(scoreboard, 'the Daily game card includes a scoreboard');
+    assert(scoreboard.textContent.includes('Alice'), 'the scoreboard shows the current user');
+    assert(scoreboard.textContent.includes('Bob'), 'the scoreboard shows the partner');
+    assert(scoreboard.textContent.includes('0 to 0'), 'the scoreboard starts at 0 to 0');
+    assert.equal(scoreboard.querySelector('[data-partner-score="self"]')?.textContent.includes('0 wins'), true,
+      'the current user starts with 0 wins');
+    assert.equal(scoreboard.querySelector('[data-partner-score="partner"]')?.textContent.includes('0 wins'), true,
+      'the partner starts with 0 wins');
+    await act(async () => { playButton.click(); });
+    assert(dailyGameCard.textContent.includes('coming soon'), 'tapping Play shows the placeholder notice without leaving Home');
+    assert(document.querySelector('[data-screen="home"]'), 'tapping Play keeps the user on the Home tab');
+
+    // Reserved empty rounded area at the bottom of the Home screen for a future animated scene.
+    const sceneArea = home.querySelector('[data-scene-placeholder]');
+    assert(sceneArea, 'the Home tab includes a reserved area for a future animated scene');
+    assert.equal(home.lastElementChild, sceneArea, 'the reserved scene area sits at the bottom of the Home screen');
+    assert.equal(sceneArea.textContent, '', 'the reserved scene area is left empty');
+    assert(sceneArea.style.borderRadius, 'the reserved scene area is rounded');
 
     // Presence: tracked on the couple channel, keyed by the signed-in account.
     assert.equal(presence.topic, `nooki-couple-${couple.id}`, 'presence stays scoped to the couple');

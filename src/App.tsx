@@ -13,6 +13,7 @@ import { AuthView } from './components/auth/AuthView';
 import { OnboardingView } from './components/auth/OnboardingView';
 import { PairingView } from './components/auth/PairingView';
 import { CoupleHeader } from './components/common/CoupleHeader';
+import { SplashScreen, SPLASH_DURATION_MS } from './components/common/SplashScreen';
 import { HomeView } from './components/home/HomeView';
 import { CalendarModal } from './components/calendar/CalendarModal';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
@@ -83,6 +84,31 @@ const TABS: TabConfig[] = [
   },
 ];
 
+const viewportStyle: React.CSSProperties = {
+  width: '100%',
+  height: '100dvh',
+  backgroundColor: tokens.colors.bgDesktop,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontFamily: tokens.typography.fontFamily,
+  overflow: 'hidden',
+};
+
+const shellStyle: React.CSSProperties = {
+  width: '100%',
+  maxWidth: '390px',
+  height: '100%',
+  maxHeight: '844px',
+  backgroundColor: tokens.colors.bgCanvas,
+  position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+  boxShadow: tokens.shadows.card,
+  borderRadius: '36px',
+  overflow: 'hidden',
+};
+
 export const App: React.FC = () => {
   // Navigation & Modal State
   const [activeTab, setActiveTab] = useState<TabKey>('home');
@@ -92,6 +118,7 @@ export const App: React.FC = () => {
 
   // Auth & Pairing State
   const [loading, setLoading] = useState(true);
+  const [splashDone, setSplashDone] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -151,6 +178,11 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => setSplashDone(true), SPLASH_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     // Defer the external session load so StrictMode's discarded mount does not start a duplicate request.
     let cancelled = false;
     queueMicrotask(() => { if (!cancelled) void loadUserData(); });
@@ -198,23 +230,13 @@ export const App: React.FC = () => {
     );
   }
 
-  // 1. Loading screen
-  if (loading) {
+  // 1. Splash screen (< 0.5s: simple Nooki wordmark + racing green & pink dots)
+  if (loading || !splashDone) {
     return (
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: tokens.colors.bgDesktop,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: tokens.typography.fontFamily,
-        }}
-      >
-        <div style={{ color: tokens.colors.textSecondary, fontWeight: 700, fontSize: '0.95rem' }}>
-          Loading Nooki...
-        </div>
+      <div className="nooki-viewport" style={viewportStyle}>
+        <main className="nooki-shell" style={shellStyle}>
+          <SplashScreen />
+        </main>
       </div>
     );
   }
@@ -222,31 +244,8 @@ export const App: React.FC = () => {
   // 2. Authentication View (Sign Up / Sign In with Email & Password)
   if (!currentUser) {
     return (
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: tokens.colors.bgDesktop,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: tokens.typography.fontFamily,
-        }}
-      >
-        <main
-          style={{
-            width: '390px',
-            height: '100%',
-            maxHeight: '844px',
-            backgroundColor: tokens.colors.bgCanvas,
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: tokens.shadows.card,
-            borderRadius: '36px',
-            overflow: 'hidden',
-          }}
-        >
+      <div className="nooki-viewport" style={viewportStyle}>
+        <main className="nooki-shell" style={shellStyle}>
           <AuthView onSuccess={loadUserData} />
         </main>
       </div>
@@ -256,31 +255,8 @@ export const App: React.FC = () => {
   // 3. Onboarding View (Collect First Name, Timezone auto-detected & editable)
   if (!profile || !profile.name) {
     return (
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: tokens.colors.bgDesktop,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: tokens.typography.fontFamily,
-        }}
-      >
-        <main
-          style={{
-            width: '390px',
-            height: '100%',
-            maxHeight: '844px',
-            backgroundColor: tokens.colors.bgCanvas,
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: tokens.shadows.card,
-            borderRadius: '36px',
-            overflow: 'hidden',
-          }}
-        >
+      <div className="nooki-viewport" style={viewportStyle}>
+        <main className="nooki-shell" style={shellStyle}>
           <OnboardingView userId={currentUser.id} onComplete={loadUserData} />
         </main>
       </div>
@@ -291,34 +267,11 @@ export const App: React.FC = () => {
   // Shows Create/Join flow or friendly waiting screen with 6-char code
   if (!couple || !partner) {
     return (
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: tokens.colors.bgDesktop,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: tokens.typography.fontFamily,
-        }}
-      >
-        <main
-          style={{
-            width: '390px',
-            height: '100%',
-            maxHeight: '844px',
-            backgroundColor: tokens.colors.bgCanvas,
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: tokens.shadows.card,
-            borderRadius: '36px',
-            overflowY: 'auto',
-          }}
-        >
+      <div className="nooki-viewport" style={viewportStyle}>
+        <main className="nooki-shell" style={{ ...shellStyle, overflowY: 'auto' }}>
           <header
             style={{
-              padding: '20px 24px 0 24px',
+              padding: '16px 20px 0 20px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -358,31 +311,8 @@ export const App: React.FC = () => {
   const isHome = activeTab === 'home';
 
   return (
-    <div
-      style={{
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: tokens.colors.bgDesktop,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: tokens.typography.fontFamily,
-      }}
-    >
-      <main
-        style={{
-          width: '390px',
-          height: '100%',
-          maxHeight: '844px',
-          backgroundColor: tokens.colors.bgCanvas,
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: tokens.shadows.card,
-          borderRadius: '36px',
-          overflow: 'hidden',
-        }}
-      >
+    <div className="nooki-viewport" style={viewportStyle}>
+      <main className="nooki-shell" style={shellStyle}>
         {/* Global couple header: names, presence ticker, partner clock and together counter */}
         <CoupleHeader
           profile={profile}
@@ -392,7 +322,7 @@ export const App: React.FC = () => {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Home tab: the Today card. Other tabs stay as airy placeholders. */}
+        {/* Home tab: Today card, daily game card and reserved animated scene area. Other tabs stay as airy placeholders. */}
         {isHome ? (
           <HomeView
             events={calendar.events}
@@ -400,16 +330,20 @@ export const App: React.FC = () => {
             eventsLoading={calendar.loading}
             eventsError={calendar.error}
             onOpenCalendar={() => setShowCalendar(true)}
+            userName={profile.name}
+            partnerName={partner.name}
           />
         ) : (
           <section
             style={{
               flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '0 28px',
+              padding: '0 24px',
               textAlign: 'center',
             }}
           >
@@ -418,12 +352,12 @@ export const App: React.FC = () => {
                 width: '100%',
                 backgroundColor: tokens.colors.bgSurface,
                 borderRadius: tokens.radii.card,
-                padding: '40px 26px',
+                padding: '32px 24px',
                 boxShadow: tokens.shadows.card,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: '16px',
+                gap: '14px',
               }}
             >
               <div
@@ -445,7 +379,7 @@ export const App: React.FC = () => {
 
               <h1
                 style={{
-                  fontSize: '1.9rem',
+                  fontSize: '1.75rem',
                   fontWeight: 800,
                   color: tokens.colors.textPrimary,
                   margin: 0,
@@ -457,10 +391,10 @@ export const App: React.FC = () => {
 
               <p
                 style={{
-                  fontSize: '0.9rem',
+                  fontSize: '0.88rem',
                   color: tokens.colors.textSecondary,
-                  lineHeight: 1.6,
-                  maxWidth: '260px',
+                  lineHeight: 1.5,
+                  maxWidth: '250px',
                   margin: 0,
                 }}
               >
@@ -475,13 +409,14 @@ export const App: React.FC = () => {
           role="navigation"
           aria-label="Main Navigation"
           style={{
-            height: '76px',
+            height: '64px',
+            flexShrink: 0,
             backgroundColor: tokens.colors.bgSurface,
             boxShadow: tokens.shadows.navBar,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-around',
-            padding: '0 8px 12px 8px',
+            padding: '0 8px calc(6px + env(safe-area-inset-bottom, 0px)) 8px',
             zIndex: 10,
           }}
         >
@@ -495,7 +430,7 @@ export const App: React.FC = () => {
                   key={tab.key}
                   style={{
                     position: 'relative',
-                    top: '-14px',
+                    top: '-10px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -507,11 +442,11 @@ export const App: React.FC = () => {
                     type="button"
                     aria-label="Home"
                     style={{
-                      width: '54px',
-                      height: '54px',
+                      width: '48px',
+                      height: '48px',
                       borderRadius: tokens.radii.full,
                       backgroundColor: tokens.colors.primaryPink,
-                      border: `4px solid ${tokens.colors.bgSurface}`,
+                      border: `3.5px solid ${tokens.colors.bgSurface}`,
                       boxShadow: tokens.shadows.highlightPink,
                       display: 'flex',
                       alignItems: 'center',
@@ -523,16 +458,16 @@ export const App: React.FC = () => {
                       transition: 'transform 0.2s ease',
                     }}
                   >
-                    <Icon size={24} strokeWidth={2.4} />
+                    <Icon size={21} strokeWidth={2.4} />
                   </button>
                   <span
                     style={{
-                      fontSize: '0.72rem',
+                      fontSize: '0.68rem',
                       fontWeight: isActive ? 700 : 600,
                       color: isActive
                         ? tokens.colors.primaryPinkDeep
                         : tokens.colors.textMuted,
-                      marginTop: '2px',
+                      marginTop: '1px',
                     }}
                   >
                     {tab.label}
@@ -553,9 +488,9 @@ export const App: React.FC = () => {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: '2px',
                   cursor: 'pointer',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                   outline: 'none',
                   color: isActive
                     ? tokens.colors.textPrimary
@@ -565,8 +500,8 @@ export const App: React.FC = () => {
               >
                 <div
                   style={{
-                    width: '32px',
-                    height: '28px',
+                    width: '30px',
+                    height: '26px',
                     borderRadius: tokens.radii.sm,
                     display: 'flex',
                     alignItems: 'center',
@@ -576,9 +511,9 @@ export const App: React.FC = () => {
                     transition: 'all 0.2s ease',
                   }}
                 >
-                  <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
+                  <Icon size={19} strokeWidth={isActive ? 2.4 : 2} />
                 </div>
-                <span style={{ fontSize: '0.72rem', fontWeight: isActive ? 700 : 500 }}>
+                <span style={{ fontSize: '0.68rem', fontWeight: isActive ? 700 : 500 }}>
                   {tab.label}
                 </span>
               </button>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   Gamepad2,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
+import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { CalendarModal } from '../components/calendar/CalendarModal';
 import type { Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
@@ -70,8 +71,15 @@ export const HomePreview = () => {
   const [preset, setPreset] = useState(PRESETS[0]);
   const [partnerOnline, setPartnerOnline] = useState(true);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   // In-memory events so add/edit/delete can be tried out without a backend.
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
+
+  useEffect(() => {
+    if (!showSplash) return;
+    const timer = setTimeout(() => setShowSplash(false), SPLASH_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [showSplash]);
   const couple: Couple = {
     id: 'preview-couple',
     invite_code: '7K4MZ9',
@@ -99,33 +107,45 @@ export const HomePreview = () => {
   };
 
   const controlStyle = (active: boolean): CSSProperties => ({
-    padding: '7px 14px',
+    padding: '5px 12px',
     borderRadius: tokens.radii.pill,
     border: `1.5px solid ${active ? tokens.colors.primaryPink : tokens.colors.borderSoft}`,
     backgroundColor: active ? tokens.colors.primaryPinkSoft : tokens.colors.bgSurface,
     color: active ? tokens.colors.primaryPinkDeep : tokens.colors.textSecondary,
     fontFamily: tokens.typography.fontFamily,
-    fontSize: '0.78rem',
+    fontSize: '0.74rem',
     fontWeight: 700,
     cursor: 'pointer',
   });
 
   return (
     <div
+      className="nooki-viewport"
       style={{
-        width: '100vw',
-        minHeight: '100vh',
+        width: '100%',
+        height: '100dvh',
         backgroundColor: tokens.colors.bgDesktop,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '14px',
-        padding: '20px 0',
+        gap: '10px',
+        padding: '12px 0',
         fontFamily: tokens.typography.fontFamily,
+        overflow: 'hidden',
       }}
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', padding: '0 16px' }}>
+      <div
+        className="nooki-preview-controls"
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '6px',
+          justifyContent: 'center',
+          padding: '0 12px',
+          flexShrink: 0,
+        }}
+      >
         {PRESETS.map((item) => (
           <button key={item.label} type="button" style={controlStyle(item === preset)} onClick={() => setPreset(item)}>
             {item.label}
@@ -134,13 +154,19 @@ export const HomePreview = () => {
         <button type="button" style={controlStyle(false)} onClick={() => setPartnerOnline((value) => !value)}>
           {partnerOnline ? 'Partner is online → show last seen' : 'Partner is away → show online'}
         </button>
+        <button type="button" style={controlStyle(showSplash)} onClick={() => setShowSplash(true)}>
+          Replay splash
+        </button>
       </div>
 
       <main
+        className="nooki-shell"
         style={{
-          width: '390px',
-          height: '844px',
-          maxHeight: '100vh',
+          width: '100%',
+          maxWidth: '390px',
+          flex: 1,
+          minHeight: 0,
+          maxHeight: '844px',
           backgroundColor: tokens.colors.bgCanvas,
           position: 'relative',
           display: 'flex',
@@ -150,105 +176,125 @@ export const HomePreview = () => {
           overflow: 'hidden',
         }}
       >
-        {/* The real header component, so the preview can never drift from the app. */}
-        <CoupleHeader
-          profile={profile}
-          partner={partner}
-          couple={couple}
-          partnerOnline={partnerOnline}
-          onOpenSettings={() => {}}
-        />
+        {showSplash ? (
+          <SplashScreen />
+        ) : (
+          <>
+            {/* The real header component, so the preview can never drift from the app. */}
+            <CoupleHeader
+              profile={profile}
+              partner={partner}
+              couple={couple}
+              partnerOnline={partnerOnline}
+              onOpenSettings={() => {}}
+            />
 
-        <HomeView
-          events={events}
-          anniversaryDate={couple.anniversary_date}
-          eventsLoading={false}
-          eventsError={null}
-          onOpenCalendar={() => setShowCalendar(true)}
-        />
+            <HomeView
+              events={events}
+              anniversaryDate={couple.anniversary_date}
+              eventsLoading={false}
+              eventsError={null}
+              onOpenCalendar={() => setShowCalendar(true)}
+              userName={profile.name}
+              partnerName={partner.name}
+            />
 
-        {showCalendar && (
-          <CalendarModal
-            partnerName={partner.name}
-            events={events}
-            anniversaryDate={couple.anniversary_date}
-            saving={false}
-            onAddEvent={async (input) => {
-              setEvents((current) => [...current, sampleEvent(`preview-${current.length + 10}`, input.title, input.date, input.repeatFrequency)]);
-            }}
-            onEditEvent={async (eventId, input) => {
-              setEvents((current) => current.map((event) => (
-                event.id === eventId
-                  ? { ...event, title: input.title, event_date: input.date, repeat_frequency: input.repeatFrequency }
-                  : event
-              )));
-            }}
-            onDeleteEvent={async (eventId) => {
-              setEvents((current) => current.filter((event) => event.id !== eventId));
-            }}
-            onClose={() => setShowCalendar(false)}
-          />
-        )}
+            {showCalendar && (
+              <CalendarModal
+                partnerName={partner.name}
+                events={events}
+                anniversaryDate={couple.anniversary_date}
+                saving={false}
+                onAddEvent={async (input) => {
+                  setEvents((current) => [...current, sampleEvent(`preview-${current.length + 10}`, input.title, input.date, input.repeatFrequency)]);
+                }}
+                onEditEvent={async (eventId, input) => {
+                  setEvents((current) => current.map((event) => (
+                    event.id === eventId
+                      ? { ...event, title: input.title, event_date: input.date, repeat_frequency: input.repeatFrequency }
+                      : event
+                  )));
+                }}
+                onDeleteEvent={async (eventId) => {
+                  setEvents((current) => current.filter((event) => event.id !== eventId));
+                }}
+                onClose={() => setShowCalendar(false)}
+              />
+            )}
 
-        <nav
-          aria-label="Preview navigation"
-          style={{
-            height: '76px',
-            backgroundColor: tokens.colors.bgSurface,
-            boxShadow: tokens.shadows.navBar,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-around',
-            padding: '0 8px 12px 8px',
-          }}
-        >
-          {[
-            { label: 'Chat', Icon: MessageCircle, tint: tokens.colors.primaryPinkSoft, ink: tokens.colors.primaryPinkDeep },
-            { label: 'Media', Icon: ImageIcon, tint: tokens.colors.primaryGreenSoft, ink: tokens.colors.primaryGreenDeep },
-          ].map(({ label, Icon, tint, ink }) => (
-            <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: tokens.colors.textMuted }}>
-              <span style={{ width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: tokens.radii.sm, backgroundColor: tint, color: ink }}>
-                <Icon size={20} />
-              </span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 500 }}>{label}</span>
-            </span>
-          ))}
-          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', top: '-14px' }}>
-            <span
+            <nav
+              aria-label="Preview navigation"
               style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: tokens.radii.full,
-                backgroundColor: tokens.colors.primaryPink,
-                border: `4px solid ${tokens.colors.bgSurface}`,
-                boxShadow: tokens.shadows.highlightPink,
+                height: '64px',
+                flexShrink: 0,
+                backgroundColor: tokens.colors.bgSurface,
+                boxShadow: tokens.shadows.navBar,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                color: tokens.colors.textWhite,
+                justifyContent: 'space-around',
+                padding: '0 8px calc(6px + env(safe-area-inset-bottom, 0px)) 8px',
               }}
             >
-              <HomeIcon size={24} strokeWidth={2.4} />
-            </span>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: tokens.colors.primaryPinkDeep, marginTop: '2px' }}>
-              Home
-            </span>
-          </span>
-          {[
-            { label: 'Discuss', Icon: MessageSquare, tint: tokens.colors.accentSageSoft, ink: tokens.colors.accentSageDeep },
-            { label: 'Games', Icon: Gamepad2, tint: tokens.colors.accentLavenderSoft, ink: tokens.colors.accentLavenderDeep },
-          ].map(({ label, Icon, tint, ink }) => (
-            <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: tokens.colors.textMuted }}>
-              <span style={{ width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: tokens.radii.sm, backgroundColor: tint, color: ink }}>
-                <Icon size={20} />
+              {[
+                { label: 'Chat', Icon: MessageCircle, tint: tokens.colors.primaryPinkSoft, ink: tokens.colors.primaryPinkDeep },
+                { label: 'Media', Icon: ImageIcon, tint: tokens.colors.primaryGreenSoft, ink: tokens.colors.primaryGreenDeep },
+              ].map(({ label, Icon, tint, ink }) => (
+                <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: tokens.colors.textMuted }}>
+                  <span style={{ width: '30px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: tokens.radii.sm, backgroundColor: tint, color: ink }}>
+                    <Icon size={19} />
+                  </span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 500 }}>{label}</span>
+                </span>
+              ))}
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', top: '-10px' }}>
+                <span
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: tokens.radii.full,
+                    backgroundColor: tokens.colors.primaryPink,
+                    border: `3.5px solid ${tokens.colors.bgSurface}`,
+                    boxShadow: tokens.shadows.highlightPink,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: tokens.colors.textWhite,
+                  }}
+                >
+                  <HomeIcon size={21} strokeWidth={2.4} />
+                </span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: tokens.colors.primaryPinkDeep, marginTop: '1px' }}>
+                  Home
+                </span>
               </span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 500 }}>{label}</span>
-            </span>
-          ))}
-        </nav>
+              {[
+                { label: 'Discuss', Icon: MessageSquare, tint: tokens.colors.accentSageSoft, ink: tokens.colors.accentSageDeep },
+                { label: 'Games', Icon: Gamepad2, tint: tokens.colors.accentLavenderSoft, ink: tokens.colors.accentLavenderDeep },
+              ].map(({ label, Icon, tint, ink }) => (
+                <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: tokens.colors.textMuted }}>
+                  <span style={{ width: '30px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: tokens.radii.sm, backgroundColor: tint, color: ink }}>
+                    <Icon size={19} />
+                  </span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 500 }}>{label}</span>
+                </span>
+              ))}
+            </nav>
+          </>
+        )}
       </main>
 
-      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: 0, fontSize: '0.76rem', color: tokens.colors.textMuted }}>
+      <p
+        className="nooki-preview-caption"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          margin: 0,
+          fontSize: '0.74rem',
+          color: tokens.colors.textMuted,
+          flexShrink: 0,
+        }}
+      >
         <Heart size={13} fill={tokens.colors.primaryPink} strokeWidth={1.5} />
         Home tab preview · sample data only · tap the calendar icon to open the full calendar
       </p>

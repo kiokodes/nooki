@@ -90,19 +90,25 @@ The global header sits above every tab and carries the couple's live status:
 
 The header owns its own one-second tick, so only the header re-renders as time passes.
 
-## Today card and the full calendar
+## Today card, daily game card and the full calendar
 
-The Home tab shows one compact **Today card**:
+The Home tab shows:
 
-- Today's date ("Thursday, 15 October") and anything happening today.
-- The couple's automatic dates: the **anniversary** each year and the **monthsary** on the
-  same day-of-month, both derived from `anniversary_date` — nothing is stored for them, so
-  they can never drift out of sync. A 31st anniversary borrows the last day of shorter
-  months (so 31 Jan reads as 28/29 Feb) instead of skipping the month.
-- **Upcoming**: whatever is coming within the next `UPCOMING_WINDOW_DAYS` days (1 by
-  default, set in `src/components/home/TodayCard.tsx`). It is separated from today by a
-  hairline and a small "Tomorrow" label, so today always reads first.
-- A **calendar icon** in the corner that opens the full calendar.
+- A compact **Today card**:
+  - Today's date ("Thursday, 15 October") and anything happening today.
+  - The couple's automatic dates: the **anniversary** each year and the **monthsary** on the
+    same day-of-month, both derived from `anniversary_date` — nothing is stored for them, so
+    they can never drift out of sync. A 31st anniversary borrows the last day of shorter
+    months (so 31 Jan reads as 28/29 Feb) instead of skipping the month.
+  - **Upcoming**: whatever is coming within the next `UPCOMING_WINDOW_DAYS` days (1 by
+    default, set in `src/components/home/TodayCard.tsx`). It is separated from today by a
+    hairline and a small "Tomorrow" label, so today always reads first.
+  - A **calendar icon** in the corner that opens the full calendar.
+- A **Daily game card** (`src/components/home/DailyGameCard.tsx`): a placeholder
+  **"Today's challenge"** card with a **Play** button and a head-to-head scoreboard
+  showing wins for each partner (`0 to 0` for now).
+- An **empty rounded area at the bottom of the screen**, reserved for a future animated
+  scene.
 
 The full calendar is a **modal over the current tab** — never a page of its own, so the
 Home tab stays exactly as it was behind it:
