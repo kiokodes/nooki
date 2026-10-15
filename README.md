@@ -69,33 +69,31 @@ In Authentication settings:
 Each partner needs their **own** account. A pairing code connects signed-in accounts; it
 is not an email/password login credential.
 
-## Home tab
+## Global header and Home tab
 
-The centre Home tab is the default screen once a couple is paired. It is a vertical stack
-of three soft cards and needs no schema change:
+The global header sits above every tab and carries the couple's live status:
 
-The global app header keeps the couple's names (`Sam & Ana`) with the "Together since
-<date>" line, and the Home card carries the live counter.
+- **Names** — `Sam & Ana`, with long names truncating instead of pushing the settings
+  button off-screen.
+- **Presence ticker** — a small dot right beside the partner's name, green with a faint
+  pulse while they are in the app and grey once they leave. Its tooltip/accessible label
+  falls back to `Last seen 12m ago`, then a date after a week.
+- **Partner's local time** — `5:14 PM Tue` in the partner's own timezone, with their
+  weekday (so a different day is obvious). The reader's own clock is never shown.
+- **Together counter** — a quiet `Together for 2Y 1M 4D` line under the names, from
+  `anniversary_date`, measured on the viewer's own calendar day. The anniversary day
+  itself reads `Happy anniversary — today is your day`, and a future date counts down.
 
-1. **Couple header** — both partners' names and a live counter from `anniversary_date`,
-   shown as years, months and days ("Together for 2Y 1M 4D"). It is measured on the
-   viewer's own calendar day and re-renders on a one-second tick, so it rolls over at
-   midnight without a refresh. A future anniversary counts down instead, and the
-   anniversary day itself reads "Happy anniversary — today is your day".
-2. **Partner status** — partner 1 is the phone owner (marked "You"), partner 2 carries a
-   green dot right beside their name with a small "Online" label while they are in the app.
-   Online state comes from Supabase **Realtime presence** on the couple-scoped channel
-   `nooki-couple-<couple_id>`, keyed by user id. When they leave, the row falls back to
-   their `profiles.last_seen_at` ("Last seen 12m ago", then a date after a week).
-3. **Partner's local time** — "It's 11:42 PM for Ana", computed with `Intl` from the
-   partner's own timezone, with a quiet "tomorrow"/"yesterday" hint when their calendar day
-   differs. The reader's own time is deliberately never shown.
+The header owns its own one-second tick, so only the header re-renders as time passes.
 
-Presence runs at app level, not inside the tab, so a partner still reads as online while
-this phone browses Chat, Media, Discussion or Games. The app writes its own
-`last_seen_at` on mount, every minute while open, and when the tab is hidden — permitted by
-the existing "update own profile" RLS policy, so **no migration is required** for the Home
-tab. Two caveats worth knowing:
+**The Home tab is intentionally blank for now.** The centre tab is still the default
+screen, and its empty surface is where the next batch of Home features lands — nothing is
+duplicated between the header and the tab.
+
+Presence runs at app level, so a partner still reads as online while this phone browses
+Chat, Media, Discussion or Games. The app writes its own `last_seen_at` on mount, every
+minute while open, and when the tab is hidden — permitted by the existing "update own
+profile" RLS policy, so **no migration is required** for any of this. Two caveats:
 
 - Presence requires the Realtime service, which is on by default. Channels are public in
   Supabase unless Realtime Authorization is configured; the topic includes the couple's
@@ -106,10 +104,11 @@ tab. Two caveats worth knowing:
 
 ### Design preview (development only)
 
-`npm run dev` serves a sample-data preview of just this tab at
+`npm run dev` serves a sample-data preview of the header and Home surface at
 **http://localhost:5173/preview.html**. It uses static names ("Sam & Ana"), needs no
 Supabase project, and lets you flip the partner between online and away and switch
-anniversary examples. It is a dev-server route only: `npm run build` still publishes
+anniversary examples; it reuses the real header component so it cannot drift from the
+app. It is a dev-server route only: `npm run build` still publishes
 `index.html` alone, and the app itself has no mock/sample mode.
 
 While no `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` values are present, the dev server
@@ -134,9 +133,10 @@ Tests run in isolated PostgreSQL (PGlite) and DOM environments. Test accounts ex
 inside those tests: no test contacts, inserts data into, or resets your live project.
 Tests cover password visibility, email-confirmation handling, timezone selection,
 pairing navigation/cancellation, protected profile retries, anniversary locks, RLS,
-configuration failures, the read-only database verification script, and the Home tab
-(YMD counter across end-of-month/leap-day edges, partner clock timezones, last-seen labels,
-Realtime presence online/offline states and the `last_seen_at` heartbeat).
+configuration failures, the read-only database verification script, and the global header
+(YMD counter across end-of-month/leap-day edges, partner clock timezones and weekdays,
+last-seen labels, the presence dot greying out and re-greening, the `last_seen_at`
+heartbeat, and that the Home tab stays deliberately blank).
 
 A successful build does **not** verify a deployed key, email delivery, an applied live
 migration, or two-device connectivity. Complete the acceptance test below as well.
@@ -170,10 +170,11 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] A cancelled code is rejected; a newly generated code is accepted by partner B.
 - [ ] B can join using the current code, including a pasted/lowercase code.
 - [ ] Both devices unlock the same couple; A's waiting screen updates automatically.
-- [ ] Home opens by default: both names plus a live "Together for 2Y 1M 4D" counter.
-- [ ] With both apps open, each device shows the other as Online with a green dot beside the name.
-- [ ] Closing one app flips the other to "Last seen ..." within about a minute (refresh or wait for the next presence sync).
-- [ ] The partner clock card matches the partner's own device time and never shows your own clock.
+- [ ] Every tab's header shows both names with a live "Together for 2Y 1M 4D" counter.
+- [ ] With both apps open, the header dot is green with a faint pulse; hovering/long-pressing it says the partner is online.
+- [ ] Closing one app greys the dot within about a minute and its tooltip reads "Last seen ...".
+- [ ] The header clock beside the dot matches the partner's own device time and weekday, and never shows your own clock.
+- [ ] The Home tab opens by default and is empty on every device.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.
 - [ ] Refreshing and signing out/in preserve the couple, anniversary and partner names.
@@ -181,10 +182,11 @@ Use your actual accounts; there is no automatic user creation.
 
 ## Current feature scope
 
-Signup, onboarding, pairing, the Home tab (live together counter, partner presence and the
-partner's local time), couple details, sign-out and mutual-breakup settings are implemented.
-Chat, media, discussion and games currently display **Coming Soon**; this release does not
-implement those features. No sample conversations/content are loaded.
+Signup, onboarding, pairing, the global header (couple names, live together counter,
+presence ticker and the partner's local time), couple details, sign-out and
+mutual-breakup settings are implemented. The Home tab is a blank canvas for the next
+features; chat, media, discussion and games display **Coming Soon**. No sample
+conversations/content are loaded.
 
 ## Design system
 

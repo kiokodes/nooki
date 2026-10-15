@@ -14,8 +14,8 @@ test('couple time helpers: YMD duration, partner clock and last-seen labels', as
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
   try {
     const {
-      getTogetherDuration, formatTogetherDuration, getPartnerClock, formatDayOffset,
-      formatLastSeen, getInitial,
+      getTogetherDuration, formatTogetherDuration, getPartnerClock, formatPartnerClock,
+      formatLastSeen,
     } = await server.ssrLoadModule('/src/lib/coupleTime.ts');
 
     assert.equal(new Date('2026-10-15T03:42:00Z').getHours(), 3, 'test process must run in UTC');
@@ -42,20 +42,17 @@ test('couple time helpers: YMD duration, partner clock and last-seen labels', as
     assert.equal(formatTogetherDuration({ years: 2, months: 1, days: 4, isFuture: false }), '2Y 1M 4D');
     assert.equal(formatTogetherDuration(getTogetherDuration('2020-02-14', new Date(2026, 9, 15))), '6Y 8M 1D');
 
-    // The clock belongs to the partner's timezone, never the reader's.
+    // The clock belongs to the partner's timezone, never the reader's, and carries their weekday.
     assert.deepEqual(getPartnerClock('America/New_York', new Date(Date.UTC(2026, 9, 15, 3, 42))),
-      { time: '11:42 PM', dayOffset: -1 });
+      { time: '11:42 PM', weekday: 'Wed' });
     assert.deepEqual(getPartnerClock('Asia/Tokyo', new Date(Date.UTC(2026, 9, 15, 3, 42))),
-      { time: '12:42 PM', dayOffset: 0 });
+      { time: '12:42 PM', weekday: 'Thu' });
     assert.deepEqual(getPartnerClock('Africa/Lagos', new Date(Date.UTC(2026, 9, 15, 22, 42))),
-      { time: '11:42 PM', dayOffset: 0 });
+      { time: '11:42 PM', weekday: 'Thu' });
+    assert.equal(formatPartnerClock({ time: '5:14 PM', weekday: 'Tue' }), '5:14 PM Tue');
     assert.equal(getPartnerClock('Not/AZone', new Date()), null);
     assert.equal(getPartnerClock(null, new Date()), null);
     assert.equal(getPartnerClock(undefined, new Date()), null);
-
-    assert.equal(formatDayOffset(-1), 'yesterday');
-    assert.equal(formatDayOffset(0), null);
-    assert.equal(formatDayOffset(1), 'tomorrow');
 
     const now = new Date(Date.UTC(2026, 9, 15, 12, 0, 0));
     assert.equal(formatLastSeen(new Date(now.getTime() - 30_000).toISOString(), now), 'Last seen just now');
@@ -66,16 +63,12 @@ test('couple time helpers: YMD duration, partner clock and last-seen labels', as
     assert.equal(formatLastSeen(new Date(now.getTime() + 5_000).toISOString(), now), 'Last seen just now');
     assert.equal(formatLastSeen(null, now), 'Offline');
     assert.equal(formatLastSeen('rubbish', now), 'Offline');
-
-    assert.equal(getInitial('Bob'), 'B');
-    assert.equal(getInitial('  ana '), 'A');
-    assert.equal(getInitial(''), '?');
   } finally {
     await server.close();
   }
 });
 
-test('home tab: live together counter, partner presence and the partner clock', async () => {
+test('global header: live counter, presence ticker and partner clock; Home stays blank', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'FormData', 'localStorage']) {
     globalThis[key] = dom.window[key];
@@ -152,35 +145,47 @@ test('home tab: live together counter, partner presence and the partner clock', 
 
     const { default: App } = await server.ssrLoadModule('/src/App.tsx');
     await act(async () => { root.render(React.createElement(App)); });
-    await waitFor(() => body().includes('Together for'), 'the Home tab should render once the couple is loaded');
+    await waitFor(() => body().includes('Together for'), 'the unlocked app should render once the couple is loaded');
 
-    // 1. Couple header: both names plus the live YMD counter.
+    // 1. Global header: names, the live YMD counter, the partner clock and an offline dot.
     const expectedDuration = coupleTime.formatTogetherDuration(
       coupleTime.getTogetherDuration(couple.anniversary_date, new Date()),
     );
-    assert(body().includes('Alice & Bob'), 'both partners are named in the couple header');
-    const appHeader = document.querySelector('header');
-    assert(appHeader && appHeader.textContent.includes('Alice & Bob'), 'the global header names both partners');
-    assert(appHeader.textContent.includes(`Together since ${couple.anniversary_date}`),
-      'the global header keeps the "Together since" line');
-    assert(appHeader.textContent.includes('Sam') === false, 'no sample-data names leak into the app');
-    assert(body().includes(`Together for ${expectedDuration}`), `expected "${expectedDuration}" on the Home tab`);
-    assert(/Together for \d+Y \d+M \d+D/.test(body()), 'the counter is shown as years, months and days');
+    const appHeader = () => document.querySelector('header');
+    assert(appHeader(), 'the global header renders on the unlocked app');
+    assert(appHeader().textContent.includes('Alice & Bob'), 'the header names both partners');
+    assert(appHeader().textContent.includes(`Together for ${expectedDuration}`),
+      `expected "Together for ${expectedDuration}" in the header`);
+    assert(/Together for \d+Y \d+M \d+D/.test(appHeader().textContent),
+      'the header counter is shown as years, months and days');
+    assert(!appHeader().textContent.includes('Together since'), 'the since-date is replaced by the live counter');
+    assert(appHeader().textContent.includes('Sam') === false, 'no sample-data names leak into the app');
 
-    // 2. Partner status: offline partner shows their stored last-seen time.
     const dot = () => document.querySelector('[data-presence]');
-    assert(dot(), 'the partner row has a presence dot');
-    assert.equal(dot().previousElementSibling.textContent, 'Bob', 'the dot sits right beside the partner name');
-    assert.equal(dot().dataset.presence, 'offline');
-    assert(body().includes('Last seen 2h ago'), 'offline partner falls back to last_seen_at');
-    assert(body().includes('Alice'), 'the phone owner is partner 1');
-    assert(body().includes('You'), 'the phone owner is marked as you');
+    assert(dot(), 'the header has a presence dot');
+    assert.equal(dot().parentElement.textContent.includes('Alice & Bob'), true, 'the dot sits with the couple names');
+    assert.equal(dot().previousElementSibling.textContent.trim(), 'Alice & Bob',
+      'the dot sits right beside the partner name');
+    assert.equal(dot().dataset.presence, 'offline', 'an away partner greys the ticker out');
+    assert(dot().getAttribute('aria-label').includes('Last seen 2h ago'),
+      'the grey dot still knows when they were last around');
+    const offlineDotColor = dot().style.backgroundColor;
 
-    // 3. Partner's local time only — never the reader's own clock.
+    // The partner's own time and weekday sit beside the dot — never the reader's clock.
     const bobClock = coupleTime.getPartnerClock('Pacific/Auckland', new Date());
     const aliceClock = coupleTime.getPartnerClock('Africa/Lagos', new Date());
-    assert(body().includes(`It's ${bobClock.time} for Bob`), 'the partner clock uses the partner timezone');
-    assert(!body().includes(aliceClock.time), 'the reader never sees their own time');
+    assert.equal(dot().nextElementSibling.textContent, `${bobClock.time} ${bobClock.weekday}`,
+      'the partner clock reads "5:14 PM Tue" style beside the dot');
+    assert(appHeader().textContent.includes(bobClock.weekday), 'the partner weekday is shown');
+    assert(!appHeader().textContent.includes(`${aliceClock.time} ${aliceClock.weekday}`),
+      'the reader never sees their own time');
+
+    // 2. The Home tab is intentionally blank for now.
+    const home = document.querySelector('[data-screen="home"]');
+    assert(home, 'the Home tab renders as the default screen');
+    assert.equal(home.textContent.trim(), '', 'the Home tab holds no cards yet');
+    assert.equal(body().includes('This phone'), false, 'the old partner-status card is gone');
+    assert.equal(body().includes("for Bob"), false, 'the old partner-clock card is gone');
 
     // Presence: tracked on the couple channel, keyed by the signed-in account.
     assert.equal(presence.topic, `nooki-couple-${couple.id}`, 'presence stays scoped to the couple');
@@ -193,14 +198,14 @@ test('home tab: live together counter, partner presence and the partner clock', 
     assert(Math.abs(Date.now() - new Date(aliceProfile.last_seen_at).getTime()) < 60_000,
       'last_seen_at is refreshed while the app is open');
 
-    // Partner joins the channel: the dot turns green beside the name.
+    // Partner joins the channel: the ticker turns green beside the name.
     presence.state = { [alice.id]: [{ user_id: alice.id }], [bob.id]: [{ user_id: bob.id }] };
     await emitPresenceSync();
     assert.equal(dot().dataset.presence, 'online');
-    assert(body().includes('Online'), 'an online partner is labelled Online');
-    assert(!body().includes('Last seen'), 'an online partner hides the last-seen label');
+    assert.notEqual(dot().style.backgroundColor, offlineDotColor, 'an online partner turns the ticker green');
+    assert(dot().getAttribute('aria-label').includes('is online'), 'the online dot announces itself');
 
-    // Partner leaves: the label falls back to the freshest database timestamp.
+    // Partner leaves: the ticker greys out and re-reads the freshest database timestamp.
     const bobLeftAt = new Date(Date.now() - 7 * 60_000).toISOString();
     await auth.signInWithEmail('bob@example.com', 'password');
     await supabase.from('profiles').update({ last_seen_at: bobLeftAt }).eq('id', bob.id);
@@ -208,18 +213,20 @@ test('home tab: live together counter, partner presence and the partner clock', 
     presence.state = { [alice.id]: [{ user_id: alice.id }] };
     await emitPresenceSync();
     assert.equal(dot().dataset.presence, 'offline');
-    await waitFor(() => body().includes('Last seen 7m ago'), 'leaving the app re-reads the stored last_seen_at');
+    assert.equal(dot().style.backgroundColor, offlineDotColor, 'the ticker greys back out');
+    await waitFor(() => dot().getAttribute('aria-label').includes('Last seen 7m ago'),
+      'leaving the app re-reads the stored last_seen_at');
 
     // Presence survives browsing other tabs: it is owned by the app, not the Home tab.
     const chatTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Chat'));
     await act(async () => { chatTab.click(); });
     assert(body().includes('Coming Soon'), 'other tabs stay as placeholders');
-    assert.equal(document.querySelector('[data-presence]'), null);
-    assert.equal(removedChannels, 0, 'the presence channel is not torn down when the Home tab unmounts');
+    assert(dot(), 'the header ticker stays visible on every tab');
+    assert.equal(removedChannels, 0, 'the presence channel is not torn down on tab switches');
     const homeTab = [...document.querySelectorAll('button')].find((item) => item.getAttribute('aria-label') === 'Home');
     assert(homeTab, 'the Home tab is the centre tab');
     await act(async () => { homeTab.click(); });
-    await waitFor(() => body().includes('Together for'), 'the Home tab comes back');
+    await waitFor(() => document.querySelector('[data-screen="home"]') !== null, 'the Home tab comes back');
     assert.equal(dot().dataset.presence, 'offline');
   } finally {
     await act(() => root.unmount());

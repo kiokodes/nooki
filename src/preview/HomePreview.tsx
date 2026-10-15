@@ -7,9 +7,9 @@ import {
   Image as ImageIcon,
   MessageCircle,
   MessageSquare,
-  Settings,
 } from 'lucide-react';
 import { tokens } from '../tokens/designTokens';
+import { CoupleHeader } from '../components/common/CoupleHeader';
 import { HomeView } from '../components/home/HomeView';
 import type { Couple, Profile } from '../types/database';
 
@@ -117,56 +117,16 @@ export const HomePreview = () => {
           overflow: 'hidden',
         }}
       >
-        <header style={{ padding: '20px 22px 10px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {/* Mirrors the live app header: couple names, soft dot, "Together since" line. */}
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, marginRight: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-              <span
-                style={{
-                  fontSize: '1.15rem',
-                  fontWeight: 800,
-                  color: tokens.colors.textPrimary,
-                  letterSpacing: '-0.02em',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {profile.name} &amp; {partner.name}
-              </span>
-              <span
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: tokens.radii.full,
-                  backgroundColor: tokens.colors.primaryPink,
-                  flexShrink: 0,
-                }}
-              />
-            </div>
-            <span style={{ fontSize: '0.74rem', color: tokens.colors.textMuted }}>
-              Together since {couple.anniversary_date}
-            </span>
-          </div>
-          <span
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: tokens.radii.full,
-              backgroundColor: tokens.colors.bgSurface,
-              border: `1px solid ${tokens.colors.borderSubtle}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: tokens.colors.textSecondary,
-              boxShadow: tokens.shadows.subtle,
-            }}
-          >
-            <Settings size={17} />
-          </span>
-        </header>
+        {/* The real header component, so the preview can never drift from the app. */}
+        <CoupleHeader
+          profile={profile}
+          partner={partner}
+          couple={couple}
+          partnerOnline={partnerOnline}
+          onOpenSettings={() => {}}
+        />
 
-        <HomeView profile={profile} partner={partner} couple={couple} partnerOnline={partnerOnline} />
+        <HomeView />
 
         <nav
           aria-label="Preview navigation"
@@ -228,7 +188,7 @@ export const HomePreview = () => {
 
       <p style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: 0, fontSize: '0.76rem', color: tokens.colors.textMuted }}>
         <Heart size={13} fill={tokens.colors.primaryPink} strokeWidth={1.5} />
-        Home tab design preview · sample data only · the live counter ticks on its own
+        Home tab design preview · sample data only · the header clock and counter tick on their own
       </p>
     </div>
   );

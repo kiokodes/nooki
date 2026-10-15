@@ -6,13 +6,13 @@ import {
   MessageSquare,
   Gamepad2,
   Sparkles,
-  Settings,
 } from 'lucide-react';
 import { tokens } from './tokens/designTokens';
 import { supabaseConfigurationError } from './lib/supabaseClient';
 import { AuthView } from './components/auth/AuthView';
 import { OnboardingView } from './components/auth/OnboardingView';
 import { PairingView } from './components/auth/PairingView';
+import { CoupleHeader } from './components/common/CoupleHeader';
 import { HomeView } from './components/home/HomeView';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
@@ -279,9 +279,7 @@ export const App: React.FC = () => {
 
   // 4. Pairing View (Lock app until both partners have joined)
   // Shows Create/Join flow or friendly waiting screen with 6-char code
-  const isCoupleComplete = Boolean(couple && partner);
-
-  if (!isCoupleComplete) {
+  if (!couple || !partner) {
     return (
       <div
         style={{
@@ -375,76 +373,18 @@ export const App: React.FC = () => {
           overflow: 'hidden',
         }}
       >
-        {/* Couple Brand Header */}
-        <header
-          style={{
-            padding: '20px 22px 10px 22px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, marginRight: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-              <span
-                style={{
-                  fontSize: '1.15rem',
-                  fontWeight: 800,
-                  color: tokens.colors.textPrimary,
-                  letterSpacing: '-0.02em',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {profile.name} &amp; {partner?.name}
-              </span>
-              <span
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: tokens.radii.full,
-                  backgroundColor: tokens.colors.primaryPink,
-                  flexShrink: 0,
-                }}
-              />
-            </div>
-            {couple?.anniversary_date && (
-              <span style={{ fontSize: '0.74rem', color: tokens.colors.textMuted }}>
-                Together since {couple.anniversary_date}
-              </span>
-            )}
-          </div>
+        {/* Global couple header: names, presence ticker, partner clock and together counter */}
+        <CoupleHeader
+          profile={profile}
+          partner={partner}
+          couple={couple}
+          partnerOnline={partnerOnline}
+          onOpenSettings={() => setShowSettings(true)}
+        />
 
-          <button
-            onClick={() => setShowSettings(true)}
-            aria-label="Settings"
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: tokens.radii.full,
-              backgroundColor: tokens.colors.bgSurface,
-              border: `1px solid ${tokens.colors.borderSubtle}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: tokens.colors.textSecondary,
-              boxShadow: tokens.shadows.subtle,
-            }}
-          >
-            <Settings size={17} />
-          </button>
-        </header>
-
-        {/* Home tab: live couple cards. Other tabs stay as airy placeholders. */}
-        {isHome && couple && partner ? (
-          <HomeView
-            profile={profile}
-            partner={partner}
-            couple={couple}
-            partnerOnline={partnerOnline}
-          />
+        {/* Home tab is intentionally blank for now; the other tabs stay as placeholders. */}
+        {isHome ? (
+          <HomeView />
         ) : (
           <section
             style={{

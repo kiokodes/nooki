@@ -22,10 +22,10 @@ export interface TogetherDuration {
 }
 
 export interface PartnerClock {
-  /** Local wall clock for the partner, e.g. "11:42 PM". */
+  /** Local wall clock for the partner, e.g. "5:14 PM". */
   time: string;
-  /** Partner's calendar day relative to the viewer: -1 yesterday, 0 same day, 1 tomorrow. */
-  dayOffset: number;
+  /** Short weekday in the partner's timezone, e.g. "Tue". */
+  weekday: string;
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -48,10 +48,6 @@ export function daysInMonth(year: number, month: number): number {
 
 function toOrdinal(date: CalendarDate): number {
   return Math.round(Date.UTC(date.year, date.month - 1, date.day) / MS_PER_DAY);
-}
-
-function toCalendarDate(date: Date): CalendarDate {
-  return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
 }
 
 function addMonths(date: CalendarDate, months: number): CalendarDate {
@@ -82,7 +78,7 @@ export function getTogetherDuration(anniversary: string | null | undefined, now:
   const start = parseIsoDate(anniversary);
   if (!start) return { years: 0, months: 0, days: 0, isFuture: false };
 
-  const end = toCalendarDate(now);
+  const end = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
   const startOrdinal = toOrdinal(start);
   const endOrdinal = toOrdinal(end);
 
@@ -103,8 +99,9 @@ export function formatTogetherDuration(duration: TogetherDuration): string {
 }
 
 /**
- * The partner's current wall-clock time, or `null` when their timezone is missing
- * or not understood by this browser (legacy rows can hold anything).
+ * The partner's current wall-clock time and weekday in their own timezone, or `null`
+ * when their timezone is missing or not understood by this browser (legacy rows can
+ * hold anything).
  */
 export function getPartnerClock(timezone: string | null | undefined, now: Date = new Date()): PartnerClock | null {
   if (!timezone) return null;
@@ -118,33 +115,21 @@ export function getPartnerClock(timezone: string | null | undefined, now: Date =
       // Some ICU builds separate "PM" with a narrow no-break space; keep one plain space everywhere.
       .replace(/[\u00a0\u202f]/g, ' ');
 
-    const parts = cachedFormatter(`date:${timezone}`, () => new Intl.DateTimeFormat('en-US', {
+    const weekday = cachedFormatter(`weekday:${timezone}`, () => new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })).formatToParts(now);
+      weekday: 'short',
+    })).format(now);
 
-    const lookup: Record<string, string> = {};
-    for (const part of parts) {
-      if (part.type !== 'literal') lookup[part.type] = part.value;
-    }
-    const partnerDay = toOrdinal({ year: Number(lookup.year), month: Number(lookup.month), day: Number(lookup.day) });
-    if (!Number.isFinite(partnerDay)) return null;
-
-    return { time, dayOffset: partnerDay - toOrdinal(toCalendarDate(now)) };
+    return { time, weekday };
   } catch {
-    // Unknown/unsupported timezone: the card degrades to a quiet sentence instead of crashing.
+    // Unknown/unsupported timezone: callers degrade to a quiet sentence instead of crashing.
     return null;
   }
 }
 
-/** "tomorrow" / "yesterday", or `null` when both partners share the same calendar day. */
-export function formatDayOffset(dayOffset: number): string | null {
-  if (dayOffset === 0 || !Number.isFinite(dayOffset)) return null;
-  if (dayOffset === 1) return 'tomorrow';
-  if (dayOffset === -1) return 'yesterday';
-  return dayOffset > 0 ? `in ${dayOffset} days` : `${Math.abs(dayOffset)} days ago`;
+/** Compact header readout: "5:14 PM Tue". */
+export function formatPartnerClock(clock: PartnerClock): string {
+  return `${clock.time} ${clock.weekday}`;
 }
 
 /** "Online", "Last seen 5m ago", "Last seen 3d ago", "Last seen 5 Oct". */
@@ -171,7 +156,3 @@ export function formatLastSeen(lastSeenAt: string | Date | null | undefined, now
   return `Last seen ${date}`;
 }
 
-export function getInitial(name: string): string {
-  const trimmed = (name || '').trim();
-  return trimmed ? trimmed[0].toUpperCase() : '?';
-}
