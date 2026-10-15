@@ -10,7 +10,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
-import { ONE_ACTIVE_BOOK_HELP, isBookFileType } from '../../lib/booksService';
+import { MAX_BOOKS_ON_SHELF, SHELF_FULL_HELP, isBookFileType } from '../../lib/booksService';
 import type { BooksState } from '../../hooks/useBooks';
 import type { SharedBook } from '../../types/database';
 
@@ -156,6 +156,7 @@ function BookCard({
   userId,
   userName,
   partnerName,
+  shelfFull,
   onOpenReader,
   onUploadNew,
   onDelete,
@@ -165,6 +166,7 @@ function BookCard({
   userId: string;
   userName: string;
   partnerName: string;
+  shelfFull: boolean;
   onOpenReader: (bookId: string) => void;
   onUploadNew: () => void;
   onDelete: (book: SharedBook) => void;
@@ -278,38 +280,40 @@ function BookCard({
 
       {book.status !== 'reading' && (
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            type="button"
-            data-upload-new
-            disabled={state.busy}
-            onClick={onUploadNew}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '5px',
-              padding: '10px 12px',
-              borderRadius: tokens.radii.pill,
-              border: `1.5px solid ${tokens.colors.borderSoft}`,
-              backgroundColor: tokens.colors.bgSurface,
-              color: tokens.colors.textSecondary,
-              fontSize: '0.78rem',
-              fontWeight: 700,
-              fontFamily: tokens.typography.fontFamily,
-              cursor: state.busy ? 'default' : 'pointer',
-            }}
-          >
-            <Plus size={13} aria-hidden="true" />
-            Upload new
-          </button>
+          {!shelfFull && (
+            <button
+              type="button"
+              data-upload-new
+              disabled={state.busy}
+              onClick={onUploadNew}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px',
+                padding: '10px 12px',
+                borderRadius: tokens.radii.pill,
+                border: `1.5px solid ${tokens.colors.borderSoft}`,
+                backgroundColor: tokens.colors.bgSurface,
+                color: tokens.colors.textSecondary,
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                fontFamily: tokens.typography.fontFamily,
+                cursor: state.busy ? 'default' : 'pointer',
+              }}
+            >
+              <Plus size={13} aria-hidden="true" />
+              Upload new
+            </button>
+          )}
           <button
             type="button"
             data-delete-book={book.id}
             disabled={state.busy}
             onClick={() => onDelete(book)}
             style={{
-              flex: 1,
+              flex: shelfFull ? 1 : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -346,11 +350,12 @@ export const MediaView: React.FC<MediaViewProps> = ({
 
   const activeBook = state.books.find((book) => book.status === 'reading') ?? null;
   const pausedBooks = state.books.filter((book) => book.status !== 'reading');
+  const shelfFull = state.books.length >= MAX_BOOKS_ON_SHELF;
 
   const openPicker = () => {
-    // The one-active-book rule also lives in the database; this is the friendly face.
-    if (activeBook) {
-      setNotice(ONE_ACTIVE_BOOK_HELP);
+    // The two-book shelf limit: a disciplined reading habit.
+    if (shelfFull) {
+      setNotice(SHELF_FULL_HELP);
       return;
     }
     setNotice(null);
@@ -474,8 +479,9 @@ export const MediaView: React.FC<MediaViewProps> = ({
               maxWidth: '260px',
             }}
           >
-            One book for the two of you. Highlight passages, leave comments in chat, and
-            jump to wherever your partner is reading.
+            One book for the two of you — up to {MAX_BOOKS_ON_SHELF} at a time. Highlight passages, leave
+            comments in chat, and jump to wherever your partner is reading. Finish one to
+            open the next.
           </p>
           <button
             type="button"
@@ -514,6 +520,7 @@ export const MediaView: React.FC<MediaViewProps> = ({
               userId={userId}
               userName={userName}
               partnerName={partnerName}
+              shelfFull={shelfFull}
               onOpenReader={onOpenReader}
               onUploadNew={openPicker}
               onDelete={handleDelete}
@@ -528,13 +535,14 @@ export const MediaView: React.FC<MediaViewProps> = ({
               userId={userId}
               userName={userName}
               partnerName={partnerName}
+              shelfFull={shelfFull}
               onOpenReader={onOpenReader}
               onUploadNew={openPicker}
               onDelete={handleDelete}
             />
           ))}
 
-          {!activeBook && (
+          {!shelfFull && (
             <button
               type="button"
               data-upload-book
@@ -572,8 +580,8 @@ export const MediaView: React.FC<MediaViewProps> = ({
             }}
           >
             <UserRound size={11} style={{ verticalAlign: '-2px', marginRight: '4px' }} aria-hidden="true" />
-            {userName} and {partnerName} share this shelf. Files stay private to the two
-            of you — DRM-free EPUB or PDF only.
+            {userName} and {partnerName} share this shelf · up to {MAX_BOOKS_ON_SHELF} books at a time.
+            Files stay private to the two of you — DRM-free EPUB or PDF only.
           </p>
         </>
       )}

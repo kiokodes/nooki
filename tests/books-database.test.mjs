@@ -6,7 +6,7 @@ import { installTestBackend } from './helpers/testBackend.mjs';
 
 // The shelf's rules live in the database, so most of this file is about what the
 // database refuses — including with the app out of the way.
-test('shared books: one active book, progress, highlights, the chat bridge and delete', async () => {
+test('shared books: two-book shelf limit, one active book, progress, highlights, the chat bridge and delete', async () => {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false, ws: false },
     define: {
@@ -63,10 +63,11 @@ test('shared books: one active book, progress, highlights, the chat bridge and d
     assert.equal(book.file_path, `books/${couple.id}/${bookId}.epub`, 'the path is books/{couple_id}/{id}.ext');
     assert.equal(book.uploaded_by, alice.id);
 
-    // One active book per couple — enforced by the database, not just the UI.
+    // One active book per couple — the count check passes (1 < 2) but the unique
+    // index on status='reading' refuses the second reading row.
     await assert.rejects(
       books.createBook(couple.id, alice.id, { id: books.newBookId(), title: 'Dune', fileType: 'epub' }),
-      /Leave or delete current book first/,
+      /Pause or finish/,
     );
     await backend.resetRole();
     await assert.rejects(
@@ -81,7 +82,7 @@ test('shared books: one active book, progress, highlights, the chat bridge and d
     // --- Leave / finish / continue ---------------------------------------------------
     const left = await books.setBookStatus(couple.id, book.id, 'left');
     assert.equal(left.status, 'left');
-    // Paused books may be replaced: the rule is one book IN PLAY.
+    // The shelf allows two books: paused + a new one.
     const second = await books.createBook(couple.id, bob.id, {
       id: books.newBookId(),
       title: 'Dune',
@@ -89,8 +90,14 @@ test('shared books: one active book, progress, highlights, the chat bridge and d
     });
     assert.equal(second.status, 'reading');
     assert.equal(second.file_type, 'pdf');
+    // Two-book shelf limit — enforced by the database trigger and the app.
+    await assert.rejects(
+      books.createBook(couple.id, alice.id, { id: books.newBookId(), title: 'Emma', fileType: 'epub' }),
+      /2 books at a time/,
+      'a third book cannot be added until one is deleted',
+    );
     // ...but the paused book cannot come back while another is in play.
-    await assert.rejects(books.setBookStatus(couple.id, book.id, 'reading'), /Leave or delete/);
+    await assert.rejects(books.setBookStatus(couple.id, book.id, 'reading'), /Pause or finish/);
     const finished = await books.setBookStatus(couple.id, second.id, 'finished');
     assert.equal(finished.status, 'finished');
     const resumed = await books.setBookStatus(couple.id, book.id, 'reading');
@@ -246,8 +253,10 @@ test('shared books: one active book, progress, highlights, the chat bridge and d
     assert.equal(third.status, 'reading');
 
     // --- Safe to rerun, and the preflight passes on a healthy project ----------------
-    const migration = await readFile(new URL('../supabase/migrations/202610150008_shared_books.sql', import.meta.url), 'utf8');
-    await backend.exec(migration);
+    const migration008 = await readFile(new URL('../supabase/migrations/202610150008_shared_books.sql', import.meta.url), 'utf8');
+    const migration009 = await readFile(new URL('../supabase/migrations/202610150009_two_book_shelf_limit.sql', import.meta.url), 'utf8');
+    await backend.exec(migration008);
+    await backend.exec(migration009);
     await backend.exec(await readFile(new URL('../supabase/verify-books.sql', import.meta.url), 'utf8'));
     await backend.rollback();
     assert.deepEqual((await books.fetchSharedBooks(couple.id)).map((item) => item.title).sort(), ['Dune', 'Emma'],
@@ -257,7 +266,8 @@ test('shared books: one active book, progress, highlights, the chat bridge and d
     await backend.exec('DROP INDEX IF EXISTS public.shared_books_one_reading');
     await assert.rejects(backend.exec(await readFile(new URL('../supabase/verify-books.sql', import.meta.url), 'utf8')));
     await backend.rollback();
-    await backend.exec(migration);
+    await backend.exec(migration008);
+    await backend.exec(migration009);
     await backend.exec(await readFile(new URL('../supabase/verify-books.sql', import.meta.url), 'utf8'));
     await backend.rollback();
   } finally {

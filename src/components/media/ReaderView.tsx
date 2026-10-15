@@ -1,4 +1,5 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import {
   BookOpen,
   Bookmark,
@@ -33,6 +34,76 @@ const PdfReader = lazy(() => import('./PdfReader'));
 
 /** Progress saves land a few seconds after the page turns, not on every turn. */
 export const PROGRESS_SAVE_DEBOUNCE_MS = 3000;
+
+/**
+ * Error boundary wrapping the reader engine so a crash in epub.js or pdf.js shows
+ * a friendly "Back to the shelf" button instead of a blank white screen.
+ */
+interface EngineErrorBoundaryProps {
+  children: ReactNode;
+  onClose: () => void;
+}
+
+interface EngineErrorBoundaryState {
+  hasError: boolean;
+  message: string;
+}
+
+class EngineErrorBoundary extends Component<EngineErrorBoundaryProps, EngineErrorBoundaryState> {
+  state: EngineErrorBoundaryState = { hasError: false, message: '' };
+
+  static getDerivedStateFromError(error: unknown): Partial<EngineErrorBoundaryState> {
+    return {
+      hasError: true,
+      message: error instanceof Error ? error.message : 'Something went wrong opening this book.',
+    };
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    // In production this would go to a logging service.
+    console.error('[ReaderView] Engine error:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            padding: '24px',
+            textAlign: 'center',
+          }}
+        >
+          <p role="alert" style={{ color: tokens.colors.primaryPinkDeep, fontWeight: 700, fontSize: '0.9rem' }}>
+            This book could not be opened. {this.state.message}
+          </p>
+          <button
+            type="button"
+            onClick={this.props.onClose}
+            style={{
+              padding: '10px 22px',
+              borderRadius: tokens.radii.pill,
+              border: 'none',
+              backgroundColor: tokens.colors.primaryGreenDeep,
+              color: tokens.colors.textWhite,
+              fontWeight: 800,
+              fontFamily: tokens.typography.fontFamily,
+              cursor: 'pointer',
+            }}
+          >
+            Back to the shelf
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export interface ShareHighlightInput extends EngineSelection {
   /** PDF rectangles as fractions of the page box; undefined for EPUB. */
@@ -224,7 +295,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       onError: (message: string) => setLoadError(message),
     };
     return (
-      <Suspense fallback={null}>
+      <Suspense
+        fallback={
+          <div
+            style={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+            }}
+          >
+            <BookOpen size={30} color={tokens.colors.primaryGreenDeep} aria-hidden="true" />
+            <p style={{ color: tokens.colors.textSecondary, fontSize: '0.85rem', fontWeight: 600 }}>
+              Opening the book…
+            </p>
+          </div>
+        }
+      >
         {book.file_type === 'epub' ? (
           <EpubReader
             {...shared}
@@ -313,7 +402,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             </p>
           </div>
         )}
-        {engine}
+        <EngineErrorBoundary onClose={onClose}>
+          {engine}
+        </EngineErrorBoundary>
       </div>
 
       {/* Top bar: out of the way until the middle of the page is tapped. */}
