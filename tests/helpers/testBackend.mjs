@@ -58,11 +58,12 @@ export async function installTestBackend(client) {
     } catch (error) { return { data: null, error: { message: error.message, code: error.code } }; }
   };
   client.from = (table) => {
-    if (!['profiles', 'couples', 'couple_events'].includes(table)) throw new Error('Unexpected table in test');
+    if (!['profiles', 'couples', 'couple_events', 'messages'].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;
     let singleRow = false;
     let orderBy;
+    let rowLimit;
     const filters = [];
     const query = {
       select() { return query; },
@@ -71,8 +72,11 @@ export async function installTestBackend(client) {
       update(data) { writeData = data; writeMode = 'update'; return query; },
       delete() { writeMode = 'delete'; return query; },
       order(column, options = {}) { assertIdentifier(column); orderBy = `${column} ${options.ascending === false ? 'DESC' : 'ASC'}`; return query; },
+      limit(count) { rowLimit = count; return query; },
       eq(column, value) { assertIdentifier(column); filters.push([column, '=', value]); return query; },
       neq(column, value) { assertIdentifier(column); filters.push([column, '<>', value]); return query; },
+      // `IS NULL` / `IS NOT NULL`: Postgres does not accept a bind parameter here.
+      is(column, value) { assertIdentifier(column); filters.push([column, value === null ? 'IS NULL' : 'IS NOT NULL', undefined]); return query; },
       single() { singleRow = true; return execute(); },
       maybeSingle() { singleRow = true; return execute(); },
       // Bare `await` on a filter builder returns a list, exactly like the real client.
@@ -81,8 +85,14 @@ export async function installTestBackend(client) {
     async function execute() {
       try {
         let result;
+        // `IS NULL` carries no value, so only value-carrying filters consume a placeholder.
+        let placeholder = 0;
         const where = filters.length
-          ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${i + 1}`).join(' AND ')}`
+          ? `WHERE ${filters.map(([field, operator]) => (
+              operator === 'IS NULL' || operator === 'IS NOT NULL'
+                ? `${field} ${operator}`
+                : `${field} ${operator} $${++placeholder}`
+            )).join(' AND ')}`
           : '';
         if (writeMode === 'insert' || writeMode === 'upsert') {
           const fields = Object.keys(writeData);
@@ -99,19 +109,25 @@ export async function installTestBackend(client) {
           const fields = Object.keys(writeData);
           fields.forEach(assertIdentifier);
           const values = Object.values(writeData);
+          let updatePlaceholder = fields.length;
           const whereForUpdate = filters.length
-            ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${fields.length + i + 1}`).join(' AND ')}`
+            ? `WHERE ${filters.map(([field, operator]) => (
+                operator === 'IS NULL' || operator === 'IS NOT NULL'
+                  ? `${field} ${operator}`
+                  : `${field} ${operator} $${++updatePlaceholder}`
+              )).join(' AND ')}`
             : '';
           result = await db.query(
             `UPDATE public.${table} SET ${fields.map((field, i) => `${field} = $${i + 1}`).join(', ')} ${whereForUpdate} RETURNING *`,
-            [...values, ...filters.map(([, , value]) => value)],
+            [...values, ...filters.filter(([, , value]) => value !== undefined).map(([, , value]) => value)],
           );
         } else if (writeMode === 'delete') {
-          result = await db.query(`DELETE FROM public.${table} ${where} RETURNING *`, filters.map(([, , value]) => value));
+          result = await db.query(`DELETE FROM public.${table} ${where} RETURNING *`,
+            filters.filter(([, , value]) => value !== undefined).map(([, , value]) => value));
         } else {
           result = await db.query(
-            `SELECT * FROM public.${table} ${where}${orderBy ? ` ORDER BY ${orderBy}` : ''}`,
-            filters.map(([, , value]) => value),
+            `SELECT * FROM public.${table} ${where}${orderBy ? ` ORDER BY ${orderBy}` : ''}${rowLimit ? ` LIMIT ${Number(rowLimit)}` : ''}`,
+            filters.filter(([, , value]) => value !== undefined).map(([, , value]) => value),
           );
         }
         const rows = result.rows.map(toRow);

@@ -11,10 +11,13 @@ BEGIN
   IF to_regclass('public.couple_events') IS NULL THEN
     RAISE EXCEPTION 'Missing couple_events table. Apply supabase/migrations/202610150002_couple_events.sql.';
   END IF;
+  IF to_regclass('public.messages') IS NULL THEN
+    RAISE EXCEPTION 'Missing messages table. Apply supabase/migrations/202610150003_messages.sql.';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relname IN ('profiles', 'couples', 'couple_events') AND NOT c.relrowsecurity
-  ) THEN RAISE EXCEPTION 'Row-level security must be enabled on profiles, couples and couple_events.'; END IF;
+    WHERE n.nspname = 'public' AND c.relname IN ('profiles', 'couples', 'couple_events', 'messages') AND NOT c.relrowsecurity
+  ) THEN RAISE EXCEPTION 'Row-level security must be enabled on profiles, couples, couple_events and messages.'; END IF;
 
   FOREACH signature IN ARRAY ARRAY[
     'public.create_couple(date)', 'public.join_couple(text)',
@@ -72,6 +75,40 @@ BEGIN
     SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.couple_events'::regclass
     AND tgname = 'couple_events_set_updated_at' AND tgenabled = 'O'
   ) THEN RAISE EXCEPTION 'Missing couple_events updated_at trigger. Apply the calendar migration.'; END IF;
+  -- Chat: table permissions, RLS policies, the message-type check, immutability and Realtime.
+  IF NOT has_table_privilege('authenticated', 'public.messages', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.messages', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.messages', 'UPDATE') THEN
+    RAISE EXCEPTION 'Authenticated users need select, insert and update on messages.';
+  END IF;
+  IF has_table_privilege('anon', 'public.messages', 'SELECT')
+     OR has_table_privilege('anon', 'public.messages', 'INSERT') THEN
+    RAISE EXCEPTION 'Anonymous users must not be able to read or write messages.';
+  END IF;
+  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'messages' AND (
+    policyname IN ('Couple members can read their messages', 'Couple members can send messages',
+                   'Couple members can mark messages read')
+  )) <> 3 THEN RAISE EXCEPTION 'Required messages RLS policies are missing. Rerun supabase/migrations/202610150003_messages.sql.'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'type'
+  ) THEN RAISE EXCEPTION 'messages.type is missing. Rerun supabase/migrations/202610150003_messages.sql.'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'messages_type_check') THEN
+    RAISE EXCEPTION 'messages.type is missing its text/question/answer/system check. Rerun the chat migration.';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.messages'::regclass
+    AND tgname = 'messages_guard_immutable' AND tgenabled = 'O'
+  ) THEN RAISE EXCEPTION 'Missing messages immutability trigger. Apply the chat migration.'; END IF;
+  -- Postgres Changes is the transport for instant messages. Only checked when the
+  -- project has the Realtime publication at all.
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'messages'
+     ) THEN
+    RAISE EXCEPTION 'messages is not in the supabase_realtime publication, so chat will not update live. Rerun supabase/migrations/202610150003_messages.sql.';
+  END IF;
   IF NOT has_table_privilege('authenticated', 'public.profiles', 'SELECT')
      OR NOT has_table_privilege('authenticated', 'public.profiles', 'INSERT')
      OR NOT has_table_privilege('authenticated', 'public.profiles', 'UPDATE')
@@ -89,5 +126,5 @@ BEGIN
   ) THEN RAISE EXCEPTION 'Old couple creation policy is still active. Apply the pairing migration.'; END IF;
 END;
 $$;
-SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger and couple_events calendar are present. Still complete the two-device acceptance test.' AS result;
+SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar and realtime messages are present. Still complete the two-device acceptance test.' AS result;
 COMMIT;

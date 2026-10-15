@@ -270,11 +270,18 @@ test('global header: live counter, presence ticker and partner clock', async () 
       'leaving the app re-reads the stored last_seen_at');
 
     // Presence survives browsing other tabs: it is owned by the app, not the Home tab.
-    const chatTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Chat'));
-    await act(async () => { chatTab.click(); });
-    assert(body().includes('Coming Soon'), 'other tabs stay as placeholders');
+    const mediaTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Media'));
+    await act(async () => { mediaTab.click(); });
+    assert(body().includes('Coming Soon'), 'tabs without a feature yet stay as placeholders');
     assert(dot(), 'the header ticker stays visible on every tab');
     assert.equal(removedChannels, 0, 'the presence channel is not torn down on tab switches');
+
+    // The Chat tab is a real feature now: it opens the couple's conversation.
+    const chatTab = [...document.querySelectorAll('button')].find((item) => item.getAttribute('aria-label')?.startsWith('Chat'));
+    await act(async () => { chatTab.click(); });
+    assert(document.querySelector('[data-screen="chat"]'), 'the Chat tab opens the chat');
+    assert(dot(), 'the header ticker stays visible on the chat tab too');
+    assert.equal(removedChannels, 0, 'the chat channel is not torn down on tab switches');
     const homeTab = [...document.querySelectorAll('button')].find((item) => item.getAttribute('aria-label') === 'Home');
     assert(homeTab, 'the Home tab is the centre tab');
     await act(async () => { homeTab.click(); });
