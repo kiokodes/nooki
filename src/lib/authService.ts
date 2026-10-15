@@ -75,11 +75,16 @@ export async function touchLastSeen(userId: string): Promise<void> {
 }
 
 /**
- * A missing table means the calendar migration has not been applied yet; that is an
- * owner problem, not something the person using the app can fix.
+ * A missing table or function means a migration has not been applied yet; that is an owner
+ * problem, not something the person using the app can fix. PostgREST reports an absent RPC
+ * as 42883 ("could not find the function"), which is how a project without the Discuss
+ * migration answers `question_categories`, `pick_question` and `ask_question`.
  */
 export function describeDatabaseError(error: { message: string; code?: string }): string {
-  if (error.code === '42P01' || /relation .*(couple_events|messages).* does not exist/i.test(error.message)) {
+  const missingTable = error.code === '42P01'
+    || /relation .*(couple_events|messages|questions|question_sessions|answers|answer_reactions|couple_settings).* does not exist/i.test(error.message);
+  const missingFunction = error.code === '42883' || /could not find the function/i.test(error.message);
+  if (missingTable || missingFunction) {
     return 'The database needs an update. Please ask the app owner to apply the Supabase migrations.';
   }
   return error.message;

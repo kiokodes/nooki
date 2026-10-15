@@ -35,14 +35,17 @@ and public-key format, not the remote key's validity or the database's health.
 1. Take a database backup/snapshot before changing the schema.
 2. Run `supabase/migrations/202610150001_pairing_flow.sql` in that project's SQL Editor.
    Then run `supabase/migrations/202610150002_couple_events.sql`, then
-   `supabase/migrations/202610150003_messages.sql`, the same way. All three are safe to
-   rerun and change nothing that already exists: the second adds the shared calendar and
-   the third adds the chat log (plus its Realtime publication membership).
+   `supabase/migrations/202610150003_messages.sql`, then
+   `supabase/migrations/202610150004_discuss_questions.sql`, the same way. All four are
+   safe to rerun and change nothing that already exists: the second adds the shared
+   calendar, the third adds the chat log, and the fourth adds the Discuss question engine
+   (plus their Realtime publication membership).
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
-   anniversary-lock trigger, the `couple_events` calendar and the realtime `messages`
-   chat. It must return **PASS**; if it complains about `couple_events` or `messages`,
-   that migration step was skipped.
+   anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat
+   and the Discuss tables, reveal policy and question RPCs. It must return **PASS**; if it
+   complains about `couple_events`, `messages` or `questions`, that migration step was
+   skipped.
 4. Redeploy the updated frontend immediately after the migration.
 
 The migration preserves existing couples and invite codes. It makes creation/linking
@@ -54,6 +57,12 @@ The chat migration is **required before deploying the Chat tab**: a project with
 `messages` shows an owner-facing "the database needs an update" message instead of a
 broken chat, and the preflight fails loudly.
 
+The Discuss migration is **required before deploying the Discuss tab**: a project without
+`questions` shows the same owner-facing "the database needs an update" card instead of a
+tab that looks broken, and the preflight fails loudly. It adds tables, functions, triggers
+and policies only — never any questions — so the tab says "The question library is empty"
+until you import your CSV (see **Importing the question library** below).
+
 **Do not rerun the full schema on an existing project or drop tables to resolve an
 error.** Use the migration. It changes the old frontend's direct-insert permissions;
 coordinate the migration/deployment in a short maintenance window if people are using
@@ -62,9 +71,10 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 ### Brand-new, empty Supabase project only
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
-(including `couple_events` and `messages`), RLS policies, pairing RPCs, anniversary
-trigger, the Realtime publication membership for the chat and the mutual-breakup RPCs; it
-does not populate user/couple records.
+(including `couple_events`, `messages` and the five Discuss tables), RLS policies, pairing
+and question RPCs, the anniversary and answer-reveal triggers, the Realtime publication
+membership for the chat and Discuss tables, and the mutual-breakup RPCs; it does not
+populate user/couple records, and it contains no questions — import those separately.
 
 ## Supabase Auth configuration
 
@@ -186,9 +196,10 @@ left, live, with no refresh anywhere. It is built from:
   `Last seen 12m ago`), plus **phone** and **video** buttons. Those two are deliberately
   inert for now: they show a *"coming soon"* toast until calling ships.
 - **Message types** — `type` is `text`, `question`, `answer` or `system` from day one, so
-  the Discuss tab can reuse this exact table for prompts, answers and automatic notes.
+  a future feature can reuse this exact table for prompts, answers and automatic notes.
   `system` rows render as a quiet centred pill, and `sender_id` may be `NULL` only for
-  them. The Chat tab itself writes `text`.
+  them. The Chat tab itself writes `text`; the Discuss tab keeps its own tables and does
+  not post into the transcript.
 - **Realtime** — one channel per couple (`nooki-chat-<coupleId>`) carries Postgres Changes
   for `INSERT` and `UPDATE` filtered by `couple_id`, plus the typing broadcast. RLS applies
   to the stream as well, so the other couple never receives these rows.
@@ -228,6 +239,99 @@ on the fail-closed connection screen. Once real values are in `.env.local`, `/` 
 app as usual. The dev port is pinned with `strictPort` so it cannot silently drift off
 5173.
 
+## The Discuss tab
+
+A question engine for the couple: pick a corner of your life, pick how deep to go, and the
+app hands you a question from the shared library. Ask it, both partners answer privately,
+and the two answers appear together the moment the second one lands — then each can react
+with an emoji and a short comment. It is built from:
+
+| Piece | File |
+| --- | --- |
+| The screen: browse, question card, session, history | `src/components/discuss/DiscussView.tsx` |
+| Categories, depth chips and the locked 18+ shelf | `src/components/discuss/CategoryPicker.tsx` |
+| The question card and "Ask my partner" | `src/components/discuss/QuestionCard.tsx` |
+| Composer, sealed state, reveal and reaction picker | `src/components/discuss/SessionPanel.tsx` |
+| The four answer inputs: text, choice, multi-choice, ranking, slider | `src/components/discuss/AnswerInput.tsx` |
+| Past questions and their state | `src/components/discuss/HistoryList.tsx` |
+| State: load, live re-reads, the pending count, the 18+ gate | `src/hooks/useDiscuss.ts` |
+| Transport: queries, the question RPCs, the Realtime channel | `src/lib/discussService.ts` |
+| The question vocabulary, shared with the database normalisers | `src/lib/questionFormat.ts` |
+| The 18+ switch | `src/components/common/DangerSettingsModal.tsx` |
+| Tables, RLS, triggers, RPCs and Realtime membership | `supabase/migrations/202610150004_discuss_questions.sql` |
+
+- **Browse** — the categories come from the library itself, through `question_categories()`:
+  each tile shows how many questions are left in it, and the depth chips (1 Light … 5 Deep)
+  show how many are left at that level and are disabled when there are none. **Surprise me**
+  picks a random question this couple has not asked yet.
+- **Answering** — the input follows the question's `input_type`: free typing with a
+  character counter, single choice, multi-choice ("2 selected"), ranking (drag on a
+  pointer device, up/down buttons everywhere else) or a 1–10 slider. **Send my answer**
+  stays disabled until the answer is complete, and the database validates its shape again
+  on the way in — a ranking must order every option exactly once, a choice must be one of
+  the given options, a slider must be a number from 1 to 10.
+- **The seal** — until both partners have answered, each phone sees only its own answer
+  (*"Waiting for Bob … No peeking before then"*). This is not a frontend rule: the
+  `answers` SELECT policy returns a partner's row only once the session is complete, so no
+  edit to the client can force a reveal. The second answer fires
+  `answers_sync_session_progress`, which stamps `completed_at` — that stamp *is* the
+  reveal, and it locks both answers for good.
+- **Reveal and reactions** — the two answers appear side by side with a short
+  fade-and-rise animation (`nooki-reveal-card`, suppressed for `prefers-reduced-motion`),
+  then either partner can react 😊 😂 😢 😠 😞 and add a comment of up to 1000
+  characters. One reaction each, and either can change theirs later.
+- **History** — every question this couple has asked, newest first, each marked
+  *Revealed*, *Waiting* or *Your turn*. Opening one shows the same sealed or revealed
+  view; a sealed one never shows the partner's answer, because it was never sent.
+- **Unanswered badge** — sessions without your answer badge the Discuss tab in the bottom
+  nav and repeat the count in the tab header, live, even while this phone sits on Home,
+  Media or Games. Screen readers hear *"Discuss, 1 question waiting"*.
+- **18+ (Intimacy)** — hidden from the library by default. It opens only when **both**
+  partners turn it on under Settings → *Intimacy questions (18+)*; either one turning it
+  off closes it again, for both phones. The gate lives in the database: the `questions`
+  SELECT policy withholds adult rows until `couple_settings` says both agreed, and the
+  session trigger refuses to ask one that is not in the couple's visible library.
+- **One shared library, private sessions** — `questions` is global and read-only for the
+  app (`SELECT` only; `verify.sql` fails if that ever changes), while `question_sessions`,
+  `answers`, `answer_reactions` and `couple_settings` are per couple. A couple can ask a
+  given question only once (`UNIQUE (couple_id, question_id)`); asking again returns the
+  same session rather than a second one.
+- **Realtime** — one channel per couple (`nooki-discuss-<coupleId>`) carries Postgres
+  Changes for sessions, settings, answers and reactions. Every event is treated only as
+  "something changed": the app re-reads through RLS instead of trusting the payload, so
+  what lands on screen is always exactly what this phone is allowed to see.
+- **Breakup** — sessions, answers and reactions cascade away with the couple; the shared
+  library is untouched and the next couple starts with a clean history.
+
+### Importing the question library
+
+The app ships **no** questions of its own: it reads the `questions` table and nothing else,
+so the tab shows "The question library is empty" until you import your CSV. Run this in
+the SQL Editor any time after the migration — the app can never write to `questions`
+itself, by design:
+
+```sql
+INSERT INTO public.questions (id, text, category, seriousness, input_type, options, is_adult) VALUES
+  ('fun-001', 'Beach holiday or city break?', 'fun', 1, 'choice', '["Beach","City"]', false),
+  ('deep-001', 'What are you quietly afraid of?', 'deep', 5, 'text', NULL, false);
+```
+
+| Column | Notes |
+| --- | --- |
+| `id` | Optional text. Any string is accepted, so keep your CSV's own ids; a UUID is generated when the value is missing or blank. |
+| `text` | Required, up to 4000 characters after trimming. A row without one is refused. |
+| `category` | Free text, canonicalised to `Fun`, `Deep`, `Family`, `Future`, `Money`, `Home Life`, `Intimacy` or `Silly`. `home`/`homelife` → `Home Life`, `intimate`/`sex` → `Intimacy`, capitalisation and stray spaces are cleaned, and a blank becomes `Uncategorised`. Anything else is kept as written and grouped into its own tile. |
+| `seriousness` | 1–5. Out-of-range numbers are clamped, and something non-numeric falls back to 3. |
+| `input_type` | `text`, `choice`, `multi_choice`, `ranking` or `slider`. `multiplechoice` → `choice`; `multiselect`, `multi`, `multiple` or `checkbox` → `multi_choice`; `scale` → `slider`; anything unknown → `text`. Single-pick questions are `choice`: use `multi_choice` in the CSV when several options may be ticked. |
+| `options` | Required for `choice`, `multi_choice` and `ranking`; ignored (set to `NULL`) for `text` and `slider`. A JSON array of strings, a JSON array of objects carrying a `label`/`text`/`value`/`title`/`name` key, a double-encoded JSON string, or a delimited list (`A|B|C`, `A;B;C`, `A,B,C`) are all understood. |
+| `is_adult` | Optional; forced to `true` for anything in the `Intimacy` category. |
+
+A row that cannot be interpreted is refused with a plain-English error naming the question
+(*"… needs its options"*, *"… needs its text"*), so a malformed CSV line cannot slip in
+half-formed. The same normalisers exist in the app (`src/lib/questionFormat.ts`) and in the
+database, and the test suite feeds every accepted spelling through both to keep them in
+step — edit one, edit the other.
+
 ## Deploying this release — exact steps
 
 ### 1. Database (Supabase dashboard → SQL Editor)
@@ -237,18 +341,21 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | `supabase/migrations/202610150001_pairing_flow.sql`, then `supabase/migrations/202610150002_couple_events.sql`, then `supabase/migrations/202610150003_messages.sql`, then `supabase/verify.sql` |
+| Live project with real couples | `supabase/migrations/202610150001_pairing_flow.sql`, then `supabase/migrations/202610150002_couple_events.sql`, then `supabase/migrations/202610150003_messages.sql`, then `supabase/migrations/202610150004_discuss_questions.sql`, then `supabase/verify.sql` |
 
-All three migrations are idempotent and safe to rerun; they never drop or rewrite existing
+All four migrations are idempotent and safe to rerun; they never drop or rewrite existing
 data (the pairing migration only changes policies, the calendar migration only adds a table
-or converts an older one in place, and the chat migration only adds a table, its policies
-and its Realtime membership). Take a snapshot first anyway.
+or converts an older one in place, the chat migration only adds a table, its policies and
+its Realtime membership, and the Discuss migration only adds tables, functions, triggers
+and policies). Take a snapshot first anyway.
 
 `supabase/verify.sql` is read-only and must print **PASS**. It checks the pairing RPCs,
 RLS on every table, the anniversary-lock trigger, the `couple_events` calendar, the repeat
 column, the realtime `messages` chat (type check, policies, immutability trigger and
-publication membership), and that `anon` cannot reach couple data. If it raises, it names
-the file to rerun.
+publication membership), the Discuss engine (its five tables, the policies that never
+reveal a sealed answer, the canonicalised library, the three question RPCs, and that the
+app cannot write to `questions`), and that `anon` cannot reach couple data. If it raises,
+it names the file to rerun.
 
 **If you already ran the calendar migration before the repeat control existed**, rerun
 `202610150002_couple_events.sql`: it upgrades `repeats_yearly` to `repeat_frequency` in
@@ -265,15 +372,19 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
   error. With your own sender the cap starts at 30/hour and is yours to raise under
   **Authentication → Rate Limits**.
 - **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
-  chat messages ride Postgres Changes on `messages`, and `last_seen_at` writes ride on the
-  existing "update own profile" policy. The chat migration adds `messages` to the
-  `supabase_realtime` publication (checked by `verify.sql`). Optionally enable Realtime
-  Authorization to lock channels down at the database level.
+  chat messages ride Postgres Changes on `messages`, Discuss rides a second couple-scoped
+  channel over `question_sessions`, `couple_settings`, `answers` and `answer_reactions`,
+  and `last_seen_at` writes ride on the existing "update own profile" policy. The chat and
+  Discuss migrations add those tables to the `supabase_realtime` publication (checked by
+  `verify.sql`). Optionally enable Realtime Authorization to lock channels down at the
+  database level.
 - **Table privileges**: no action needed. The migrations now grant `profiles`, `couples`,
-  `couple_events` and `messages` to `authenticated` explicitly and revoke `anon`, so the
-  app works whether or not the project still hands out Supabase's legacy automatic grants
-  (projects created since 2026-05-30, and every project from 2026-10-30, need the explicit
-  grants).
+  `couple_events`, `messages` and the five Discuss tables to `authenticated` explicitly and
+  revoke `anon`, so the app works whether or not the project still hands out Supabase's
+  legacy automatic grants (projects created since 2026-05-30, and every project from
+  2026-10-30, need the explicit grants). The Discuss migration also revokes write access to
+  `questions` from `authenticated` — on a legacy project that inherited it — so the shared
+  library stays read-only for the app.
 
 ### 3. Environment (Vercel → Project Settings → Environment Variables)
 
@@ -291,7 +402,7 @@ at the production project uses real production data.
 cp .env.example .env.local   # fill in the two values
 npm ci
 npm run check:env            # fails closed without valid public config
-npm test                     # 15 tests, no live project contacted
+npm test                     # 17 tests, no live project contacted
 npm run lint
 npm run build
 ```
@@ -328,21 +439,32 @@ sent message, cascade on breakup and safe re-migration), and the live tab itself
 with the button, Enter only making paragraphs, an incoming message appearing without a
 reload, one check turning into two when the partner reads it, the typing indicator, the
 unread badge counting and clearing, day grouping, auto-scroll, retry after a failed send,
-and the phone/video buttons saying "coming soon".
+and the phone/video buttons saying "coming soon"), and discuss: the question vocabulary
+normalised identically in SQL and TypeScript for every accepted spelling, a CSV-shaped
+import repaired or refused row by row, one shared library with per-couple sessions,
+answers sealed by RLS until both partners reply and the reveal that the second answer
+triggers, all four input types validated in the database, reactions gated on the reveal,
+the 18+ gate needing both partners and closing the moment either opts out, a third account
+and an unpaired user refused, cascade on breakup with the library left intact, safe
+re-migration, and `verify.sql` catching a half-applied one — plus the live tab itself:
+browsing categories and depths, asking, answering privately, the reveal arriving over
+realtime, reacting and commenting, the unanswered-question badge, ranking by button, the
+multi-choice, slider and text inputs, editing a sealed answer, the settings switch and an
+empty library.
 
 A successful build does **not** verify a deployed key, email delivery, an applied live
 migration, or two-device connectivity. Complete the acceptance test below as well.
 
 ## Push and deploy
 
-Work for this Arena session stays on `arena/92212623-nooki`:
+Work for this Arena session stays on `arena/a6d9925b-nooki`:
 
 ```sh
 git status
 git diff --check
 git add .
-git commit -m "Add the Chat tab: realtime messages, receipts and unread badge"
-git push origin arena/92212623-nooki
+git commit -m "Add the Discuss tab: sealed answers, a shared question library and the 18+ gate"
+git push origin arena/a6d9925b-nooki
 ```
 
 Open a pull request from that branch to `main`. Test the Vercel preview with its environment
@@ -386,6 +508,27 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] Sending from device B while device A sits on Home shows a pink count on the Chat tab,
       and opening the chat clears it.
 - [ ] A third account cannot read or write the couple's messages.
+- [ ] Discuss opens on categories with what is left in each; the Intimacy tile is a lock
+      that explains how to open it, and no adult question text reaches either device.
+- [ ] Tapping a category shows depth chips with counts, and a depth with nothing left is
+      disabled. "Surprise me" produces a question the couple has not asked.
+- [ ] "Ask my partner" opens the answer composer with the input that question asked for,
+      and Send stays disabled until the answer is complete.
+- [ ] Device A's answer stays sealed: A sees only their own answer, and B's answer is
+      nowhere on A's screen or in A's network responses until B has answered too.
+- [ ] When device B answers, both answers appear side by side on both devices without a
+      refresh, with the reveal animation.
+- [ ] After the reveal, an emoji reaction and a comment save on one device and appear on
+      the other; the answers are locked and cannot be edited any more.
+- [ ] A question asked from device B while device A sits on Home badges the Discuss tab,
+      and the history list marks it "Your turn".
+- [ ] Ranking reorders by dragging and by the up/down buttons, and the stored order
+      matches what was sent. Multi-choice, slider and text answers store as written.
+- [ ] Turning Intimacy on in Settings on one device only leaves the category locked;
+      turning it on for both unlocks it, and either device turning it off hides it again.
+- [ ] With an empty `questions` table, Discuss says "The question library is empty"
+      instead of showing bundled questions; after importing the CSV the categories fill up.
+- [ ] A third account cannot read the couple's sessions, answers or reactions.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.
 - [ ] Refreshing and signing out/in preserve the couple, anniversary and partner names.
@@ -396,11 +539,17 @@ Use your actual accounts; there is no automatic user creation.
 Signup, onboarding, pairing, the global header (couple names, live together counter,
 presence ticker and the partner's local time), the Today card with the shared calendar,
 the realtime **Chat tab** (message bubbles, day separators, sent/read receipts, typing
-indicator, unread badge, multi-paragraph composer, message types ready for the Discuss
-tab), couple details, sign-out and mutual-breakup settings are implemented. Media,
-discussion and games display **Coming Soon**, and voice/video calling is still a
-"coming soon" toast. No sample conversations are loaded into the app itself — the
-in-memory transcript only exists on the development preview page.
+indicator, unread badge, multi-paragraph composer), the **Discuss tab** (a shared question
+library read from the database, category and depth browsing, "Surprise me", four answer
+input types, answers sealed until both partners reply — enforced by row-level security —
+the side-by-side reveal, emoji reactions with comments, history and an
+unanswered-question badge, and a both-partners 18+ gate), couple details, sign-out and
+mutual-breakup settings are implemented. Media and games display **Coming Soon**, and
+voice/video calling is still a "coming soon" toast. No sample conversations or questions
+are loaded into the app itself — the in-memory transcript only exists on the development
+preview page, and the question library is whatever the owner imported into `questions`.
+Scenes and illustrated backgrounds are deliberately out of scope for now: the Discuss tab
+uses the plain sage accent colour like every other surface.
 
 ## Design system
 

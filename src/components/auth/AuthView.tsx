@@ -3,6 +3,9 @@ import { Heart, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { signInWithEmail, signUpWithEmail } from '../../lib/authService';
 
+/** The one line under the welcome heading, on both the sign-up and sign-in side. */
+const TAGLINE = 'A cozy corner for long-distance couples';
+
 interface AuthModalProps {
   onSuccess: () => void;
 }
@@ -109,9 +112,7 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
               margin: 0,
             }}
           >
-            {isSignUp
-              ? 'A cozy, storybook corner for long-distance partners'
-              : 'Sign in to reconnect to your couple nook'}
+            {TAGLINE}
           </p>
         </div>
 

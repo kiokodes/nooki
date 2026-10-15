@@ -16,9 +16,11 @@ import { CoupleHeader } from './components/common/CoupleHeader';
 import { SplashScreen, SPLASH_DURATION_MS } from './components/common/SplashScreen';
 import { HomeView } from './components/home/HomeView';
 import { ChatView } from './components/chat/ChatView';
+import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
+import { useDiscuss } from './hooks/useDiscuss';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import {
@@ -72,7 +74,7 @@ const TABS: TabConfig[] = [
     key: 'discuss',
     label: 'Discuss',
     icon: MessageSquare,
-    comingSoonSubtitle: 'The Square public board & prompt decks',
+    comingSoonSubtitle: 'Private questions you answer together',
     accentColor: tokens.colors.accentSageDeep,
     accentSoft: tokens.colors.accentSageSoft,
   },
@@ -144,6 +146,13 @@ export const App: React.FC = () => {
     userId: currentUser?.id ?? null,
     partnerId: partner?.id ?? null,
     active: activeTab === 'chat' && appVisible,
+  });
+
+  // The Discuss question engine sits at app level too, so a question the partner asks
+  // still badges its tab while this phone is somewhere else.
+  const discuss = useDiscuss({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
   });
 
   const { partnerOnline } = useCouplePresence({
@@ -329,6 +338,7 @@ export const App: React.FC = () => {
   const currentTab = TABS.find((t) => t.key === activeTab)!;
   const isHome = activeTab === 'home';
   const isChat = activeTab === 'chat';
+  const isDiscuss = activeTab === 'discuss';
 
   return (
     <div className="nooki-viewport" style={viewportStyle}>
@@ -343,8 +353,18 @@ export const App: React.FC = () => {
         />
 
         {/* Home tab: Today card, daily game card and reserved animated scene area.
-            Chat tab: the couple's live conversation. The rest stay as airy placeholders. */}
-        {isHome ? (
+            Chat tab: the couple's live conversation.
+            Discuss tab: the question engine over the imported library.
+            Media and Games stay as airy placeholders. */}
+        {isDiscuss ? (
+          <DiscussView
+            discuss={discuss}
+            userId={currentUser.id}
+            userName={profile.name}
+            partnerName={partner.name}
+            onOpenSettings={() => setShowSettings(true)}
+          />
+        ) : isHome ? (
           <HomeView
             events={calendar.events}
             anniversaryDate={couple.anniversary_date}
@@ -513,17 +533,24 @@ export const App: React.FC = () => {
               );
             }
 
-            // Unread messages are announced on the Chat tab and shown as a small count.
-            const unreadBadge = tab.key === 'chat' ? chat.unreadCount : 0;
+            // Unread messages are announced on the Chat tab, unanswered questions on
+            // Discuss; both show as the same small count.
+            const unreadBadge = tab.key === 'chat'
+              ? chat.unreadCount
+              : tab.key === 'discuss'
+                ? discuss.pendingCount
+                : 0;
+            const badgeWords = tab.key === 'discuss'
+              ? `${unreadBadge} question${unreadBadge === 1 ? '' : 's'} waiting`
+              : `${unreadBadge} unread ${unreadBadge === 1 ? 'message' : 'messages'}`;
 
             return (
               <button
                 key={tab.key}
                 type="button"
+                data-nav-tab={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                aria-label={unreadBadge
-                  ? `${tab.label}, ${unreadBadge} unread ${unreadBadge === 1 ? 'message' : 'messages'}`
-                  : tab.label}
+                aria-label={unreadBadge ? `${tab.label}, ${badgeWords}` : tab.label}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -589,6 +616,10 @@ export const App: React.FC = () => {
             userId={currentUser.id}
             couple={couple}
             partner={partner}
+            adultQuestionsEnabled={discuss.myAdultEnabled}
+            partnerAdultQuestionsEnabled={discuss.partnerAdultEnabled}
+            adultQuestionsSaving={discuss.busy}
+            onToggleAdultQuestions={(enabled) => discuss.setAdultEnabled(enabled).then(() => undefined)}
             onClose={() => setShowSettings(false)}
             onCoupleEnded={() => {
               setShowSettings(false);

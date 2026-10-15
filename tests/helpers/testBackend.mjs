@@ -53,14 +53,50 @@ export async function installTestBackend(client) {
     try {
       const params = Object.entries(args);
       const placeholders = params.map(([key], i) => { assertIdentifier(key); return `${key} => $${i + 1}`; }).join(', ');
-      const result = await db.query(`SELECT public.${name}(${placeholders}) AS result`, params.map(([, value]) => value));
+      const values = params.map(([, value]) => value);
+      // PostgREST returns a list for a set-returning function and a bare value otherwise.
+      const returnsSet = (await db.query(
+        `SELECT p.proretset FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'public' AND p.proname = $1`,
+        [name],
+      )).rows.some((row) => row.proretset);
+      if (returnsSet) {
+        const result = await db.query(`SELECT * FROM public.${name}(${placeholders})`, values);
+        return { data: result.rows.map(toRow), error: null };
+      }
+      const result = await db.query(`SELECT public.${name}(${placeholders}) AS result`, values);
       return { data: result.rows[0].result, error: null };
     } catch (error) { return { data: null, error: { message: error.message, code: error.code } }; }
   };
+  // PostgREST sends JSON for a jsonb column; a bare string bound into one is not valid
+  // JSON. Learn which columns those are so a write arrives the way the real client sends it.
+  const jsonColumns = new Map();
+  const jsonColumnsFor = async (table) => {
+    if (!jsonColumns.has(table)) {
+      const result = await db.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = $1 AND data_type IN ('json', 'jsonb')`,
+        [table],
+      );
+      jsonColumns.set(table, new Set(result.rows.map((row) => row.column_name)));
+    }
+    return jsonColumns.get(table);
+  };
+  const encodeWrite = async (table, fields, values) => {
+    const jsonFields = await jsonColumnsFor(table);
+    return values.map((value, index) => (
+      value !== null && value !== undefined && jsonFields.has(fields[index]) ? JSON.stringify(value) : value
+    ));
+  };
+
   client.from = (table) => {
-    if (!['profiles', 'couples', 'couple_events', 'messages'].includes(table)) throw new Error('Unexpected table in test');
+    if (![
+      'profiles', 'couples', 'couple_events', 'messages',
+      'questions', 'question_sessions', 'answers', 'answer_reactions', 'couple_settings',
+    ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;
+    let writeConflict = 'id';
     let singleRow = false;
     let orderBy;
     let rowLimit;
@@ -68,13 +104,25 @@ export async function installTestBackend(client) {
     const query = {
       select() { return query; },
       insert(data) { writeData = data; writeMode = 'insert'; return query; },
-      upsert(data) { writeData = data; writeMode = 'upsert'; return query; },
+      upsert(data, options = {}) {
+        writeData = data;
+        writeMode = 'upsert';
+        writeConflict = options.onConflict || 'id';
+        return query;
+      },
       update(data) { writeData = data; writeMode = 'update'; return query; },
       delete() { writeMode = 'delete'; return query; },
       order(column, options = {}) { assertIdentifier(column); orderBy = `${column} ${options.ascending === false ? 'DESC' : 'ASC'}`; return query; },
       limit(count) { rowLimit = count; return query; },
       eq(column, value) { assertIdentifier(column); filters.push([column, '=', value]); return query; },
       neq(column, value) { assertIdentifier(column); filters.push([column, '<>', value]); return query; },
+      // `= ANY($n)`: PostgREST's `in`, which takes one array parameter.
+      in(column, values) {
+        assertIdentifier(column);
+        if (!Array.isArray(values)) throw new Error('in() needs a list of values');
+        filters.push([column, '= ANY', values]);
+        return query;
+      },
       // `IS NULL` / `IS NOT NULL`: Postgres does not accept a bind parameter here.
       is(column, value) { assertIdentifier(column); filters.push([column, value === null ? 'IS NULL' : 'IS NOT NULL', undefined]); return query; },
       single() { singleRow = true; return execute(); },
@@ -88,19 +136,24 @@ export async function installTestBackend(client) {
         // `IS NULL` carries no value, so only value-carrying filters consume a placeholder.
         let placeholder = 0;
         const where = filters.length
-          ? `WHERE ${filters.map(([field, operator]) => (
-              operator === 'IS NULL' || operator === 'IS NOT NULL'
-                ? `${field} ${operator}`
-                : `${field} ${operator} $${++placeholder}`
-            )).join(' AND ')}`
+          ? `WHERE ${filters.map(([field, operator]) => {
+              if (operator === 'IS NULL' || operator === 'IS NOT NULL') return `${field} ${operator}`;
+              // `= ANY` takes one array parameter, wrapped: `col = ANY($1)`.
+              if (operator === '= ANY') return `${field} = ANY($${++placeholder})`;
+              return `${field} ${operator} $${++placeholder}`;
+            }).join(' AND ')}`
           : '';
         if (writeMode === 'insert' || writeMode === 'upsert') {
           const fields = Object.keys(writeData);
           fields.forEach(assertIdentifier);
-          const values = Object.values(writeData);
-          const conflict = writeMode === 'upsert'
-            ? ` ON CONFLICT (id) DO UPDATE SET ${fields.filter((key) => key !== 'id').map((key) => `${key} = EXCLUDED.${key}`).join(', ')}`
-            : '';
+          const values = await encodeWrite(table, fields, Object.values(writeData));
+          const conflictColumns = writeConflict.split(',').map((key) => { const trimmed = key.trim(); assertIdentifier(trimmed); return trimmed; });
+          const updates = fields.filter((key) => !conflictColumns.includes(key));
+          const conflict = writeMode !== 'upsert'
+            ? ''
+            : updates.length
+              ? ` ON CONFLICT (${conflictColumns.join(', ')}) DO UPDATE SET ${updates.map((key) => `${key} = EXCLUDED.${key}`).join(', ')}`
+              : ` ON CONFLICT (${conflictColumns.join(', ')}) DO NOTHING`;
           result = await db.query(
             `INSERT INTO public.${table} (${fields.join(', ')}) VALUES (${fields.map((_, i) => `$${i + 1}`).join(', ')})${conflict} RETURNING *`,
             values,
@@ -108,7 +161,7 @@ export async function installTestBackend(client) {
         } else if (writeMode === 'update') {
           const fields = Object.keys(writeData);
           fields.forEach(assertIdentifier);
-          const values = Object.values(writeData);
+          const values = await encodeWrite(table, fields, Object.values(writeData));
           let updatePlaceholder = fields.length;
           const whereForUpdate = filters.length
             ? `WHERE ${filters.map(([field, operator]) => (
@@ -134,7 +187,7 @@ export async function installTestBackend(client) {
         if (singleRow && rows.length > 1) throw new Error('Expected at most one row');
         return { data: singleRow ? rows[0] ?? null : rows, error: null };
       } catch (error) { return { data: null, error: { message: error.message, code: error.code } }; }
-      finally { writeData = undefined; writeMode = undefined; }
+      finally { writeData = undefined; writeMode = undefined; writeConflict = 'id'; }
     }
     return query;
   };
@@ -145,6 +198,10 @@ export async function installTestBackend(client) {
     exec: async (sql) => { await db.exec('RESET ROLE'); await db.exec(sql); },
     query: async (sql, params) => { await db.exec('RESET ROLE'); return db.query(sql, params); },
     resetRole: async () => { await db.exec('RESET ROLE'); },
+    // verify.sql opens its own read-only transaction: a script that raises on purpose
+    // leaves it aborted, and nothing else runs until it is rolled back. RESET ROLE is
+    // itself refused inside an aborted transaction, so this goes straight to the server.
+    rollback: async () => { try { await db.exec('ROLLBACK'); } catch { /* nothing was open */ } },
   };
 }
 
