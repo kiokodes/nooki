@@ -8,7 +8,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
   return <section className="games-view" aria-label="Games">
-    <header><span className="games-eyebrow">A little friendly rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : 'Play together'}</h1><p>{m ? (m.daily_date ? `Daily challenge · ${m.daily_date} (UTC)` : 'Just for fun · unlimited rematches') : 'Near or far, it’s always your move together.'}</p></header>
+    <header><span className="games-eyebrow">A little friendly rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : 'Play together'}</h1>{m && <p>{m.daily_date ? `Daily challenge · ${m.daily_date} (UTC)` : 'Just for fun · unlimited rematches'}</p>}</header>
     {games.error && <div role="alert" className="game-card">{games.error}<button onClick={() => void games.refresh()}>Retry connection</button></div>}
     {!games.data && !games.error && <p role="status">Loading your games…</p>}
     {m ? <>
