@@ -16,6 +16,19 @@ export interface Couple {
   breakup_requested_at: string | null;
 }
 
+export interface CoupleEvent {
+  id: string;
+  couple_id: string;
+  /** Account that added it; null if that account was later deleted. */
+  created_by: string | null;
+  title: string;
+  /** Plain `YYYY-MM-DD` calendar date, no timezone. */
+  event_date: string;
+  repeats_yearly: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserSession {
   user: {
     id: string;

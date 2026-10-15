@@ -21,7 +21,7 @@ export async function installTestBackend(client) {
   await db.exec(await readFile(new URL('../../supabase/schema.sql', import.meta.url), 'utf8'));
   await db.exec(`
     GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles, public.couples TO authenticated;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles, public.couples, public.couple_events TO authenticated;
   `);
   const users = new Map();
   let currentUser = null;
@@ -58,48 +58,85 @@ export async function installTestBackend(client) {
     } catch (error) { return { data: null, error: { message: error.message, code: error.code } }; }
   };
   client.from = (table) => {
-    if (!['profiles', 'couples'].includes(table)) throw new Error('Unexpected table in test');
+    if (!['profiles', 'couples', 'couple_events'].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;
+    let singleRow = false;
+    let orderBy;
     const filters = [];
     const query = {
       select() { return query; },
-      eq(column, value) { assertIdentifier(column); filters.push([column, '=', value]); return query; },
-      neq(column, value) { assertIdentifier(column); filters.push([column, '<>', value]); return query; },
+      insert(data) { writeData = data; writeMode = 'insert'; return query; },
       upsert(data) { writeData = data; writeMode = 'upsert'; return query; },
       update(data) { writeData = data; writeMode = 'update'; return query; },
-      async maybeSingle() { return execute(); },
-      async single() { return execute(); },
-      // The real client's filter builder is awaited directly by `update(...).eq(...)`.
+      delete() { writeMode = 'delete'; return query; },
+      order(column, options = {}) { assertIdentifier(column); orderBy = `${column} ${options.ascending === false ? 'DESC' : 'ASC'}`; return query; },
+      eq(column, value) { assertIdentifier(column); filters.push([column, '=', value]); return query; },
+      neq(column, value) { assertIdentifier(column); filters.push([column, '<>', value]); return query; },
+      single() { singleRow = true; return execute(); },
+      maybeSingle() { singleRow = true; return execute(); },
+      // Bare `await` on a filter builder returns a list, exactly like the real client.
       then(resolve, reject) { return execute().then(resolve, reject); },
     };
     async function execute() {
       try {
         let result;
-        if (writeMode === 'upsert') {
+        const where = filters.length
+          ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${i + 1}`).join(' AND ')}`
+          : '';
+        if (writeMode === 'insert' || writeMode === 'upsert') {
           const fields = Object.keys(writeData);
           fields.forEach(assertIdentifier);
-          result = await db.query(`INSERT INTO public.${table} (${fields.join(', ')}) VALUES (${fields.map((_, i) => `$${i + 1}`).join(', ')})
-            ON CONFLICT (id) DO UPDATE SET ${fields.filter((key) => key !== 'id').map((key) => `${key} = EXCLUDED.${key}`).join(', ')} RETURNING *`, Object.values(writeData));
+          const values = Object.values(writeData);
+          const conflict = writeMode === 'upsert'
+            ? ` ON CONFLICT (id) DO UPDATE SET ${fields.filter((key) => key !== 'id').map((key) => `${key} = EXCLUDED.${key}`).join(', ')}`
+            : '';
+          result = await db.query(
+            `INSERT INTO public.${table} (${fields.join(', ')}) VALUES (${fields.map((_, i) => `$${i + 1}`).join(', ')})${conflict} RETURNING *`,
+            values,
+          );
         } else if (writeMode === 'update') {
           const fields = Object.keys(writeData);
           fields.forEach(assertIdentifier);
-          const where = filters.length ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${fields.length + i + 1}`).join(' AND ')}` : '';
-          result = await db.query(`UPDATE public.${table} SET ${fields.map((field, i) => `${field} = $${i + 1}`).join(', ')} ${where} RETURNING *`, [...Object.values(writeData), ...filters.map(([, , value]) => value)]);
+          const values = Object.values(writeData);
+          const whereForUpdate = filters.length
+            ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${fields.length + i + 1}`).join(' AND ')}`
+            : '';
+          result = await db.query(
+            `UPDATE public.${table} SET ${fields.map((field, i) => `${field} = $${i + 1}`).join(', ')} ${whereForUpdate} RETURNING *`,
+            [...values, ...filters.map(([, , value]) => value)],
+          );
+        } else if (writeMode === 'delete') {
+          result = await db.query(`DELETE FROM public.${table} ${where} RETURNING *`, filters.map(([, , value]) => value));
         } else {
-          const where = filters.length ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${i + 1}`).join(' AND ')}` : '';
-          result = await db.query(`SELECT * FROM public.${table} ${where}`, filters.map(([, , value]) => value));
+          result = await db.query(
+            `SELECT * FROM public.${table} ${where}${orderBy ? ` ORDER BY ${orderBy}` : ''}`,
+            filters.map(([, , value]) => value),
+          );
         }
-        if (result.rows.length > 1) throw new Error('Expected at most one row');
-        const row = result.rows[0];
-        const data = row ? Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? (key === 'anniversary_date' ? value.toISOString().slice(0, 10) : value.toISOString()) : value])) : null;
-        return { data, error: null };
+        const rows = result.rows.map(toRow);
+        if (singleRow && rows.length > 1) throw new Error('Expected at most one row');
+        return { data: singleRow ? rows[0] ?? null : rows, error: null };
       } catch (error) { return { data: null, error: { message: error.message, code: error.code } }; }
       finally { writeData = undefined; writeMode = undefined; }
     }
     return query;
   };
-  return { close: () => db.close() };
+  // Owner-level access, so tests can apply migrations the way the dashboard would.
+  // RLS is bypassed as the owner; callers must sign in again afterwards.
+  return {
+    close: () => db.close(),
+    exec: async (sql) => { await db.exec('RESET ROLE'); await db.exec(sql); },
+    resetRole: async () => { await db.exec('RESET ROLE'); },
+  };
+}
+
+/** Mirrors how the real client serialises Postgres values into JSON. */
+function toRow(row) {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [
+    key,
+    value instanceof Date ? (key.endsWith('_date') ? value.toISOString().slice(0, 10) : value.toISOString()) : value,
+  ]));
 }
 
 function assertIdentifier(value) {

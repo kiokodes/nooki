@@ -93,3 +93,21 @@ html, body {
     animation: none !important;
   }
 }
+
+/* Calendar modal: a soft backdrop fade and a gentle sheet rise from the bottom. */
+@keyframes nooki-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nooki-sheet-up {
+  from { transform: translateY(14px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-modal='calendar'],
+  .nooki-modal-sheet {
+    animation: none !important;
+  }
+}

@@ -34,9 +34,12 @@ and public-key format, not the remote key's validity or the database's health.
 
 1. Take a database backup/snapshot before changing the schema.
 2. Run `supabase/migrations/202610150001_pairing_flow.sql` in that project's SQL Editor.
+   Then run `supabase/migrations/202610150002_couple_events.sql` the same way. Both are safe
+   to rerun and change nothing that already exists; the second one adds the shared calendar.
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
-   functions, authenticated/anonymous pairing permissions, table permissions, RLS and
-   the anniversary-lock trigger. It must return **PASS**.
+   functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
+   anniversary-lock trigger and the `couple_events` calendar. It must return **PASS**; if
+   it complains about `couple_events`, that migration step was skipped.
 4. Redeploy the updated frontend immediately after the migration.
 
 The migration preserves existing couples and invite codes. It makes creation/linking
@@ -51,9 +54,9 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 
 ### Brand-new, empty Supabase project only
 
-Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables,
-RLS policies, pairing RPCs, anniversary trigger and mutual-breakup RPCs; it does not
-populate user/couple records.
+Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
+(including `couple_events`), RLS policies, pairing RPCs, anniversary trigger and
+mutual-breakup RPCs; it does not populate user/couple records.
 
 ## Supabase Auth configuration
 
@@ -86,9 +89,39 @@ The global header sits above every tab and carries the couple's live status:
 
 The header owns its own one-second tick, so only the header re-renders as time passes.
 
-**The Home tab is intentionally blank for now.** The centre tab is still the default
-screen, and its empty surface is where the next batch of Home features lands — nothing is
-duplicated between the header and the tab.
+## Today card and the full calendar
+
+The Home tab shows one compact **Today card**:
+
+- Today's date ("Thursday, 15 October") and anything happening today.
+- The couple's automatic dates: the **anniversary** each year and the **monthsary** on the
+  same day-of-month, both derived from `anniversary_date` — nothing is stored for them, so
+  they can never drift out of sync. A 31st anniversary borrows the last day of shorter
+  months (so 31 Jan reads as 28/29 Feb) instead of skipping the month.
+- **Upcoming**: whatever is coming within the next `UPCOMING_WINDOW_DAYS` days (1 by
+  default, set in `src/components/home/TodayCard.tsx`). It is separated from today by a
+  hairline and a small "Tomorrow" label, so today always reads first.
+- A **calendar icon** in the corner that opens the full calendar.
+
+The full calendar is a **modal over the current tab** — never a page of its own, so the
+Home tab stays exactly as it was behind it:
+
+- A month grid (Monday first, neighbouring days shown faintly) with dot markers on dates
+  that have something on: green for events, pink for the anniversary and monthsaries.
+- **‹ › for months**, a **"Choose month and year"** picker (12-month grid plus year steps),
+  a **Back to today** shortcut, and **swipe left/right** to change month.
+- Tapping a day shows what is on it. User events can be added, edited and deleted from
+  there (`window.confirm` guards the delete); automatic dates are labelled `automatically`
+  and are not editable, because they come from the anniversary.
+- Close with the **X**, **Escape** (which first closes the picker or the form), or by
+  tapping the dimmed backdrop.
+
+Events live in `couple_events` (`title`, `event_date`, `repeats_yearly`, plus `couple_id`
+and `created_by`). Both partners read and write the same rows, `repeats_yearly` brings an
+event back every year on its month and day (29 Feb events fall on 28 Feb in other years),
+and an event's yearly repeat never shows before the date it was set for. Rows are
+cascaded away when the couple ends, and the RLS policies scope every read and write to
+`public.get_user_couple_id(auth.uid())`, so an unpaired or third account sees nothing.
 
 Presence runs at app level, so a partner still reads as online while this phone browses
 Chat, Media, Discussion or Games. The app writes its own `last_seen_at` on mount, every
@@ -106,8 +139,9 @@ profile" RLS policy, so **no migration is required** for any of this. Two caveat
 
 `npm run dev` serves a sample-data preview of the header and Home surface at
 **http://localhost:5173/preview.html**. It uses static names ("Sam & Ana"), needs no
-Supabase project, and lets you flip the partner between online and away and switch
-anniversary examples; it reuses the real header component so it cannot drift from the
+Supabase project, and lets you flip the partner between online and away, switch
+anniversary examples, and open the real calendar modal with sample events where
+add/edit/delete work in memory; it reuses the real header component so it cannot drift from the
 app. It is a dev-server route only: `npm run build` still publishes
 `index.html` alone, and the app itself has no mock/sample mode.
 
@@ -135,8 +169,12 @@ Tests cover password visibility, email-confirmation handling, timezone selection
 pairing navigation/cancellation, protected profile retries, anniversary locks, RLS,
 configuration failures, the read-only database verification script, and the global header
 (YMD counter across end-of-month/leap-day edges, partner clock timezones and weekdays,
-last-seen labels, the presence dot greying out and re-greening, the `last_seen_at`
-heartbeat, and that the Home tab stays deliberately blank).
+last-seen labels, the presence dot greying out and re-greening, and the `last_seen_at`
+heartbeat), and the calendar: the month grid, anniversary/monthsary clamping, yearly
+repeats (including 29 Feb), the upcoming window, swipe direction, `couple_events` CRUD
+under RLS with cascade on breakup, that `verify.sql` catches a project missing the
+calendar migration, and the full UI flow of browsing, adding, editing, deleting and
+closing without leaving the Home tab.
 
 A successful build does **not** verify a deployed key, email delivery, an applied live
 migration, or two-device connectivity. Complete the acceptance test below as well.
@@ -174,7 +212,11 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] With both apps open, the header dot is green with a faint pulse; hovering/long-pressing it says the partner is online.
 - [ ] Closing one app greys the dot within about a minute and its tooltip reads "Last seen ...".
 - [ ] The header clock beside the dot matches the partner's own device time and weekday, and never shows your own clock.
-- [ ] The Home tab opens by default and is empty on every device.
+- [ ] The Today card shows today's date and the anniversary/monthsary that fall today.
+- [ ] The calendar icon opens the calendar over the Home tab; the tab is still there when you close it.
+- [ ] Tapping a day adds, edits and deletes an event, and the other device sees the change after a refresh.
+- [ ] A "repeats yearly" event reappears on the same date the following year.
+- [ ] Swipe left/right and the ‹ › buttons move months; the picker jumps to any month and year.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.
 - [ ] Refreshing and signing out/in preserve the couple, anniversary and partner names.
@@ -183,10 +225,9 @@ Use your actual accounts; there is no automatic user creation.
 ## Current feature scope
 
 Signup, onboarding, pairing, the global header (couple names, live together counter,
-presence ticker and the partner's local time), couple details, sign-out and
-mutual-breakup settings are implemented. The Home tab is a blank canvas for the next
-features; chat, media, discussion and games display **Coming Soon**. No sample
-conversations/content are loaded.
+presence ticker and the partner's local time), the Today card with the shared calendar,
+couple details, sign-out and mutual-breakup settings are implemented. Chat, media,
+discussion and games display **Coming Soon**. No sample conversations/content are loaded.
 
 ## Design system
 

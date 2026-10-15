@@ -68,7 +68,7 @@ test('couple time helpers: YMD duration, partner clock and last-seen labels', as
   }
 });
 
-test('global header: live counter, presence ticker and partner clock; Home stays blank', async () => {
+test('global header: live counter, presence ticker and partner clock', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'FormData', 'localStorage']) {
     globalThis[key] = dom.window[key];
@@ -180,12 +180,13 @@ test('global header: live counter, presence ticker and partner clock; Home stays
     assert(!appHeader().textContent.includes(`${aliceClock.time} ${aliceClock.weekday}`),
       'the reader never sees their own time');
 
-    // 2. The Home tab is intentionally blank for now.
+    // 2. The Home tab shows the Today card and nothing else.
     const home = document.querySelector('[data-screen="home"]');
     assert(home, 'the Home tab renders as the default screen');
-    assert.equal(home.textContent.trim(), '', 'the Home tab holds no cards yet');
+    assert(home.querySelector('[data-card="today"]'), 'the Today card is on the Home tab');
+    assert(document.querySelector('[data-modal="calendar"]') === null, 'the calendar starts closed');
     assert.equal(body().includes('This phone'), false, 'the old partner-status card is gone');
-    assert.equal(body().includes("for Bob"), false, 'the old partner-clock card is gone');
+    assert.equal(body().includes('Partner status'), false, 'no leftover status card');
 
     // Presence: tracked on the couple channel, keyed by the signed-in account.
     assert.equal(presence.topic, `nooki-couple-${couple.id}`, 'presence stays scoped to the couple');
@@ -226,7 +227,7 @@ test('global header: live counter, presence ticker and partner clock; Home stays
     const homeTab = [...document.querySelectorAll('button')].find((item) => item.getAttribute('aria-label') === 'Home');
     assert(homeTab, 'the Home tab is the centre tab');
     await act(async () => { homeTab.click(); });
-    await waitFor(() => document.querySelector('[data-screen="home"]') !== null, 'the Home tab comes back');
+    await waitFor(() => document.querySelector('[data-card="today"]') !== null, 'the Home tab comes back');
     assert.equal(dot().dataset.presence, 'offline');
   } finally {
     await act(() => root.unmount());

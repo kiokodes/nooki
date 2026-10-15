@@ -11,7 +11,8 @@ import {
 import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
 import { HomeView } from '../components/home/HomeView';
-import type { Couple, Profile } from '../types/database';
+import { CalendarModal } from '../components/calendar/CalendarModal';
+import type { Couple, Profile, CoupleEvent } from '../types/database';
 
 /**
  * Design preview for the Home tab, served by the dev server at /preview.html.
@@ -30,6 +31,35 @@ const NOW = new Date().toISOString();
 /** Static sample row: the partner closed the app 42 minutes ago. */
 const PARTNER_LAST_SEEN = new Date(Date.now() - 42 * 60_000).toISOString();
 
+function dateKeyFromToday(offsetDays: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+const sampleEvent = (
+  id: string,
+  title: string,
+  date: string,
+  repeats_yearly = false,
+): CoupleEvent => ({
+  id,
+  couple_id: 'preview-couple',
+  created_by: 'preview-sam',
+  title,
+  event_date: date,
+  repeats_yearly,
+  created_at: NOW,
+  updated_at: NOW,
+});
+
+const STARTING_EVENTS: CoupleEvent[] = [
+  sampleEvent('e1', 'Movie night', dateKeyFromToday(0)),
+  sampleEvent('e2', 'Ana flies in ✈️', dateKeyFromToday(1)),
+  sampleEvent('e3', 'Sam’s birthday', dateKeyFromToday(23), true),
+  sampleEvent('e4', 'Call Mum together', dateKeyFromToday(4)),
+];
+
 const PRESETS: Preset[] = [
   { label: 'Together for 2Y 1M 4D', anniversary: '2024-09-11' },
   { label: 'Anniversary today', anniversary: new Date().toISOString().slice(0, 10) },
@@ -39,6 +69,9 @@ const PRESETS: Preset[] = [
 export const HomePreview = () => {
   const [preset, setPreset] = useState(PRESETS[0]);
   const [partnerOnline, setPartnerOnline] = useState(true);
+  const [showCalendar, setShowCalendar] = useState(false);
+  // In-memory events so add/edit/delete can be tried out without a backend.
+  const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const couple: Couple = {
     id: 'preview-couple',
     invite_code: '7K4MZ9',
@@ -126,7 +159,36 @@ export const HomePreview = () => {
           onOpenSettings={() => {}}
         />
 
-        <HomeView />
+        <HomeView
+          events={events}
+          anniversaryDate={couple.anniversary_date}
+          eventsLoading={false}
+          eventsError={null}
+          onOpenCalendar={() => setShowCalendar(true)}
+        />
+
+        {showCalendar && (
+          <CalendarModal
+            partnerName={partner.name}
+            events={events}
+            anniversaryDate={couple.anniversary_date}
+            saving={false}
+            onAddEvent={async (input) => {
+              setEvents((current) => [...current, sampleEvent(`preview-${current.length + 10}`, input.title, input.date, input.repeatsYearly)]);
+            }}
+            onEditEvent={async (eventId, input) => {
+              setEvents((current) => current.map((event) => (
+                event.id === eventId
+                  ? { ...event, title: input.title, event_date: input.date, repeats_yearly: input.repeatsYearly }
+                  : event
+              )));
+            }}
+            onDeleteEvent={async (eventId) => {
+              setEvents((current) => current.filter((event) => event.id !== eventId));
+            }}
+            onClose={() => setShowCalendar(false)}
+          />
+        )}
 
         <nav
           aria-label="Preview navigation"
@@ -188,7 +250,7 @@ export const HomePreview = () => {
 
       <p style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: 0, fontSize: '0.76rem', color: tokens.colors.textMuted }}>
         <Heart size={13} fill={tokens.colors.primaryPink} strokeWidth={1.5} />
-        Home tab design preview · sample data only · the header clock and counter tick on their own
+        Home tab preview · sample data only · tap the calendar icon to open the full calendar
       </p>
     </div>
   );

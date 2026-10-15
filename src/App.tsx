@@ -14,6 +14,8 @@ import { OnboardingView } from './components/auth/OnboardingView';
 import { PairingView } from './components/auth/PairingView';
 import { CoupleHeader } from './components/common/CoupleHeader';
 import { HomeView } from './components/home/HomeView';
+import { CalendarModal } from './components/calendar/CalendarModal';
+import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import {
@@ -85,6 +87,8 @@ export const App: React.FC = () => {
   // Navigation & Modal State
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [showSettings, setShowSettings] = useState(false);
+  // The calendar is a modal over whatever tab is open, never a page of its own.
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Auth & Pairing State
   const [loading, setLoading] = useState(true);
@@ -96,6 +100,12 @@ export const App: React.FC = () => {
 
   // Presence runs for the whole unlocked app (not just the Home tab) so a partner
   // is still shown as online while this phone is browsing another tab.
+  // One shared calendar for the Today card and the calendar modal.
+  const calendar = useCoupleEvents({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+  });
+
   const { partnerOnline } = useCouplePresence({
     coupleId: couple?.id ?? null,
     userId: currentUser?.id ?? null,
@@ -382,9 +392,15 @@ export const App: React.FC = () => {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Home tab is intentionally blank for now; the other tabs stay as placeholders. */}
+        {/* Home tab: the Today card. Other tabs stay as airy placeholders. */}
         {isHome ? (
-          <HomeView />
+          <HomeView
+            events={calendar.events}
+            anniversaryDate={couple.anniversary_date}
+            eventsLoading={calendar.loading}
+            eventsError={calendar.error}
+            onOpenCalendar={() => setShowCalendar(true)}
+          />
         ) : (
           <section
             style={{
@@ -569,6 +585,20 @@ export const App: React.FC = () => {
             );
           })}
         </nav>
+
+        {/* Full calendar, layered over the current tab */}
+        {showCalendar && (
+          <CalendarModal
+            partnerName={partner.name}
+            events={calendar.events}
+            anniversaryDate={couple.anniversary_date}
+            saving={calendar.saving}
+            onAddEvent={calendar.addEvent}
+            onEditEvent={calendar.editEvent}
+            onDeleteEvent={calendar.removeEvent}
+            onClose={() => setShowCalendar(false)}
+          />
+        )}
 
         {/* Danger Zone Settings Modal (Sign Out & Mutual Breakup Option) */}
         {showSettings && couple && (
