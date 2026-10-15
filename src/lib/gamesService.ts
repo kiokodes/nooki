@@ -11,6 +11,12 @@ export const GAMES = [
     icon: '🐍',
     description: 'One run each, highest score wins. No pause — leaving forfeits the duel.',
   },
+  {
+    id: 'sudoku',
+    name: 'Sudoku',
+    icon: '9️⃣',
+    description: 'Fill the grid. Easy, medium or hard — solo, race your partner, or solve together.',
+  },
 ] as const;
 export type GameId = typeof GAMES[number]['id'];
 
