@@ -20,7 +20,10 @@ test('games UI: library, match length, moves, locked picks, reveals and daily co
   await render();
   assert(document.body.textContent.includes('Tic Tac Toe'));
   await act(async()=>button('Best of 5').click());
-  await act(async()=>[...document.querySelectorAll('article button')].at(-1).click());
+  // The Rock Paper Scissors card, whatever else the library is offering: its own play
+  // button is the last button inside its card.
+  const rpsCard=[...document.querySelectorAll('article')].find(card=>card.textContent.includes('Rock Paper Scissors'));
+  await act(async()=>[...rpsCard.querySelectorAll('button')].at(-1).click());
   assert.deepEqual(calls.pop(),['rock-paper-scissors',false,5]);
   games.match={id:'m',game:'tic-tac-toe',player_x:'a',board:Array(9).fill(''),turn_id:'a',round:1,finished:false};
   await render();

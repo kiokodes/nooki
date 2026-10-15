@@ -38,3 +38,50 @@
 .game-card h2 { margin:8px 0 6px; }
 .game-card h3 { margin:18px 0 10px; }
 .game-card .game-hint { margin-top:10px; }
+
+/* --- Snake duel ---------------------------------------------------------------
+   The board is the one thing in the app that must not stop, so it is built to be
+   read at a glance: a soft lavender grid, a heavy head, the food pink enough to
+   catch the eye. Cells are absolutely positioned by percentage, so the board scales
+   to any phone without re-measuring anything. */
+.snake-run { display: flex; flex-direction: column; }
+.snake-hud { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.snake-score { display: flex; flex-direction: column; }
+.snake-score span { font-size: .66rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #8a6c93; }
+.snake-score strong { font-size: 2rem; line-height: 1.05; color: #4a3a52; }
+.snake-hud-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: .72rem; font-weight: 700; color: #85767e; }
+.snake-pill { padding: 2px 9px; border-radius: 999px; background: #f4edf5; color: #795d88; font-size: .66rem; font-weight: 800; }
+.snake-pill-live { background: #e8efdf; color: #5f7154; }
+.snake-pill-trouble { background: #fde3ec; color: #a5345c; }
+.snake-cap { height: 4px; border-radius: 999px; background: #eee4e7; overflow: hidden; margin-bottom: 10px; }
+.snake-cap i { display: block; height: 100%; background: #cbb3d8; }
+.snake-board { position: relative; width: 100%; max-width: 340px; aspect-ratio: 1 / 1; margin: 0 auto 10px; border-radius: 18px; overflow: hidden; background-color: #f8f4fa; background-image: repeating-linear-gradient(to right, #12100e14 0 1px, transparent 1px 5%), repeating-linear-gradient(to bottom, #12100e14 0 1px, transparent 1px 5%); touch-action: none; }
+.snake-cell { position: absolute; border-radius: 24%; }
+.snake-body { background-color: #b79ac6; }
+.snake-head { background-color: #6f5480; border-radius: 32%; box-shadow: inset 0 0 0 2px #ffffff59; }
+.snake-food { background-color: #ed91ad; border-radius: 50%; transform: scale(.84); box-shadow: 0 0 0 3px #ed91ad4d; }
+.snake-dpad { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 4px 0 6px; }
+.snake-dpad-row { display: flex; gap: 6px; }
+.games-view .snake-dpad button { width: 64px; padding: 12px 0; background: #f4edf5; color: #795d88; font-size: 1rem; touch-action: manipulation; }
+.snake-exit { margin-top: 4px; }
+.snake-restart { margin-top: 6px; }
+.snake-rules { font-size: .84rem; line-height: 1.5; color: #6b5c66; padding-left: 18px; margin: 0 0 14px; }
+.snake-rules li { margin: 0 0 6px; }
+.snake-gate-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.snake-secondary { background: #f4edf5 !important; color: #795d88 !important; }
+.snake-result { display: flex; gap: 10px; margin: 12px 0 14px; }
+.snake-result > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 16px; background: #faf6fb; border: 1px solid #eee4e7; }
+.snake-result span { font-size: .72rem; font-weight: 700; color: #85767e; overflow-wrap: anywhere; }
+.snake-result strong { font-size: 1.7rem; color: #4a3a52; }
+.snake-result small { font-size: .68rem; color: #9b8b93; }
+
+/* The only question the duel asks. It covers the board on purpose: there is no pause,
+   so the snake keeps moving behind it. */
+.snake-leave { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 22px; background: #443c428c; backdrop-filter: blur(2px); }
+.snake-leave-card { width: 100%; max-width: 330px; padding: 20px; border-radius: 22px; background: #fffdfb; box-shadow: 0 18px 40px #49344333; }
+.snake-leave-card h2 { margin: 0 0 8px; font-size: 1.1rem; color: #443c42; }
+.snake-leave-card p { margin: 0 0 10px; font-size: .85rem; line-height: 1.55; color: #6b5c66; }
+.snake-leave-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.snake-leave-actions button { font: inherit; font-size: .85rem; font-weight: 700; border: 0; border-radius: 14px; padding: 12px 16px; background: #f4edf5; color: #402d38; cursor: pointer; }
+.snake-leave-actions .snake-leave-danger { background: #ed91ad; }
+.snake-leave-actions button:disabled { opacity: .55; cursor: default; }
