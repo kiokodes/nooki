@@ -85,3 +85,7 @@
 .snake-leave-actions button { font: inherit; font-size: .85rem; font-weight: 700; border: 0; border-radius: 14px; padding: 12px 16px; background: #f4edf5; color: #402d38; cursor: pointer; }
 .snake-leave-actions .snake-leave-danger { background: #ed91ad; }
 .snake-leave-actions button:disabled { opacity: .55; cursor: default; }
+
+/* --- Sudoku --------------------------------------------------------------- */
+.sudoku-board { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; max-width: 320px; margin: 0 auto 12px; aspect-ratio: 1; }
+.sudoku-cell { aspect-ratio: 1; font-size: 1rem; }

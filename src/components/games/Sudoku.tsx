@@ -170,7 +170,7 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
       )}
       <div className="sudoku-board" data-sudoku-board style={{
         display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 2,
-        maxWidth: 360, margin: '0 auto 12px', aspectRatio: '1',
+        maxWidth: 320, margin: '0 auto 12px', aspectRatio: '1',
         border: `2px solid ${tokens.colors.textPrimary}`,
       }}>
         {board.map((v, i) => {
@@ -196,7 +196,7 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
                 backgroundColor: isSel ? tokens.colors.accentLavenderSoft : conflict ? '#fde2e2' : tokens.colors.bgSurface,
                 color: isGiven ? tokens.colors.textPrimary : tokens.colors.accentLavenderDeep,
                 fontWeight: isGiven ? 700 : 500,
-                fontSize: '1.1rem',
+                fontSize: '1rem',
                 cursor: isGiven ? 'default' : 'pointer',
               }}
             >
@@ -242,7 +242,7 @@ const secondaryButton: React.CSSProperties = {
 };
 
 const digitButton: React.CSSProperties = {
-  font: 'inherit', fontSize: '1rem', fontWeight: 700, width: 36, height: 36,
+  font: 'inherit', fontSize: '1rem', fontWeight: 700, width: 32, height: 32,
   borderRadius: '10px', border: 'none', cursor: 'pointer',
   backgroundColor: tokens.colors.bgSurfaceSubtle, color: tokens.colors.textPrimary,
 };
