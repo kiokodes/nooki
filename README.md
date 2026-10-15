@@ -74,6 +74,9 @@ is not an email/password login credential.
 The centre Home tab is the default screen once a couple is paired. It is a vertical stack
 of three soft cards and needs no schema change:
 
+The global app header keeps the couple's names (`Sam & Ana`) with the "Together since
+<date>" line, and the Home card carries the live counter.
+
 1. **Couple header** — both partners' names and a live counter from `anniversary_date`,
    shown as years, months and days ("Together for 2Y 1M 4D"). It is measured on the
    viewer's own calendar day and re-renders on a one-second tick, so it rolls over at

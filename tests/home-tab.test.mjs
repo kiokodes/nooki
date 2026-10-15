@@ -159,6 +159,11 @@ test('home tab: live together counter, partner presence and the partner clock', 
       coupleTime.getTogetherDuration(couple.anniversary_date, new Date()),
     );
     assert(body().includes('Alice & Bob'), 'both partners are named in the couple header');
+    const appHeader = document.querySelector('header');
+    assert(appHeader && appHeader.textContent.includes('Alice & Bob'), 'the global header names both partners');
+    assert(appHeader.textContent.includes(`Together since ${couple.anniversary_date}`),
+      'the global header keeps the "Together since" line');
+    assert(appHeader.textContent.includes('Sam') === false, 'no sample-data names leak into the app');
     assert(body().includes(`Together for ${expectedDuration}`), `expected "${expectedDuration}" on the Home tab`);
     assert(/Together for \d+Y \d+M \d+D/.test(body()), 'the counter is shown as years, months and days');
 

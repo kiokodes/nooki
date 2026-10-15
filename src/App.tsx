@@ -384,16 +384,37 @@ export const App: React.FC = () => {
             justifyContent: 'space-between',
           }}
         >
-          <span
-            style={{
-              fontSize: '1.15rem',
-              fontWeight: 800,
-              color: tokens.colors.textPrimary,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Nooki
-          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, marginRight: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+              <span
+                style={{
+                  fontSize: '1.15rem',
+                  fontWeight: 800,
+                  color: tokens.colors.textPrimary,
+                  letterSpacing: '-0.02em',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {profile.name} &amp; {partner?.name}
+              </span>
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: tokens.radii.full,
+                  backgroundColor: tokens.colors.primaryPink,
+                  flexShrink: 0,
+                }}
+              />
+            </div>
+            {couple?.anniversary_date && (
+              <span style={{ fontSize: '0.74rem', color: tokens.colors.textMuted }}>
+                Together since {couple.anniversary_date}
+              </span>
+            )}
+          </div>
 
           <button
             onClick={() => setShowSettings(true)}

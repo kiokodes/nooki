@@ -118,9 +118,36 @@ export const HomePreview = () => {
         }}
       >
         <header style={{ padding: '20px 22px 10px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '1.15rem', fontWeight: 800, color: tokens.colors.textPrimary, letterSpacing: '-0.02em' }}>
-            Nooki
-          </span>
+          {/* Mirrors the live app header: couple names, soft dot, "Together since" line. */}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, marginRight: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+              <span
+                style={{
+                  fontSize: '1.15rem',
+                  fontWeight: 800,
+                  color: tokens.colors.textPrimary,
+                  letterSpacing: '-0.02em',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {profile.name} &amp; {partner.name}
+              </span>
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: tokens.radii.full,
+                  backgroundColor: tokens.colors.primaryPink,
+                  flexShrink: 0,
+                }}
+              />
+            </div>
+            <span style={{ fontSize: '0.74rem', color: tokens.colors.textMuted }}>
+              Together since {couple.anniversary_date}
+            </span>
+          </div>
           <span
             style={{
               width: '36px',
