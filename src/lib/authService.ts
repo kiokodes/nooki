@@ -1,5 +1,7 @@
 import { requireSupabase } from './supabaseClient';
-import type { Profile, Couple } from '../types/database';
+import { parseIsoDate } from './coupleTime';
+import { REPEAT_FREQUENCIES } from '../types/database';
+import type { Profile, Couple, CoupleEvent, RepeatFrequency } from '../types/database';
 
 export interface AuthUser {
   id: string;
@@ -60,6 +62,89 @@ export async function saveOnboardingProfile(userId: string, name: string, timezo
   if (error) throw new Error(error.message);
   if (!data) throw new Error('Your profile could not be saved. Please try again.');
   return data as Profile;
+}
+
+/**
+ * Presence covers "in the app right now"; this timestamp is what the partner's Home tab
+ * falls back to as "Last seen ...". Allowed by the existing "update own profile" RLS policy.
+ */
+export async function touchLastSeen(userId: string): Promise<void> {
+  const { error } = await requireSupabase()
+    .from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * A missing table means the calendar migration has not been applied yet; that is an
+ * owner problem, not something the person using the app can fix.
+ */
+function describeDatabaseError(error: { message: string; code?: string }): string {
+  if (error.code === '42P01' || /relation .*couple_events.* does not exist/i.test(error.message)) {
+    return 'The database needs an update. Please ask the app owner to apply the Supabase migrations.';
+  }
+  return error.message;
+}
+
+export interface CoupleEventInput {
+  title: string;
+  /** Plain `YYYY-MM-DD` calendar date. */
+  date: string;
+  /** How often it comes back: 'none' fires once, on its own date. */
+  repeatFrequency: RepeatFrequency;
+}
+
+function validateEventInput(input: CoupleEventInput): CoupleEventInput {
+  const title = (input.title || '').trim();
+  if (!title) throw new Error('Please give this event a name.');
+  if (title.length > 120) throw new Error('Event names can be up to 120 characters.');
+  if (!parseIsoDate(input.date)) throw new Error('Please choose a valid date.');
+  const repeatFrequency = REPEAT_FREQUENCIES.includes(input.repeatFrequency) ? input.repeatFrequency : 'none';
+  return { title, date: input.date, repeatFrequency };
+}
+
+export async function fetchCoupleEvents(coupleId: string): Promise<CoupleEvent[]> {
+  const { data, error } = await requireSupabase().from('couple_events')
+    .select('*').eq('couple_id', coupleId).order('event_date', { ascending: true });
+  if (error) throw new Error(describeDatabaseError(error));
+  return (data ?? []) as CoupleEvent[];
+}
+
+export async function createCoupleEvent(
+  coupleId: string,
+  userId: string,
+  input: CoupleEventInput,
+): Promise<CoupleEvent> {
+  const clean = validateEventInput(input);
+  const { data, error } = await requireSupabase().from('couple_events')
+    .insert({
+      couple_id: coupleId,
+      created_by: userId,
+      title: clean.title,
+      event_date: clean.date,
+      repeat_frequency: clean.repeatFrequency,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(describeDatabaseError(error));
+  if (!data) throw new Error('This event could not be saved. Please try again.');
+  return data as CoupleEvent;
+}
+
+export async function updateCoupleEvent(eventId: string, input: CoupleEventInput): Promise<CoupleEvent> {
+  const clean = validateEventInput(input);
+  const { data, error } = await requireSupabase().from('couple_events')
+    .update({ title: clean.title, event_date: clean.date, repeat_frequency: clean.repeatFrequency })
+    .eq('id', eventId)
+    .select('*')
+    .single();
+  if (error) throw new Error(describeDatabaseError(error));
+  if (!data) throw new Error('This event could not be updated. Please try again.');
+  return data as CoupleEvent;
+}
+
+export async function deleteCoupleEvent(eventId: string): Promise<void> {
+  const { error } = await requireSupabase().from('couple_events').delete().eq('id', eventId);
+  if (error) throw new Error(describeDatabaseError(error));
 }
 
 export async function fetchCouple(coupleId: string): Promise<{ couple: Couple; partner: Profile | null } | null> {

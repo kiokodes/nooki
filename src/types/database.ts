@@ -16,6 +16,24 @@ export interface Couple {
   breakup_requested_at: string | null;
 }
 
+/** How often an event comes back. 'none' fires once, on its own date. */
+export type RepeatFrequency = 'none' | 'weekly' | 'monthly' | 'yearly';
+
+export const REPEAT_FREQUENCIES: RepeatFrequency[] = ['none', 'weekly', 'monthly', 'yearly'];
+
+export interface CoupleEvent {
+  id: string;
+  couple_id: string;
+  /** Account that added it; null if that account was later deleted. */
+  created_by: string | null;
+  title: string;
+  /** Plain `YYYY-MM-DD` calendar date, no timezone. */
+  event_date: string;
+  repeat_frequency: RepeatFrequency;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserSession {
   user: {
     id: string;

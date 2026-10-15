@@ -67,3 +67,47 @@ html, body {
   justify-content: center;
   align-items: center;
 }
+
+/* The couple header's presence ticker: a soft pulse only while the partner is online,
+   deliberately faint so the header stays quiet. */
+.nooki-presence-dot {
+  transition: background-color 0.4s ease;
+}
+
+.nooki-presence-dot[data-presence='online'] {
+  animation: nooki-presence-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes nooki-presence-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.3);
+  }
+  60% {
+    box-shadow: 0 0 0 4px rgba(5, 150, 105, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-presence-dot {
+    animation: none !important;
+  }
+}
+
+/* Calendar modal: a soft backdrop fade and a gentle sheet rise from the bottom. */
+@keyframes nooki-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nooki-sheet-up {
+  from { transform: translateY(14px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-modal='calendar'],
+  .nooki-modal-sheet {
+    animation: none !important;
+  }
+}

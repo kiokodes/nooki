@@ -183,4 +183,13 @@ REVOKE ALL ON FUNCTION public.create_couple(DATE), public.leave_pending_couple()
 GRANT EXECUTE ON FUNCTION public.create_couple(DATE), public.leave_pending_couple(),
   public.update_pending_anniversary(DATE), public.join_couple(TEXT) TO authenticated;
 
+-- Pin the API-role privileges explicitly. Supabase used to auto-grant every new table in
+-- public to anon/authenticated; projects created since 2026-05-30 never had that, and all
+-- projects stop getting it for new tables from 2026-10-30. Without these statements a
+-- project on the new behaviour would leave authenticated with no access to these tables.
+GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
+GRANT SELECT, UPDATE ON public.couples TO authenticated;
+REVOKE ALL ON public.profiles, public.couples FROM anon;
+
+
 COMMIT;
