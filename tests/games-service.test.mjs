@@ -27,6 +27,10 @@ test('games service distinguishes Snake setup failures from pairing, network and
     await assert.rejects(games.fetchGames(), /202610150010_snake_duel.sql/);
     fail('PGRST202', 'Could not find public.games_state in the schema cache');
     await assert.rejects(games.fetchGames(), /202610150007_games.sql/);
+    fail('PGRST202', 'Could not find public.start_chess in the schema cache');
+    await assert.rejects(games.startChess('queen-hunt'), /202610150011_chess.sql/);
+    fail('42883', 'function public.chess_view(jsonb) does not exist');
+    await assert.rejects(games.fetchGames(), /202610150011_chess.sql/);
     fail('P0001', 'Both partners must be paired.');
     await assert.rejects(games.startGame('snake', false, 3), /^Error: Both partners must be paired\.$/);
     fail('', 'Failed to fetch');

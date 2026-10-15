@@ -84,6 +84,9 @@ test('games: saved multiplayer, daily limit, sealed picks and authoritative scor
   await assert.rejects(db.exec(verify), /start_game does not support Snake Duel/, 'preflight catches migration 007 overwriting the Snake entry points');
   await db.rollback();
   await db.exec(await readFile(new URL('../supabase/migrations/202610150010_snake_duel.sql',import.meta.url),'utf8'));
+  await assert.rejects(db.exec(verify), /game check does not allow chess/, 'Chess must be restored after the older Snake migration');
+  await db.rollback();
+  await db.exec(await readFile(new URL('../supabase/migrations/202610150011_chess.sql',import.meta.url),'utf8'));
   await db.exec(verify);
   await login('a');
   assert.equal((await match(id)).winner_id,a.id,'migration reruns preserve matches');

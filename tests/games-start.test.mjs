@@ -33,6 +33,7 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
 
     const original = await readFile(new URL('../supabase/migrations/202610150007_games.sql', import.meta.url), 'utf8');
     const snake = await readFile(new URL('../supabase/migrations/202610150010_snake_duel.sql', import.meta.url), 'utf8');
+    const chess = await readFile(new URL('../supabase/migrations/202610150011_chess.sql', import.meta.url), 'utf8');
     const verify = await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8');
     // This really is the old start_game, not a stub inventing an error message.
     await db.exec(original);
@@ -73,9 +74,10 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     assert.match(alert().textContent, /202610150010_snake_duel.sql/, 'successful polling cannot erase the start error');
     assert.equal(requests.filter(name => name === 'start_game').length, 1);
 
-    // The owner applies the exact migration named in the error. Retry must redo the
+    // The owner applies Snake and then Chess to keep the latest Games schema. Retry must redo the
     // failed start, not merely refresh the already-readable list of games.
     await db.exec(snake);
+    await db.exec(chess);
     await db.exec(verify);
     await auth.signInWithEmail('alice@test.com', 'password');
     await click('Try again');
@@ -103,6 +105,7 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     await assert.rejects(db.exec(verify), /games_state is the pre-Snake version/);
     await db.rollback();
     await db.exec(snake);
+    await db.exec(chess);
     await db.exec(verify);
   } finally {
     await act(async () => root.unmount());

@@ -5,6 +5,8 @@ import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
 import { SnakeBoard } from './SnakeBoard';
 import { SnakeDuel } from './SnakeDuel';
 import { Sudoku } from './Sudoku';
+import { ChessDuel } from './ChessDuel';
+import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import './games.css';
 
 /** A practice run in progress: its own food, dealt on this phone and never reported. */
@@ -14,6 +16,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   const [bestOf, setBestOf] = useState(3);
   const [warmUp, setWarmUp] = useState<WarmUp | null>(null);
   const [sudokuOpen, setSudokuOpen] = useState(false);
+  const [chessMode, setChessMode] = useState<ChessMode>('classic');
   const m = games.match;
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
@@ -38,7 +41,19 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
     {!games.data && !games.error && <p role="status">Loading your games…</p>}
     {m ? <>
       <button className="game-back" onClick={() => openMatch(null)}>← All games</button>
-      {practice ?? (m.game === 'snake' ? (
+      {practice ?? (m.game === 'chess' ? (
+        <ChessDuel
+          partnerName={partnerName}
+          onExit={() => openMatch(null)}
+          online={{
+            match: m,
+            userId,
+            busy: games.busy,
+            onMove: (move) => void games.playChess(m, move),
+            onRematch: (nextMode) => void games.startChess(nextMode),
+          }}
+        />
+      ) : m.game === 'snake' ? (
         <SnakeDuel
           match={m}
           userId={userId}
@@ -84,17 +99,27 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
               {[3, 5].map(n => <button key={n} type="button" aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}
             </fieldset>
           )}
+          {game.id === 'chess' && (
+            <fieldset>
+              <legend>Choose your duel</legend>
+              {CHESS_MODES.map(modeOption => (
+                <button key={modeOption.id} type="button" aria-pressed={chessMode === modeOption.id} onClick={() => setChessMode(modeOption.id)}>
+                  {modeOption.icon} {modeOption.name}
+                </button>
+              ))}
+            </fieldset>
+          )}
           {games.error && inlineErrorGame === game.id && <GameError games={games} />}
           <div className="game-actions">
             <button
               type="button"
               disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
               aria-busy={games.pendingGame === game.id}
-              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : void games.start(game.id, false, bestOf)}
+              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : void games.start(game.id, false, bestOf)}
             >
               {games.pendingGame === game.id
                 ? game.id === 'snake' ? 'Opening duel…' : 'Opening game…'
-                : game.id === 'snake' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : `Play with ${partnerName} →`}
+                : game.id === 'snake' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
             </button>
             {game.id === 'snake' && (
               <button type="button" className="snake-secondary" disabled={games.busy} onClick={startWarmUp} data-action="library-warm-up">
