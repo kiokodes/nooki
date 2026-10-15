@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
+import { PreviewSnake } from './PreviewSnake';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { ChatView } from '../components/chat/ChatView';
@@ -84,7 +85,7 @@ const PRESETS: Preset[] = [
   { label: 'Long distance (6Y 8M 1D)', anniversary: '2020-02-14' },
 ];
 
-type PreviewTab = 'home' | 'chat';
+type PreviewTab = 'home' | 'chat' | 'games';
 
 interface PreviewMessage extends ChatEntry {
   /** The name shown nowhere but useful when reading this file. */
@@ -447,7 +448,12 @@ export const AppPreview = () => {
               onOpenSettings={() => {}}
             />
 
-            {tab === 'home' ? (
+            {tab === 'games' ? (
+              /* The duel, played out on this page: same board, same rules, no backend. */
+              <section style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px 24px' }}>
+                <PreviewSnake partnerName={partner.name} />
+              </section>
+            ) : tab === 'home' ? (
               <HomeView
                 events={events}
                 anniversaryDate={couple.anniversary_date}
@@ -516,7 +522,7 @@ export const AppPreview = () => {
                 padding: '0 8px calc(6px + env(safe-area-inset-bottom, 0px)) 8px',
               }}
             >
-              {/* Chat and Home are live in this preview; the rest stay inert. */}
+              {/* Chat, Home and Games are live in this preview; Discuss stays inert. */}
               <button
                 type="button"
                 aria-label={unread ? `Chat, ${unread} unread ${unread === 1 ? 'message' : 'messages'}` : 'Chat'}
@@ -577,7 +583,6 @@ export const AppPreview = () => {
 
               {[
                 { label: 'Discuss', Icon: MessageSquare, tint: tokens.colors.accentSageSoft, ink: tokens.colors.accentSageDeep },
-                { label: 'Games', Icon: Gamepad2, tint: tokens.colors.accentLavenderSoft, ink: tokens.colors.accentLavenderDeep },
               ].map(({ label, Icon, tint, ink }) => (
                 <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: tokens.colors.textMuted }}>
                   <span style={{ width: '30px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: tokens.radii.sm, backgroundColor: tint, color: ink }}>
@@ -586,6 +591,29 @@ export const AppPreview = () => {
                   <span style={{ fontSize: '0.68rem', fontWeight: 500 }}>{label}</span>
                 </span>
               ))}
+
+              <button
+                type="button"
+                aria-label="Games"
+                onClick={() => setTab('games')}
+                style={navItemStyle(tab === 'games')}
+              >
+                <span
+                  style={{
+                    width: '30px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: tokens.radii.sm,
+                    backgroundColor: tab === 'games' ? tokens.colors.accentLavenderSoft : 'transparent',
+                    color: tab === 'games' ? tokens.colors.accentLavenderDeep : tokens.colors.textMuted,
+                  }}
+                >
+                  <Gamepad2 size={19} />
+                </span>
+                Games
+              </button>
             </nav>
           </>
         )}
@@ -607,7 +635,9 @@ export const AppPreview = () => {
         <Heart size={13} fill={tokens.colors.primaryPink} strokeWidth={1.5} />
         {tab === 'chat'
           ? 'Chat preview · sample conversation only · send a message, or make Ana type and reply'
-          : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
+          : tab === 'games'
+            ? 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database'
+            : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
       </p>
     </div>
   );

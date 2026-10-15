@@ -34,15 +34,18 @@ and public-key format, not the remote key's validity or the database's health.
 
 1. Take a database backup/snapshot before changing the schema.
 2. Run `supabase/migrations/202610150001_pairing_flow.sql` in that project's SQL Editor.
-   Then run `supabase/migrations/202610150002_couple_events.sql`, then
-   `supabase/migrations/202610150003_messages.sql`, then
-   `supabase/migrations/202610150004_discuss_questions.sql`, then
-   `supabase/migrations/202610150005_discuss_comments_chat_links.sql`, then
-   `supabase/migrations/202610150006_chat_replies_edits.sql`, the same way. All six are
+   Then run, the same way: `202610150002_couple_events.sql`,
+   `202610150003_messages.sql`, `202610150004_discuss_questions.sql`,
+   `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`,
+   `202610150007_games.sql` (Games), `202610150010_snake_duel.sql` (the Snake Duel in
+   Games), `202610150008_shared_books.sql` and `202610150009_two_book_shelf_limit.sql`
+   (shared books). All ten are
    safe to rerun and change nothing that already exists: the second adds the shared
    calendar, the third adds the chat log, the fourth adds the Discuss question engine,
-   the fifth rewrites reactions into comments and links chat messages to questions, and
-   the sixth adds chat replies and edits (plus their Realtime publication membership).
+   the fifth rewrites reactions into comments and links chat messages to questions, the
+   sixth adds chat replies and edits (plus their Realtime publication membership), the
+   seventh adds Games, the tenth adds the Snake Duel's verified runs to Games, and the
+   last two add the shared-books shelf.
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
    anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat
@@ -242,14 +245,18 @@ profile" RLS policy, so **no migration is required** for any of this. Two caveat
 
 ### Design preview (development only)
 
-`npm run dev` serves a sample-data preview of the header, Home surface and Chat tab at
-**http://localhost:5173/preview.html**. It uses static names ("Sam & Ana"), needs no
-Supabase project, and lets you flip the partner between online and away, switch
+`npm run dev` serves a sample-data preview of the header, Home surface, Chat tab and
+Snake Duel at **http://localhost:5173/preview.html**. It uses static names ("Sam & Ana"),
+needs no Supabase project, and lets you flip the partner between online and away, switch
 anniversary examples, and open the real calendar modal with sample events where
 add/edit/delete work in memory. The Chat tab is the real component over an in-memory
 transcript, so you can send a message, watch one check turn into two, make Ana type, make
-her reply, and see the unread badge — it reuses the real header and chat components so it
-cannot drift from the app. It is a dev-server route only: `npm run build` still publishes
+her reply, and see the unread badge. The Games tab is the real snake board over a
+simulated duel: deal a run, steer it with the arrow keys, the WASD keys, a swipe or the
+D-pad, watch the leave-and-forfeit question, and see the reveal against a sample partner
+score. It reuses the real header, chat and board components so it cannot drift from the
+app — but the preview's duel is played out on the page, since the ranked one depends on the
+database dealing the food and replaying the run. It is a dev-server route only: `npm run build` still publishes
 `index.html` alone, and the app itself has no mock/sample mode.
 
 While no `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` values are present, the dev server
@@ -365,9 +372,9 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | `supabase/migrations/202610150001_pairing_flow.sql`, then `supabase/migrations/202610150002_couple_events.sql`, then `supabase/migrations/202610150003_messages.sql`, then `supabase/migrations/202610150004_discuss_questions.sql`, then `supabase/verify.sql` |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
-All four migrations are idempotent and safe to rerun; they never drop or rewrite existing
+All of the migrations are idempotent and safe to rerun; they never drop or rewrite existing
 data (the pairing migration only changes policies, the calendar migration only adds a table
 or converts an older one in place, the chat migration only adds a table, its policies and
 its Realtime membership, and the Discuss migration only adds tables, functions, triggers
@@ -379,7 +386,9 @@ column, the realtime `messages` chat (type check, policies, immutability trigger
 publication membership), the Discuss engine (its five tables, the policies that never
 reveal a sealed answer, the canonicalised library, the three question RPCs, and that the
 app cannot write to `questions`), and that `anon` cannot reach couple data. If it raises,
-it names the file to rerun.
+it names the file to rerun. `verify-games.sql` additionally checks that the Snake Duel's
+replay and its private internals are in place, and that a phone cannot settle a duel or
+score a run without playing it.
 
 **If you already ran the calendar migration before the repeat control existed**, rerun
 `202610150002_couple_events.sql`: it upgrades `repeats_yearly` to `repeat_frequency` in
@@ -604,8 +613,8 @@ mutual-breakup settings are implemented. Media hosts **Read together** (shared b
 one EPUB or PDF in play per couple, a full-screen reader, saved places for both
 partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
 back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes
-Tic Tac Toe and Rock Paper Scissors, and voice/video calling is still a "coming soon"
-toast. No sample conversations or questions
+Tic Tac Toe, Rock Paper Scissors and the asynchronous Snake Duel, and voice/video calling
+is still a "coming soon" toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, and the question library is whatever the owner imported into `questions`.
 Scenes and illustrated backgrounds are deliberately out of scope for now: the Discuss tab
@@ -620,18 +629,58 @@ partners are paired; ending a completed couple requires both partners' agreement
 ## Games tab and Today's Challenge
 
 Apply **`supabase/migrations/202610150007_games.sql`** to an existing project before
-shipping Games, then run **`supabase/verify-games.sql`** in addition to the usual
-`verify.sql`. New projects get Games from `schema.sql`. This migration is additive
-and rerunnable; it does not reset existing matches. It has not been applied to your
-live project by the frontend build.
+shipping Games, then **`supabase/migrations/202610150010_snake_duel.sql`** before shipping
+the Snake Duel, then run **`supabase/verify-games.sql`** in addition to the usual
+`verify.sql`. New projects get both from `schema.sql`. Both migrations are additive
+and rerunnable; they do not reset existing matches or duels. They have not been applied
+to your live project by the frontend build.
 
 - **Tic Tac Toe:** a 3×3 board, alternating turns, all eight winning lines and draws.
   The starting partner is X. Moves and results are validated by the database.
 - **Rock Paper Scissors:** best of 3 (first to 2 wins) or 5 (first to 3).
   Ties replay without adding a point. Tap once to lock a secret pick; both picks
   are revealed together when the second partner submits. Locked picks cannot change.
+- **Snake Duel:** one run each, and the higher score wins. The two partners never need to
+  be online at the same time: a duel waits for both runs whenever they are played, so it
+  suits a couple in two time zones. A run starts the moment it is entered, lasts at most
+  four minutes, and cannot be paused — there is no pause button and none is coming.
+  Leaving the run is a forfeit and the partner takes the duel there and then, so the only
+  score you can hand in is the one you played. A phone that goes quiet for more than
+  **30 seconds** (locked, backgrounded, no signal) is treated as having left, and time in
+  the background is not paused: the snake keeps travelling and will usually hit a wall
+  before you get back. Reloading is the same — you get the 30 seconds to pick the run
+  back up, from the tick the server last heard about.
+- **Snake Duel · scorekeeping:** the score is not something the phone claims. The
+  database deals the food, the phone reports only its direction changes and its tick
+  count, and the database replays that history through the same rules as
+  `src/lib/snake.ts` to derive the score, the length and the crash (`snake_replay`).
+  Reports are append-only, cannot be rewound, and cannot outrun real time (one tick per
+  160ms, plus two ticks of slack for the round trip), and each side may start exactly one
+  run per duel — so a run cannot be re-rolled, sped up or handed in twice. The honest
+  limits: the food sequence is sent to the phone, so a technical player who scripts a bot
+  could still play a very good run at human speed; the duel is built to stop score
+  forgery and re-rolls between two people who trust each other, not to police a
+  tournament. Both `snake_replay` and `src/lib/snake.ts` hold the same constants and the
+  same rules: **changing one without the other disqualifies honest runs**, and the
+  database test compares the two scores precisely because that is the failure mode.
+- **Snake Duel · secrecy:** it is a blind duel. While the duel is open, neither partner
+  can see the other's score — a partner who is playing right now shows only as *playing
+  right now*. Both scores are revealed together when both runs are in (`snake_view`
+  strips the score from the snapshot until then, exactly as it strips rock-paper-scissors
+  picks). A forfeit ends the duel immediately and reveals the score the leaver had
+  reached.
+- **Snake Duel · warm-up:** the same board, dealt on the phone itself, never reported and
+  never scored. It is offered on the duel's gate, while waiting for the partner, and from
+  the Snake Duel card in the library, so nobody's one attempt is their first attempt.
+- **Snake Duel · leaving a tab:** a live ranked run guards the app's navigation. Changing
+  tab asks first — over the board, which keeps moving, because there is no pause — and
+  only changing the tab after *Leave and forfeit* gives the duel to the partner.
+- **Snake Duel · not the daily challenge:** the daily pool stays Tic Tac Toe and Rock
+  Paper Scissors (`start_game` never picks snake for a daily match). A duel waits however
+  long both partners need, which one UTC day is the wrong container for.
 - **Games:** unlimited rematches; starting a game with an unfinished practice match
-  resumes that match, including the original match length.
+  resumes that match, including the original match length. A finished duel stays reachable
+  from the library's *Last Snake Duel* row, so its result does not vanish.
 - **Home → Today's Challenge:** randomly selects either available game on the first
   start and saves that choice for both partners. Exactly one shared match per couple
   per **UTC day**, enforced by a database unique constraint and serialized starts.
@@ -643,12 +692,21 @@ live project by the frontend build.
   are published through Realtime or exposed through direct table access. Only the
   RPC's sanitized snapshot is returned to the couple; other accounts cannot read it.
 - To add another game, extend `GAMES` in `gamesService.ts`, its UI, and the database
-  validator/daily selection pool together. No future game is selected until playable.
+  validator/daily selection pool together. No future game is selected until playable. A
+  game with rules of its own (as Snake has) wants its own RPCs plus its own row in the
+  snapshot, the way `snake_*` and `games_state`'s `snake` key do: never hand a phone the
+  authority to score itself.
 
 Before release, use two real paired accounts to play each game, verify a secret pick
 is absent from the other device's network responses, resume after a reload, finish a
 daily match, and confirm both devices can only view its result until midnight UTC.
-The no-backend development preview remains sample UI, not a local game backend.
+For the Snake Duel specifically: play both runs on two real phones (one of them in a
+different time zone), leave a run halfway and confirm the partner is credited with the
+win, lock one phone for longer than 30 seconds mid-run and confirm the run is lost,
+reload mid-run and confirm the run resumes from the last report, and confirm the
+partner's score is nowhere in the other phone's network responses until both runs are in.
+The no-backend development preview remains sample UI, not a local game backend: the
+preview's Snake Duel is played out on the page, and a ranked duel needs the migration.
 
 ## Media tab: Read together (shared books)
 

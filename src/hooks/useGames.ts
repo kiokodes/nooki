@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchGames, playGame, startGame, type GameId, type GameMatch, type GamesSnapshot } from '../lib/gamesService';
+import {
+  beatSnakeRun, fetchGames, finishSnakeRun, forfeitSnakeRun, playGame, startGame, startSnakeRun,
+  type GameId, type GameMatch, type GamesSnapshot, type SnakeRun,
+} from '../lib/gamesService';
+import type { SnakeChange } from '../lib/snake';
 
 /**
  * True while this phone still owes a move in a match: the Games tab badge.
@@ -7,10 +11,13 @@ import { fetchGames, playGame, startGame, type GameId, type GameMatch, type Game
  * Tic-tac-toe hands the turn back and forth, so it is this phone's move when the
  * turn points at it. Rock-paper-scissors waits for a locked-in pick from each
  * side, so it is this phone's move until it has locked its own pick in.
+ * A snake duel waits for one run from each partner: it is this phone's move until
+ * it has played its run, and while that run is still live.
  */
 export function needsMyMove(match: GameMatch, userId: string | null): boolean {
   if (!userId || match.finished) return false;
   if (match.game === 'tic-tac-toe') return match.turn_id === userId;
+  if (match.game === 'snake') return !match.snake?.mine || match.snake.mine.status === 'running';
   return !match.my_pick;
 }
 
@@ -51,15 +58,41 @@ export function useGames(coupleId: string | null, userId: string | null) {
     catch (e) { if (current.current === scope) setError((e as Error).message); }
     finally { lock.current = false; setBusy(false); }
   };
+  const match = data?.matches.find(m => selected?.scope === scope && m.id === selected.id);
+  /**
+   * True while this phone is in the middle of a ranked snake run. The app asks before
+   * letting a tab change end it: a live run that is left behind is a forfeit.
+   */
+  const snakeLive = Boolean(match && !match.finished && match.game === 'snake' && match.snake?.mine?.status === 'running');
+  /**
+   * Progress reports. These deliberately skip the shared busy flag: they happen every
+   * couple of seconds behind the board's back, and must not disable the buttons or wipe
+   * an error the couple needs to read. The board reports its own connection trouble.
+   */
+  const beat = useCallback(async (matchId: string, ticks: number, changes: SnakeChange[]): Promise<SnakeRun> =>
+    beatSnakeRun(matchId, ticks, changes), []);
+  const finish = useCallback(async (matchId: string, ticks: number, changes: SnakeChange[]): Promise<SnakeRun> => {
+    const entry = await finishSnakeRun(matchId, ticks, changes);
+    await refresh();
+    return entry;
+  }, [refresh]);
   return {
-    data, error, busy, refresh, pendingCount,
-    match: data?.matches.find(m => selected?.scope === scope && m.id === selected.id),
+    data, error, busy, refresh, pendingCount, match, snakeLive,
     select: (id: string | null) => setSelected(id ? { scope, id } : null),
     start: (game: GameId, daily = false, bestOf = 3) => run(async () => {
       const id = await startGame(game, daily, bestOf);
       if (current.current === scope) setSelected({ scope, id });
     }),
     play: (match: GameMatch, move: string) => run(async () => { await playGame(match, move); }),
+    /** Deal the food and start this phone's one run. Resuming a live run hands the same one back. */
+    startSnake: (matchId: string) => run(async () => { await startSnakeRun(matchId); }),
+    beat,
+    finish,
+    /**
+     * Walking out of a live run. Best effort by design: if the call cannot get through,
+     * the run is lost to the grace window anyway, so the caller carries on.
+     */
+    forfeitSnake: (matchId: string) => run(async () => { await forfeitSnakeRun(matchId); }),
   };
 }
 export type GamesState = ReturnType<typeof useGames>;

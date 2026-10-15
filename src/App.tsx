@@ -14,6 +14,7 @@ import { PairingView } from './components/auth/PairingView';
 import { CoupleHeader } from './components/common/CoupleHeader';
 import { SplashScreen, SPLASH_DURATION_MS } from './components/common/SplashScreen';
 import { GamesView } from './components/games/GamesView';
+import { SnakeLeaveDialog } from './components/games/SnakeLeaveDialog';
 import { useGames } from './hooks/useGames';
 import { HomeView } from './components/home/HomeView';
 import { ChatView } from './components/chat/ChatView';
@@ -120,6 +121,9 @@ const shellStyle: React.CSSProperties = {
 export const App: React.FC = () => {
   // Navigation & Modal State
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  // A tab the couple asked for while a ranked snake run was live: the run cannot be
+  // paused, so leaving the Games tab is a forfeit and they get asked first.
+  const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   // The calendar is a modal over whatever tab is open, never a page of its own.
   const [showCalendar, setShowCalendar] = useState(false);
@@ -162,6 +166,17 @@ export const App: React.FC = () => {
   // The Discuss question engine sits at app level too, so a question the partner asks
   // still badges its tab while this phone is somewhere else.
   const games = useGames(couple?.id ?? null, currentUser?.id ?? null);
+
+  /**
+   * Every way out of the Games tab goes through here. A live snake run has no pause and no
+   * second chance, so a tab change while one is on screen is a forfeit, and the couple is
+   * asked before it happens — with the snake still moving behind the question.
+   */
+  const requestTab = useCallback((key: TabKey) => {
+    if (key === activeTab) return;
+    if (activeTab === 'games' && games.snakeLive && games.match) setPendingTab(key);
+    else setActiveTab(key);
+  }, [activeTab, games.snakeLive, games.match]);
 
   const discuss = useDiscuss({
     coupleId: couple?.id ?? null,
@@ -573,7 +588,7 @@ export const App: React.FC = () => {
                     alignItems: 'center',
                     cursor: 'pointer',
                   }}
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => requestTab(tab.key)}
                 >
                   <button
                     type="button"
@@ -634,7 +649,7 @@ export const App: React.FC = () => {
                 key={tab.key}
                 type="button"
                 data-nav-tab={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => requestTab(tab.key)}
                 aria-label={tabBadge ? `${tab.label}, ${badgeWords}` : tab.label}
                 style={{
                   background: 'none',
@@ -735,6 +750,23 @@ export const App: React.FC = () => {
               loadUserData();
             }}
             onSignOut={handleSignOut}
+          />
+        )}
+
+        {/* Leaving the Games tab in the middle of a ranked snake run: asked here, over the
+            board, which keeps running while the question is on screen. */}
+        {pendingTab && games.match && (
+          <SnakeLeaveDialog
+            partnerName={partner.name}
+            busy={games.busy}
+            onKeepPlaying={() => setPendingTab(null)}
+            onForfeit={() => {
+              const target = pendingTab;
+              const matchId = games.match?.id;
+              setPendingTab(null);
+              if (matchId) void games.forfeitSnake(matchId);
+              setActiveTab(target);
+            }}
           />
         )}
       </main>
