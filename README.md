@@ -34,18 +34,25 @@ and public-key format, not the remote key's validity or the database's health.
 
 1. Take a database backup/snapshot before changing the schema.
 2. Run `supabase/migrations/202610150001_pairing_flow.sql` in that project's SQL Editor.
-   Then run `supabase/migrations/202610150002_couple_events.sql` the same way. Both are safe
-   to rerun and change nothing that already exists; the second one adds the shared calendar.
+   Then run `supabase/migrations/202610150002_couple_events.sql`, then
+   `supabase/migrations/202610150003_messages.sql`, the same way. All three are safe to
+   rerun and change nothing that already exists: the second adds the shared calendar and
+   the third adds the chat log (plus its Realtime publication membership).
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
-   anniversary-lock trigger and the `couple_events` calendar. It must return **PASS**; if
-   it complains about `couple_events`, that migration step was skipped.
+   anniversary-lock trigger, the `couple_events` calendar and the realtime `messages`
+   chat. It must return **PASS**; if it complains about `couple_events` or `messages`,
+   that migration step was skipped.
 4. Redeploy the updated frontend immediately after the migration.
 
 The migration preserves existing couples and invite codes. It makes creation/linking
 atomic, serializes joins to enforce two partners, makes retries safe, allows cancellation
 of an unpaired invite, and locks the anniversary after the second authenticated partner
 joins. It also stops unpaired users from reading other couples' invite codes.
+
+The chat migration is **required before deploying the Chat tab**: a project without
+`messages` shows an owner-facing "the database needs an update" message instead of a
+broken chat, and the preflight fails loudly.
 
 **Do not rerun the full schema on an existing project or drop tables to resolve an
 error.** Use the migration. It changes the old frontend's direct-insert permissions;
@@ -55,8 +62,9 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 ### Brand-new, empty Supabase project only
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
-(including `couple_events`), RLS policies, pairing RPCs, anniversary trigger and
-mutual-breakup RPCs; it does not populate user/couple records.
+(including `couple_events` and `messages`), RLS policies, pairing RPCs, anniversary
+trigger, the Realtime publication membership for the chat and the mutual-breakup RPCs; it
+does not populate user/couple records.
 
 ## Supabase Auth configuration
 
@@ -139,26 +147,79 @@ project in place: it adds `repeat_frequency`, converts existing `repeats_yearly 
 rows to `'yearly'`, drops the old column, and then `verify.sql` should report **PASS**
 (it fails loudly if the old column is still there).
 
+## The Chat tab
+
+A plain, WhatsApp-shaped conversation between the two partners — the second tab from the
+left, live, with no refresh anywhere. It is built from:
+
+| Piece | File |
+| --- | --- |
+| The screen (conversation bar, transcript, composer, toast) | `src/components/chat/ChatView.tsx` |
+| State: load, realtime, optimistic sends, receipts, typing, unread | `src/hooks/useChat.ts` |
+| Transport: queries, the Realtime channel, validation | `src/lib/chatService.ts` |
+| Day separators and bubble times (pure functions) | `src/lib/chatTime.ts` |
+| The table, its RLS and its Realtime membership | `supabase/migrations/202610150003_messages.sql` |
+
+- **Bubbles** — your messages sit on the right in Nooki's blush pink, the partner's on the
+  left in white, each with its timestamp inside the bubble. The transcript is split into
+  days: `Today`, `Yesterday`, then `Mon 12 October` (with the year once it is a different
+  one). Paragraph breaks are preserved exactly as typed.
+- **Sending** — the composer is a growing multi-line box. **Enter starts a new
+  paragraph**; only the send button sends, so a long message can be written properly on a
+  phone. A sent message appears instantly, then its real row replaces it.
+- **Receipts** — a small clock while it is on its way, one check once the database has it
+  (single check = sent), and two pink checks once the partner's phone has actually read it
+  (double check = read). A send that fails stays on screen as a bubble with
+  *"Not sent — tap to retry"*.
+- **Typing** — the partner's three-dot bubble appears while they compose, and the
+  conversation bar says `typing…`. It is a Realtime broadcast only: never stored, sent at
+  most once every 2 seconds, and expired after 4 seconds, so a lost ping can never leave a
+  stale "typing…" behind.
+- **Read receipts** — `read_at` is stamped only while the Chat tab is on screen **and** the
+  app is in the foreground, because you have to be looking at a message to have read it.
+  Opening the tab stamps everything the partner sent.
+- **Unread badge** — the partner's unseen messages are counted on the Chat tab icon in the
+  bottom nav (capped at `99+`), updated live even while this phone sits on Home, Media or
+  Games, and cleared the moment the chat opens. Screen readers hear
+  *"Chat, 2 unread messages"* instead of the raw number.
+- **Conversation bar** — the partner's name and live status (`Online`, `typing…`, or
+  `Last seen 12m ago`), plus **phone** and **video** buttons. Those two are deliberately
+  inert for now: they show a *"coming soon"* toast until calling ships.
+- **Message types** — `type` is `text`, `question`, `answer` or `system` from day one, so
+  the Discuss tab can reuse this exact table for prompts, answers and automatic notes.
+  `system` rows render as a quiet centred pill, and `sender_id` may be `NULL` only for
+  them. The Chat tab itself writes `text`.
+- **Realtime** — one channel per couple (`nooki-chat-<coupleId>`) carries Postgres Changes
+  for `INSERT` and `UPDATE` filtered by `couple_id`, plus the typing broadcast. RLS applies
+  to the stream as well, so the other couple never receives these rows.
+- **What the database enforces** — messages are a permanent log: an update may only stamp
+  `read_at` (a trigger rejects edits to the words, type, author or time), there is no
+  delete policy, and rows cascade away with the couple. Only the couple's two accounts can
+  read or write them, and the last 200 messages are loaded (`MESSAGE_PAGE_SIZE`).
+
 Presence runs at app level, so a partner still reads as online while this phone browses
 Chat, Media, Discussion or Games. The app writes its own `last_seen_at` on mount, every
 minute while open, and when the tab is hidden — permitted by the existing "update own
 profile" RLS policy, so **no migration is required** for any of this. Two caveats:
 
-- Presence requires the Realtime service, which is on by default. Channels are public in
-  Supabase unless Realtime Authorization is configured; the topic includes the couple's
-  UUID, so only someone who already knows that id could subscribe to it. Enable Realtime
-  Authorization if you want that enforced in the database.
+- Presence and chat both require the Realtime service, which is on by default. Channels
+  are public in Supabase unless Realtime Authorization is configured; the topic includes
+  the couple's UUID, so only someone who already knows that id could subscribe to it.
+  Message rows still go through RLS, so a stranger on the topic receives none of them.
+  Enable Realtime Authorization if you want channel access enforced in the database too.
 - `last_seen_at` writes fail quietly when the device is offline; presence still covers the
   "Online" case.
 
 ### Design preview (development only)
 
-`npm run dev` serves a sample-data preview of the header and Home surface at
+`npm run dev` serves a sample-data preview of the header, Home surface and Chat tab at
 **http://localhost:5173/preview.html**. It uses static names ("Sam & Ana"), needs no
 Supabase project, and lets you flip the partner between online and away, switch
 anniversary examples, and open the real calendar modal with sample events where
-add/edit/delete work in memory; it reuses the real header component so it cannot drift from the
-app. It is a dev-server route only: `npm run build` still publishes
+add/edit/delete work in memory. The Chat tab is the real component over an in-memory
+transcript, so you can send a message, watch one check turn into two, make Ana type, make
+her reply, and see the unread badge — it reuses the real header and chat components so it
+cannot drift from the app. It is a dev-server route only: `npm run build` still publishes
 `index.html` alone, and the app itself has no mock/sample mode.
 
 While no `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` values are present, the dev server
@@ -176,15 +237,18 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | `supabase/migrations/202610150001_pairing_flow.sql`, then `supabase/migrations/202610150002_couple_events.sql`, then `supabase/verify.sql` |
+| Live project with real couples | `supabase/migrations/202610150001_pairing_flow.sql`, then `supabase/migrations/202610150002_couple_events.sql`, then `supabase/migrations/202610150003_messages.sql`, then `supabase/verify.sql` |
 
-Both migrations are idempotent and safe to rerun; they never drop or rewrite existing data
-(the pairing migration only changes policies, and the calendar migration only adds a table,
-or converts an older one in place). Take a snapshot first anyway.
+All three migrations are idempotent and safe to rerun; they never drop or rewrite existing
+data (the pairing migration only changes policies, the calendar migration only adds a table
+or converts an older one in place, and the chat migration only adds a table, its policies
+and its Realtime membership). Take a snapshot first anyway.
 
 `supabase/verify.sql` is read-only and must print **PASS**. It checks the pairing RPCs,
 RLS on every table, the anniversary-lock trigger, the `couple_events` calendar, the repeat
-column, and that `anon` cannot reach couple data. If it raises, it names the file to rerun.
+column, the realtime `messages` chat (type check, policies, immutability trigger and
+publication membership), and that `anon` cannot reach couple data. If it raises, it names
+the file to rerun.
 
 **If you already ran the calendar migration before the repeat control existed**, rerun
 `202610150002_couple_events.sql`: it upgrades `repeats_yearly` to `repeat_frequency` in
@@ -201,12 +265,15 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
   error. With your own sender the cap starts at 30/hour and is yours to raise under
   **Authentication → Rate Limits**.
 - **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
-  and `last_seen_at` writes ride on the existing "update own profile" policy. Optionally
-  enable Realtime Authorization to lock channels down at the database level.
-- **Table privileges**: no action needed. The migrations now grant `profiles`, `couples` and
-  `couple_events` to `authenticated` explicitly and revoke `anon`, so the app works whether
-  or not the project still hands out Supabase's legacy automatic grants (projects created
-  since 2026-05-30, and every project from 2026-10-30, need the explicit grants).
+  chat messages ride Postgres Changes on `messages`, and `last_seen_at` writes ride on the
+  existing "update own profile" policy. The chat migration adds `messages` to the
+  `supabase_realtime` publication (checked by `verify.sql`). Optionally enable Realtime
+  Authorization to lock channels down at the database level.
+- **Table privileges**: no action needed. The migrations now grant `profiles`, `couples`,
+  `couple_events` and `messages` to `authenticated` explicitly and revoke `anon`, so the
+  app works whether or not the project still hands out Supabase's legacy automatic grants
+  (projects created since 2026-05-30, and every project from 2026-10-30, need the explicit
+  grants).
 
 ### 3. Environment (Vercel → Project Settings → Environment Variables)
 
@@ -224,7 +291,7 @@ at the production project uses real production data.
 cp .env.example .env.local   # fill in the two values
 npm ci
 npm run check:env            # fails closed without valid public config
-npm test                     # 11 tests, no live project contacted
+npm test                     # 15 tests, no live project contacted
 npm run lint
 npm run build
 ```
@@ -251,25 +318,31 @@ pairing navigation/cancellation, protected profile retries, anniversary locks, R
 configuration failures, the read-only database verification script, and the global header
 (YMD counter across end-of-month/leap-day edges, partner clock timezones and weekdays,
 last-seen labels, the presence dot greying out and re-greening, and the `last_seen_at`
-heartbeat), and the calendar: the month grid, anniversary/monthsary clamping, yearly
-repeats (including 29 Feb), the upcoming window, swipe direction, `couple_events` CRUD
-under RLS with cascade on breakup, that `verify.sql` catches a project missing the
-calendar migration, and the full UI flow of browsing, adding, editing, deleting and
-closing without leaving the Home tab.
+heartbeat), the calendar (the month grid, anniversary/monthsary clamping, yearly repeats
+including 29 Feb, the upcoming window, swipe direction, `couple_events` CRUD under RLS
+with cascade on breakup, that `verify.sql` catches a project missing the calendar
+migration, and the full UI flow of browsing, adding, editing, deleting and closing without
+leaving the Home tab), and the chat: day separators and bubble times, `messages` under RLS
+(reads and writes sealed per couple, the type check, read receipts, the immutability of a
+sent message, cascade on breakup and safe re-migration), and the live tab itself — send
+with the button, Enter only making paragraphs, an incoming message appearing without a
+reload, one check turning into two when the partner reads it, the typing indicator, the
+unread badge counting and clearing, day grouping, auto-scroll, retry after a failed send,
+and the phone/video buttons saying "coming soon".
 
 A successful build does **not** verify a deployed key, email delivery, an applied live
 migration, or two-device connectivity. Complete the acceptance test below as well.
 
 ## Push and deploy
 
-Work for this Arena session stays on `arena/4f0a6360-nooki`:
+Work for this Arena session stays on `arena/92212623-nooki`:
 
 ```sh
 git status
 git diff --check
 git add .
-git commit -m "Add the Home tab: live counter, presence and partner clock"
-git push origin arena/4f0a6360-nooki
+git commit -m "Add the Chat tab: realtime messages, receipts and unread badge"
+git push origin arena/92212623-nooki
 ```
 
 Open a pull request from that branch to `main`. Test the Vercel preview with its environment
@@ -299,6 +372,20 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] Tapping the repeat chip on the event form cycles Once → week → month → year, and the saved event shows that wording.
 - [ ] A weekly event reappears 7 days later, a monthly one on the same day next month, and a yearly one the following year.
 - [ ] Swipe left/right and the ‹ › buttons move months; the picker jumps to any month and year.
+- [ ] Chat opens with the partner's name, their live status and the phone/video buttons; both
+      buttons show a "coming soon" toast.
+- [ ] A message typed on device A appears on device B without a reload, on the correct side
+      (your own on the right in pink, the partner's on the left in white).
+- [ ] Enter starts a new paragraph instead of sending; the send button sends.
+- [ ] The "typing…" indicator and three-dot bubble appear on the other device while typing,
+      and disappear shortly after it stops.
+- [ ] One check appears once the message is stored, and two checks once the other device has
+      the chat open; a message sent with the network off shows "Not sent — tap to retry" and
+      retries successfully.
+- [ ] Messages from days ago sit under `Yesterday` / weekday separators as you scroll back.
+- [ ] Sending from device B while device A sits on Home shows a pink count on the Chat tab,
+      and opening the chat clears it.
+- [ ] A third account cannot read or write the couple's messages.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.
 - [ ] Refreshing and signing out/in preserve the couple, anniversary and partner names.
@@ -308,8 +395,12 @@ Use your actual accounts; there is no automatic user creation.
 
 Signup, onboarding, pairing, the global header (couple names, live together counter,
 presence ticker and the partner's local time), the Today card with the shared calendar,
-couple details, sign-out and mutual-breakup settings are implemented. Chat, media,
-discussion and games display **Coming Soon**. No sample conversations/content are loaded.
+the realtime **Chat tab** (message bubbles, day separators, sent/read receipts, typing
+indicator, unread badge, multi-paragraph composer, message types ready for the Discuss
+tab), couple details, sign-out and mutual-breakup settings are implemented. Media,
+discussion and games display **Coming Soon**, and voice/video calling is still a
+"coming soon" toast. No sample conversations are loaded into the app itself — the
+in-memory transcript only exists on the development preview page.
 
 ## Design system
 

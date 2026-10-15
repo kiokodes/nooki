@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   Gamepad2,
@@ -12,15 +12,20 @@ import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
+import { ChatView } from '../components/chat/ChatView';
 import { CalendarModal } from '../components/calendar/CalendarModal';
-import type { Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
+import type { ChatEntry, Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
 
 /**
- * Design preview for the Home tab, served by the dev server at /preview.html.
+ * Design preview for the Nooki surfaces, served by the dev server at /preview.html.
  *
- * It exists so the Home tab can be reviewed without a Supabase project or two live
- * accounts. It runs on static sample data, never contacts the backend, and is not part
- * of the production build (`npm run build` only builds index.html).
+ * It exists so the Home tab and the Chat tab can be reviewed without a Supabase project
+ * or two live accounts. It runs on static sample data, never contacts the backend, and is
+ * not part of the production build (`npm run build` only builds index.html).
+ *
+ * The Chat tab is driven by the real `ChatView` component with an in-memory transcript:
+ * sending, day separators, receipts, the typing indicator and the unread badge all behave
+ * like the app, with the partner's side simulated by the buttons above the phone.
  */
 
 interface Preset {
@@ -29,6 +34,7 @@ interface Preset {
 }
 
 const NOW = new Date().toISOString();
+const DAY_MS = 86_400_000;
 /** Static sample row: the partner closed the app 42 minutes ago. */
 const PARTNER_LAST_SEEN = new Date(Date.now() - 42 * 60_000).toISOString();
 
@@ -36,6 +42,17 @@ function dateKeyFromToday(offsetDays: number): string {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * A timestamp earlier today, whatever the hour: sample messages must always land on
+ * "Today" so the preview looks the same at 00:05 and at 23:55.
+ */
+function earlierTodayIso(minutesAgo: number): string {
+  const dayStart = new Date();
+  dayStart.setHours(0, 1, 0, 0);
+  const candidate = new Date(Date.now() - minutesAgo * 60_000);
+  return (candidate > dayStart ? candidate : dayStart).toISOString();
 }
 
 const sampleEvent = (
@@ -67,19 +84,97 @@ const PRESETS: Preset[] = [
   { label: 'Long distance (6Y 8M 1D)', anniversary: '2020-02-14' },
 ];
 
-export const HomePreview = () => {
+type PreviewTab = 'home' | 'chat';
+
+interface PreviewMessage extends ChatEntry {
+  /** The name shown nowhere but useful when reading this file. */
+  author: 'sam' | 'ana';
+}
+
+/** A transcript that already spans two days, so the day separators are visible. */
+const STARTING_MESSAGES: PreviewMessage[] = [
+  {
+    id: 'm1',
+    couple_id: 'preview-couple',
+    sender_id: 'preview-ana',
+    content: 'Slept badly, thinking of you. 🌙',
+    type: 'text',
+    created_at: new Date(Date.now() - DAY_MS - 2 * 3_600_000).toISOString(),
+    read_at: new Date(Date.now() - DAY_MS - 3_600_000).toISOString(),
+    delivery: 'read',
+    author: 'ana',
+  },
+  {
+    id: 'm2',
+    couple_id: 'preview-couple',
+    sender_id: 'preview-sam',
+    content: 'Same here. Call me when you wake up?',
+    type: 'text',
+    created_at: new Date(Date.now() - DAY_MS - 1 * 3_600_000).toISOString(),
+    read_at: new Date(Date.now() - DAY_MS).toISOString(),
+    delivery: 'read',
+    author: 'sam',
+  },
+  {
+    id: 'm3',
+    couple_id: 'preview-couple',
+    sender_id: 'preview-ana',
+    content: 'Made your favourite tea ☕️\nWish you were at the table.',
+    type: 'text',
+    created_at: earlierTodayIso(90),
+    read_at: null,
+    delivery: 'sent',
+    author: 'ana',
+  },
+  {
+    id: 'm4',
+    couple_id: 'preview-couple',
+    sender_id: 'preview-sam',
+    content: 'Miss you ❤️',
+    type: 'text',
+    created_at: earlierTodayIso(60),
+    read_at: earlierTodayIso(45),
+    delivery: 'read',
+    author: 'sam',
+  },
+  {
+    id: 'm5',
+    couple_id: 'preview-couple',
+    sender_id: null,
+    content: 'Prompt of the day: what made you smile today?',
+    type: 'question',
+    created_at: earlierTodayIso(30),
+    read_at: null,
+    delivery: 'sent',
+    author: 'ana',
+  },
+];
+
+export const AppPreview = () => {
   const [preset, setPreset] = useState(PRESETS[0]);
   const [partnerOnline, setPartnerOnline] = useState(true);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-  // In-memory events so add/edit/delete can be tried out without a backend.
+  const [tab, setTab] = useState<PreviewTab>('home');
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
+  const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const timersRef = useRef<number[]>([]);
 
   useEffect(() => {
     if (!showSplash) return;
     const timer = setTimeout(() => setShowSplash(false), SPLASH_DURATION_MS);
     return () => clearTimeout(timer);
   }, [showSplash]);
+
+  useEffect(() => () => {
+    for (const timer of timersRef.current) window.clearTimeout(timer);
+  }, []);
+
+  const later = useCallback((delay: number, run: () => void) => {
+    timersRef.current.push(window.setTimeout(run, delay));
+  }, []);
+
   const couple: Couple = {
     id: 'preview-couple',
     invite_code: '7K4MZ9',
@@ -106,6 +201,69 @@ export const HomePreview = () => {
     created_at: NOW,
   };
 
+  // The unread badge counts the partner's unseen messages — the same rule the app uses.
+  const unread = messages.filter((message) => message.author === 'ana' && !message.read_at).length;
+
+  // Opening the chat reads them, exactly like stepping into the tab on a phone.
+  const openChat = useCallback(() => {
+    setTab('chat');
+    setMessages((current) => current.map((message) => (
+      message.author === 'ana' && !message.read_at
+        ? { ...message, read_at: new Date().toISOString(), delivery: 'read' }
+        : message
+    )));
+  }, []);
+
+  const sendAsSam = useCallback((content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    const id = `preview-${Date.now()}`;
+    const mine: PreviewMessage = {
+      id,
+      couple_id: couple.id,
+      sender_id: profile.id,
+      content: trimmed,
+      type: 'text',
+      created_at: new Date().toISOString(),
+      read_at: null,
+      delivery: 'sending',
+      author: 'sam',
+    };
+    setMessages((current) => [...current, mine]);
+    // The round trip, then Ana reading it: one check, then two.
+    later(700, () => setMessages((current) => current.map((message) => (
+      message.id === id ? { ...message, delivery: 'sent' } : message
+    ))));
+    later(2_600, () => setMessages((current) => current.map((message) => (
+      message.id === id ? { ...message, delivery: 'read', read_at: new Date().toISOString() } : message
+    ))));
+  }, [couple.id, later, profile.id]);
+
+  const receiveFromAna = useCallback(() => {
+    setPartnerTyping(false);
+    // A message that lands while the chat is open is read on arrival, like the app.
+    const readAt = tab === 'chat' ? new Date().toISOString() : null;
+    setMessages((current) => [...current, {
+      id: `preview-ana-${Date.now()}`,
+      couple_id: couple.id,
+      sender_id: partner.id,
+      content: 'Just sent you a voice note length text 😅 Thinking of our trip.',
+      type: 'text' as const,
+      created_at: new Date().toISOString(),
+      read_at: readAt,
+      delivery: 'sent' as const,
+      author: 'ana' as const,
+    }]);
+  }, [couple.id, partner.id, tab]);
+
+  const readAsAna = useCallback(() => {
+    setMessages((current) => current.map((message) => (
+      message.author === 'sam' && !message.read_at
+        ? { ...message, read_at: new Date().toISOString(), delivery: 'read' }
+        : message
+    )));
+  }, []);
+
   const controlStyle = (active: boolean): CSSProperties => ({
     padding: '5px 12px',
     borderRadius: tokens.radii.pill,
@@ -116,6 +274,22 @@ export const HomePreview = () => {
     fontSize: '0.74rem',
     fontWeight: 700,
     cursor: 'pointer',
+  });
+
+  const navItemStyle = (active: boolean): CSSProperties => ({
+    background: 'none',
+    border: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    cursor: 'pointer',
+    padding: '6px 10px',
+    outline: 'none',
+    fontFamily: tokens.typography.fontFamily,
+    fontSize: '0.68rem',
+    fontWeight: active ? 700 : 500,
+    color: active ? tokens.colors.textPrimary : tokens.colors.textMuted,
   });
 
   return (
@@ -144,6 +318,7 @@ export const HomePreview = () => {
           justifyContent: 'center',
           padding: '0 12px',
           flexShrink: 0,
+          maxWidth: '720px',
         }}
       >
         {PRESETS.map((item) => (
@@ -153,6 +328,15 @@ export const HomePreview = () => {
         ))}
         <button type="button" style={controlStyle(false)} onClick={() => setPartnerOnline((value) => !value)}>
           {partnerOnline ? 'Partner is online → show last seen' : 'Partner is away → show online'}
+        </button>
+        <button type="button" style={controlStyle(partnerTyping)} onClick={() => setPartnerTyping((value) => !value)}>
+          {partnerTyping ? 'Ana is typing… (tap to stop)' : 'Make Ana type…'}
+        </button>
+        <button type="button" style={controlStyle(false)} onClick={receiveFromAna}>
+          Ana sends a message
+        </button>
+        <button type="button" style={controlStyle(false)} onClick={readAsAna}>
+          Ana reads your messages
         </button>
         <button type="button" style={controlStyle(showSplash)} onClick={() => setShowSplash(true)}>
           Replay splash
@@ -189,15 +373,34 @@ export const HomePreview = () => {
               onOpenSettings={() => {}}
             />
 
-            <HomeView
-              events={events}
-              anniversaryDate={couple.anniversary_date}
-              eventsLoading={false}
-              eventsError={null}
-              onOpenCalendar={() => setShowCalendar(true)}
-              userName={profile.name}
-              partnerName={partner.name}
-            />
+            {tab === 'home' ? (
+              <HomeView
+                events={events}
+                anniversaryDate={couple.anniversary_date}
+                eventsLoading={false}
+                eventsError={null}
+                onOpenCalendar={() => setShowCalendar(true)}
+                userName={profile.name}
+                partnerName={partner.name}
+              />
+            ) : (
+              /* The real chat: sending, receipts, typing and day separators all work. */
+              <ChatView
+                messages={messages}
+                currentUserId={profile.id}
+                partnerName={partner.name}
+                partnerOnline={partnerOnline}
+                partnerLastSeenAt={partner.last_seen_at}
+                partnerTyping={partnerTyping}
+                loading={false}
+                error={null}
+                onSend={sendAsSam}
+                onTyping={() => {}}
+                onStopTyping={() => {}}
+                onRetry={(entryId) => setMessages((current) => current.filter((message) => message.id !== entryId))}
+                onDismissError={() => {}}
+              />
+            )}
 
             {showCalendar && (
               <CalendarModal
@@ -235,8 +438,35 @@ export const HomePreview = () => {
                 padding: '0 8px calc(6px + env(safe-area-inset-bottom, 0px)) 8px',
               }}
             >
+              {/* Chat and Home are live in this preview; the rest stay inert. */}
+              <button
+                type="button"
+                aria-label={unread ? `Chat, ${unread} unread ${unread === 1 ? 'message' : 'messages'}` : 'Chat'}
+                onClick={openChat}
+                style={navItemStyle(tab === 'chat')}
+              >
+                <span
+                  style={{
+                    position: 'relative',
+                    width: '30px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: tokens.radii.sm,
+                    backgroundColor: tab === 'chat' ? tokens.colors.primaryPinkSoft : 'transparent',
+                    color: tab === 'chat' ? tokens.colors.primaryPinkDeep : tokens.colors.textMuted,
+                  }}
+                >
+                  <MessageCircle size={19} />
+                  {unread > 0 && (
+                    <span className="nooki-nav-badge" data-nav-badge="chat">{unread}</span>
+                  )}
+                </span>
+                Chat
+              </button>
+
               {[
-                { label: 'Chat', Icon: MessageCircle, tint: tokens.colors.primaryPinkSoft, ink: tokens.colors.primaryPinkDeep },
                 { label: 'Media', Icon: ImageIcon, tint: tokens.colors.primaryGreenSoft, ink: tokens.colors.primaryGreenDeep },
               ].map(({ label, Icon, tint, ink }) => (
                 <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: tokens.colors.textMuted }}>
@@ -246,7 +476,8 @@ export const HomePreview = () => {
                   <span style={{ fontSize: '0.68rem', fontWeight: 500 }}>{label}</span>
                 </span>
               ))}
-              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', top: '-10px' }}>
+
+              <button type="button" aria-label="Home" onClick={() => setTab('home')} style={{ ...navItemStyle(tab === 'home'), position: 'relative', top: '-10px', gap: '1px' }}>
                 <span
                   style={{
                     width: '48px',
@@ -263,10 +494,9 @@ export const HomePreview = () => {
                 >
                   <HomeIcon size={21} strokeWidth={2.4} />
                 </span>
-                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: tokens.colors.primaryPinkDeep, marginTop: '1px' }}>
-                  Home
-                </span>
-              </span>
+                <span style={{ color: tokens.colors.primaryPinkDeep, fontWeight: 700 }}>Home</span>
+              </button>
+
               {[
                 { label: 'Discuss', Icon: MessageSquare, tint: tokens.colors.accentSageSoft, ink: tokens.colors.accentSageDeep },
                 { label: 'Games', Icon: Gamepad2, tint: tokens.colors.accentLavenderSoft, ink: tokens.colors.accentLavenderDeep },
@@ -293,11 +523,16 @@ export const HomePreview = () => {
           fontSize: '0.74rem',
           color: tokens.colors.textMuted,
           flexShrink: 0,
+          textAlign: 'center',
         }}
       >
         <Heart size={13} fill={tokens.colors.primaryPink} strokeWidth={1.5} />
-        Home tab preview · sample data only · tap the calendar icon to open the full calendar
+        {tab === 'chat'
+          ? 'Chat preview · sample conversation only · send a message, or make Ana type and reply'
+          : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
       </p>
     </div>
   );
 };
+
+export default AppPreview;

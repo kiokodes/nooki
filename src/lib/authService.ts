@@ -78,8 +78,8 @@ export async function touchLastSeen(userId: string): Promise<void> {
  * A missing table means the calendar migration has not been applied yet; that is an
  * owner problem, not something the person using the app can fix.
  */
-function describeDatabaseError(error: { message: string; code?: string }): string {
-  if (error.code === '42P01' || /relation .*couple_events.* does not exist/i.test(error.message)) {
+export function describeDatabaseError(error: { message: string; code?: string }): string {
+  if (error.code === '42P01' || /relation .*(couple_events|messages).* does not exist/i.test(error.message)) {
     return 'The database needs an update. Please ask the app owner to apply the Supabase migrations.';
   }
   return error.message;

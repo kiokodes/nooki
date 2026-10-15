@@ -15,8 +15,10 @@ import { PairingView } from './components/auth/PairingView';
 import { CoupleHeader } from './components/common/CoupleHeader';
 import { SplashScreen, SPLASH_DURATION_MS } from './components/common/SplashScreen';
 import { HomeView } from './components/home/HomeView';
+import { ChatView } from './components/chat/ChatView';
 import { CalendarModal } from './components/calendar/CalendarModal';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
+import { useChat } from './hooks/useChat';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import {
@@ -115,6 +117,8 @@ export const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   // The calendar is a modal over whatever tab is open, never a page of its own.
   const [showCalendar, setShowCalendar] = useState(false);
+  // A message is only "read" while the Chat tab is on screen *and* the app is awake.
+  const [appVisible, setAppVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
 
   // Auth & Pairing State
   const [loading, setLoading] = useState(true);
@@ -131,6 +135,15 @@ export const App: React.FC = () => {
   const calendar = useCoupleEvents({
     coupleId: couple?.id ?? null,
     userId: currentUser?.id ?? null,
+  });
+
+  // The chat lives at app level too: messages keep arriving (and the tab keeps its
+  // unread badge) while the couple browses Home, Media or Games.
+  const chat = useChat({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+    partnerId: partner?.id ?? null,
+    active: activeTab === 'chat' && appVisible,
   });
 
   const { partnerOnline } = useCouplePresence({
@@ -180,6 +193,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => setSplashDone(true), SPLASH_DURATION_MS);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const onVisibilityChange = () => setAppVisible(document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
   useEffect(() => {
@@ -309,6 +328,7 @@ export const App: React.FC = () => {
   // 5. Unlocked Couple App (Both partners joined)
   const currentTab = TABS.find((t) => t.key === activeTab)!;
   const isHome = activeTab === 'home';
+  const isChat = activeTab === 'chat';
 
   return (
     <div className="nooki-viewport" style={viewportStyle}>
@@ -322,7 +342,8 @@ export const App: React.FC = () => {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Home tab: Today card, daily game card and reserved animated scene area. Other tabs stay as airy placeholders. */}
+        {/* Home tab: Today card, daily game card and reserved animated scene area.
+            Chat tab: the couple's live conversation. The rest stay as airy placeholders. */}
         {isHome ? (
           <HomeView
             events={calendar.events}
@@ -332,6 +353,22 @@ export const App: React.FC = () => {
             onOpenCalendar={() => setShowCalendar(true)}
             userName={profile.name}
             partnerName={partner.name}
+          />
+        ) : isChat ? (
+          <ChatView
+            messages={chat.messages}
+            currentUserId={currentUser.id}
+            partnerName={partner.name}
+            partnerOnline={partnerOnline}
+            partnerLastSeenAt={partner.last_seen_at}
+            partnerTyping={chat.partnerTyping}
+            loading={chat.loading}
+            error={chat.error}
+            onSend={chat.send}
+            onTyping={chat.notifyTyping}
+            onStopTyping={chat.notifyStoppedTyping}
+            onRetry={chat.retry}
+            onDismissError={chat.clearError}
           />
         ) : (
           <section
@@ -476,12 +513,17 @@ export const App: React.FC = () => {
               );
             }
 
+            // Unread messages are announced on the Chat tab and shown as a small count.
+            const unreadBadge = tab.key === 'chat' ? chat.unreadCount : 0;
+
             return (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                aria-label={tab.label}
+                aria-label={unreadBadge
+                  ? `${tab.label}, ${unreadBadge} unread ${unreadBadge === 1 ? 'message' : 'messages'}`
+                  : tab.label}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -500,6 +542,7 @@ export const App: React.FC = () => {
               >
                 <div
                   style={{
+                    position: 'relative',
                     width: '30px',
                     height: '26px',
                     borderRadius: tokens.radii.sm,
@@ -512,6 +555,11 @@ export const App: React.FC = () => {
                   }}
                 >
                   <Icon size={19} strokeWidth={isActive ? 2.4 : 2} />
+                  {unreadBadge > 0 && (
+                    <span className="nooki-nav-badge" data-nav-badge={tab.key} aria-hidden="true">
+                      {unreadBadge > 99 ? '99+' : unreadBadge}
+                    </span>
+                  )}
                 </div>
                 <span style={{ fontSize: '0.68rem', fontWeight: isActive ? 700 : 500 }}>
                   {tab.label}

@@ -222,3 +222,52 @@ html, body {
     animation: none !important;
   }
 }
+
+/* Chat: the partner is composing. Three soft dots rise in turn. */
+.nooki-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  animation: nooki-typing-bounce 1.15s ease-in-out infinite;
+}
+
+.nooki-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.nooki-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes nooki-typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* The chat tab's unread badge: a quiet pink dot that grows into a count. */
+.nooki-nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background-color: var(--primary-pink-deep);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-typing-dot {
+    animation: none !important;
+  }
+}
