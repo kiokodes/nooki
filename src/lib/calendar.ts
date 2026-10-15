@@ -7,7 +7,15 @@
  */
 
 import { daysInMonth, parseIsoDate, type CalendarDate } from './coupleTime';
-import type { CoupleEvent } from '../types/database';
+import type { CoupleEvent, RepeatFrequency } from '../types/database';
+
+/** Quiet second line on a repeating event, e.g. "every month". */
+export const REPEAT_LABELS: Record<RepeatFrequency, string> = {
+  none: 'once',
+  weekly: 'every week',
+  monthly: 'every month',
+  yearly: 'every year',
+};
 
 export type CalendarItemKind = 'anniversary' | 'monthsary' | 'event';
 
@@ -185,22 +193,40 @@ export function getItemsForDate(
   for (const event of events) {
     const start = parseIsoDate(event.event_date);
     if (!start) continue;
-    const occurs = event.repeats_yearly
-      // A yearly repeat can never fall before the date it was created for; Feb 29 borrows Feb 28.
-      ? dateKey >= event.event_date && day.month === start.month && day.day === clampDay(day.year, start.month, start.day)
-      : dateKey === event.event_date;
-    if (!occurs) continue;
+    if (!eventOccursOn(event, start, dateKey, day)) continue;
     items.push({
       id: event.id,
       kind: 'event',
       title: event.title,
-      detail: event.repeats_yearly ? 'every year' : undefined,
+      detail: event.repeat_frequency === 'none' ? undefined : REPEAT_LABELS[event.repeat_frequency],
       date: dateKey,
       event,
     });
   }
 
   return items;
+}
+
+/**
+ * Whether a repeating event lands on a given day. A repeat never appears before the date
+ * it was set for, and short months borrow the last day (a 31st monthly event falls on
+ * 28/29/30 February) instead of skipping the month.
+ */
+function eventOccursOn(event: CoupleEvent, start: CalendarDate, dateKey: string, day: CalendarDate): boolean {
+  if (dateKey < event.event_date) return false;
+  switch (event.repeat_frequency) {
+    case 'none':
+      return dateKey === event.event_date;
+    case 'weekly':
+      // Whole weeks apart, counted in calendar days so daylight saving cannot shift it.
+      return (toOrdinal(dateKey) - toOrdinal(event.event_date)) % 7 === 0;
+    case 'monthly':
+      return day.day === clampDay(day.year, day.month, start.day);
+    case 'yearly':
+      return day.month === start.month && day.day === clampDay(day.year, start.month, start.day);
+    default:
+      return dateKey === event.event_date;
+  }
 }
 
 export interface DayGroup {

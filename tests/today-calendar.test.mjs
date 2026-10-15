@@ -22,8 +22,8 @@ test('calendar helpers: month grid, recurrence rules and upcoming windows', asyn
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
   try {
     const cal = await server.ssrLoadModule('/src/lib/calendar.ts');
-    const event = (id, title, event_date, repeats_yearly = false) => ({
-      id, title, event_date, repeats_yearly, couple_id: 'c1', created_by: null, created_at: '', updated_at: '',
+    const event = (id, title, event_date, repeat_frequency = 'none') => ({
+      id, title, event_date, repeat_frequency, couple_id: 'c1', created_by: null, created_at: '', updated_at: '',
     });
 
     // --- Month grid: Monday first, padded to whole weeks ---------------------------------
@@ -73,13 +73,14 @@ test('calendar helpers: month grid, recurrence rules and upcoming windows', asyn
     // --- Events, including yearly repeats ----------------------------------------------
     const events = [
       event('e1', 'Visit', '2026-12-25'),
-      event('e2', 'Birthday', '2026-12-25', true),
-      event('e3', 'Leap party', '2024-02-29', true),
+      event('e2', 'Birthday', '2026-12-25', 'yearly'),
+      event('e3', 'Leap party', '2024-02-29', 'yearly'),
     ];
     const both = cal.getItemsForDate('2026-12-25', events, null);
     assert.equal(both.length, 2, 'a one-off and a yearly event can land on the same day');
     assert.equal(both[0].title, 'Visit');
     assert.equal(both[1].detail, 'every year');
+    assert.equal(both[0].detail, undefined, 'a one-off event carries no repeat note');
     assert.deepEqual(cal.getItemsForDate('2027-12-25', events, null).map((i) => i.title), ['Birthday'],
       'the yearly repeat comes back the next year, the one-off does not');
     assert.deepEqual(cal.getItemsForDate('2025-12-25', events, null), [],
@@ -87,6 +88,28 @@ test('calendar helpers: month grid, recurrence rules and upcoming windows', asyn
     const leap = cal.getItemsForDate('2025-02-28', events, null);
     assert.equal(leap.length, 1, 'a 29 Feb yearly event borrows 28 Feb in a normal year');
     assert.equal(cal.getItemsForDate('2028-02-29', events, null).length, 1, 'and lands back on 29 Feb in a leap year');
+
+    // --- Weekly and monthly repeats -----------------------------------------------------
+    const weekly = [event('w1', 'Date night', '2026-10-15', 'weekly')];
+    assert.equal(cal.getItemsForDate('2026-10-22', weekly, null).length, 1, 'a weekly repeat comes back in 7 days');
+    assert.equal(cal.getItemsForDate('2026-10-29', weekly, null).length, 1, 'and 14 days later');
+    assert.deepEqual(cal.getItemsForDate('2026-10-21', weekly, null), [], 'but not on other days');
+    assert.deepEqual(cal.getItemsForDate('2026-10-08', weekly, null), [], 'and never before its start date');
+    assert.equal(cal.getItemsForDate('2026-11-05', weekly, null)[0].detail, 'every week');
+    // Weekly repeats survive the end of a month and a year boundary.
+    assert.equal(cal.getItemsForDate('2026-12-31', [event('w2', 'Countdown', '2026-12-24', 'weekly')], null).length, 1);
+
+    const monthly = [event('m1', 'Rent', '2026-01-15', 'monthly')];
+    assert.equal(cal.getItemsForDate('2026-02-15', monthly, null).length, 1, 'a monthly repeat returns each month');
+    assert.equal(cal.getItemsForDate('2027-01-15', monthly, null).length, 1, 'and a year later');
+    assert.deepEqual(cal.getItemsForDate('2026-02-16', monthly, null), [], 'but not on other days');
+    assert.deepEqual(cal.getItemsForDate('2025-12-15', monthly, null), [], 'and never before its start date');
+    assert.equal(cal.getItemsForDate('2026-03-15', monthly, null)[0].detail, 'every month');
+    // A 31st monthly repeat borrows the last day of shorter months.
+    const monthEnd = [event('m2', 'Payday', '2026-01-31', 'monthly')];
+    assert.equal(cal.getItemsForDate('2026-02-28', monthEnd, null).length, 1, '31 Jan monthly lands on 28 Feb');
+    assert.equal(cal.getItemsForDate('2026-04-30', monthEnd, null).length, 1, 'and on 30 April');
+    assert.equal(cal.getItemsForDate('2026-03-31', monthEnd, null).length, 1, 'while March keeps the 31st');
 
     // Automatic dates and events can share a day.
     const shared = cal.getItemsForDate('2026-02-14', [event('e4', 'Dinner', '2026-02-14', false)], anniversary);
@@ -143,10 +166,16 @@ test('couple_events: CRUD, RLS isolation, cascade and safe re-migration', async 
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);
 
     // Alice adds events; both partners see them, ordered by date.
-    await auth.createCoupleEvent(couple.id, alice.id, { title: '  Movie night  ', date: '2026-12-24', repeatsYearly: false });
-    const birthday = await auth.createCoupleEvent(couple.id, alice.id, { title: 'Sam’s birthday', date: '2026-03-02', repeatsYearly: true });
+    await auth.createCoupleEvent(couple.id, alice.id, { title: '  Movie night  ', date: '2026-12-24', repeatFrequency: 'none' });
+    const birthday = await auth.createCoupleEvent(couple.id, alice.id, { title: 'Sam’s birthday', date: '2026-03-02', repeatFrequency: 'yearly' });
     assert.equal(birthday.title, 'Sam’s birthday');
-    assert.equal(birthday.repeats_yearly, true);
+    assert.equal(birthday.repeat_frequency, 'yearly');
+    const weekly = await auth.createCoupleEvent(couple.id, alice.id, { title: 'Call night', date: '2026-03-09', repeatFrequency: 'weekly' });
+    assert.equal(weekly.repeat_frequency, 'weekly');
+    const monthly = await auth.createCoupleEvent(couple.id, alice.id, { title: 'Rent', date: '2026-03-05', repeatFrequency: 'monthly' });
+    assert.equal(monthly.repeat_frequency, 'monthly');
+    await auth.deleteCoupleEvent(weekly.id);
+    await auth.deleteCoupleEvent(monthly.id);
     assert.equal(birthday.created_by, alice.id, 'the row records who added it');
 
     const aliceView = await auth.fetchCoupleEvents(couple.id);
@@ -158,13 +187,19 @@ test('couple_events: CRUD, RLS isolation, cascade and safe re-migration', async 
     assert.equal(bobView.length, 2, 'the other partner sees the same calendar');
 
     // Editing is shared, and the trigger moves updated_at.
-    await auth.updateCoupleEvent(birthday.id, { title: 'Ana’s birthday', date: '2026-03-02', repeatsYearly: true });
+    await auth.updateCoupleEvent(birthday.id, { title: 'Ana’s birthday', date: '2026-03-02', repeatFrequency: 'monthly' });
+    assert.equal((await auth.fetchCoupleEvents(couple.id))[0].repeat_frequency, 'monthly', 'the repeat can be changed');
+    await auth.updateCoupleEvent(birthday.id, { title: 'Ana’s birthday', date: '2026-03-02', repeatFrequency: 'yearly' });
     assert.equal((await auth.fetchCoupleEvents(couple.id))[0].title, 'Ana’s birthday');
 
     // Validation happens before anything is sent.
-    await assert.rejects(auth.createCoupleEvent(couple.id, bob.id, { title: '   ', date: '2026-01-01', repeatsYearly: false }), /give this event a name/);
-    await assert.rejects(auth.createCoupleEvent(couple.id, bob.id, { title: 'x'.repeat(121), date: '2026-01-01', repeatsYearly: false }), /120 characters/);
-    await assert.rejects(auth.createCoupleEvent(couple.id, bob.id, { title: 'Party', date: '2026-02-30', repeatsYearly: false }), /valid date/);
+    await assert.rejects(auth.createCoupleEvent(couple.id, bob.id, { title: '   ', date: '2026-01-01', repeatFrequency: 'none' }), /give this event a name/);
+    await assert.rejects(auth.createCoupleEvent(couple.id, bob.id, { title: 'x'.repeat(121), date: '2026-01-01', repeatFrequency: 'none' }), /120 characters/);
+    await assert.rejects(auth.createCoupleEvent(couple.id, bob.id, { title: 'Party', date: '2026-02-30', repeatFrequency: 'none' }), /valid date/);
+    // An unknown repeat value falls back to a one-off rather than reaching the database.
+    const fallback = await auth.createCoupleEvent(couple.id, bob.id, { title: 'Odd input', date: '2026-01-01', repeatFrequency: 'fortnightly' });
+    assert.equal(fallback.repeat_frequency, 'none');
+    await auth.deleteCoupleEvent(fallback.id);
 
     // A live project that has not run the calendar migration gets an owner-facing message,
     // not a raw Postgres error.
@@ -196,9 +231,27 @@ test('couple_events: CRUD, RLS isolation, cascade and safe re-migration', async 
     await auth.deleteCoupleEvent(first.id);
     assert.equal((await auth.fetchCoupleEvents(couple.id)).length, 1);
 
+    // A project that ran the earlier revision (a repeats_yearly boolean) upgrades in place.
+    await auth.createCoupleEvent(couple.id, alice.id, { title: 'Legacy yearly', date: '2026-05-05', repeatFrequency: 'yearly' });
+    await backend.resetRole();
+    await backend.exec(`
+      ALTER TABLE public.couple_events DROP CONSTRAINT couple_events_repeat_frequency_check;
+      ALTER TABLE public.couple_events DROP COLUMN repeat_frequency;
+      ALTER TABLE public.couple_events ADD COLUMN repeats_yearly BOOLEAN NOT NULL DEFAULT FALSE;
+      UPDATE public.couple_events SET repeats_yearly = TRUE WHERE title = 'Legacy yearly';
+    `);
+    const calendarMigrationSql = await readFile(new URL('../supabase/migrations/202610150002_couple_events.sql', import.meta.url), 'utf8');
+    await backend.exec(calendarMigrationSql);
+    await auth.signInWithEmail('alice@example.com', 'password');
+    const upgraded = (await auth.fetchCoupleEvents(couple.id)).find((row) => row.title === 'Legacy yearly');
+    assert.equal(upgraded.repeat_frequency, 'yearly', 'yearly repeats survive the upgrade');
+    await backend.resetRole();
+    const legacyColumns = await backend.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'couple_events' AND column_name = 'repeats_yearly'");
+    assert.equal(legacyColumns.rows.length, 0, 'the old column is dropped');
+    await auth.signInWithEmail('alice@example.com', 'password');
+
     // The calendar migration is safe to rerun on a populated project.
-    const dbModule = await import('node:fs/promises');
-    const migration = await dbModule.readFile(new URL('../supabase/migrations/202610150002_couple_events.sql', import.meta.url), 'utf8');
+    const migration = calendarMigrationSql;
     const before = (await auth.fetchCoupleEvents(couple.id)).length;
     await backend.exec(migration);
     await backend.exec(migration);
@@ -401,7 +454,21 @@ test('today card and calendar modal: browse, add, edit, delete without leaving H
     assert(form, 'the add form opens');
     assert.equal(document.querySelector('input[aria-label="Event date"]').value, todayKey, 'the form opens on the selected day');
     await fill(document.querySelector('input[aria-label="Event name"]'), 'Anniversary dinner');
-    await act(async () => { document.querySelector('input[type="checkbox"]').click(); });
+    // The repeat control is a tappable chip that cycles Once -> week -> month -> year.
+    const repeatToggle = document.querySelector('[data-repeat-toggle]');
+    assert(repeatToggle, 'the repeat control is present');
+    assert.equal(repeatToggle.textContent.trim(), 'Once', 'events start as one-offs');
+    const cycleRepeat = async () => {
+      await click(document.querySelector('[data-repeat-toggle]'));
+      return document.querySelector('[data-repeat-toggle]').textContent.trim();
+    };
+    assert.equal(await cycleRepeat(), 'Every week', 'one tap gives a weekly repeat');
+    assert.equal(await cycleRepeat(), 'Every month', 'two taps give a monthly repeat');
+    assert.equal(await cycleRepeat(), 'Every year', 'three taps give a yearly repeat');
+    assert.equal(await cycleRepeat(), 'Once', 'and it cycles back round');
+    await act(async () => { document.querySelector('[data-repeat-toggle]').click(); });
+    await act(async () => { document.querySelector('[data-repeat-toggle]').click(); });
+    assert.equal(document.querySelector('[data-repeat-toggle]').textContent.trim(), 'Every month');
     await act(async () => {
       form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     });
@@ -410,13 +477,14 @@ test('today card and calendar modal: browse, add, edit, delete without leaving H
     assert(document.querySelector(`[data-day="${todayKey}"] [data-dot]`), 'the day is marked in the grid');
     const saved = (await auth.fetchCoupleEvents(couple.id)).find((event) => event.title === 'Anniversary dinner');
     assert(saved, 'the event reached the database');
-    assert.equal(saved.repeats_yearly, true, 'the yearly switch was saved');
+    assert.equal(saved.repeat_frequency, 'monthly', 'the chosen repeat was saved');
     assert.equal(saved.event_date, todayKey);
 
     // --- Editing it --------------------------------------------------------------------
     await click(byLabel('Edit Anniversary dinner'));
     await waitFor(() => document.querySelector('[data-event-form]'), 'the edit form opens');
     assert.equal(document.querySelector('input[aria-label="Event name"]').value, 'Anniversary dinner', 'the form is prefilled');
+    assert.equal(document.querySelector('[data-repeat-toggle]').textContent.trim(), 'Every month', 'the form is prefilled with the saved repeat');
     await fill(document.querySelector('input[aria-label="Event name"]'), 'Dinner + call');
     await act(async () => {
       document.querySelector('[data-event-form]').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));

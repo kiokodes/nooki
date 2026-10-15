@@ -10,11 +10,38 @@ CREATE TABLE IF NOT EXISTS public.couple_events (
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   event_date DATE NOT NULL,
-  repeats_yearly BOOLEAN NOT NULL DEFAULT FALSE,
+  -- 'none' | 'weekly' | 'monthly' | 'yearly'
+  repeat_frequency TEXT NOT NULL DEFAULT 'none'
+    CONSTRAINT couple_events_repeat_frequency_check
+    CHECK (repeat_frequency IN ('none', 'weekly', 'monthly', 'yearly')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   CONSTRAINT couple_events_title_length CHECK (char_length(btrim(title)) BETWEEN 1 AND 120)
 );
+
+-- Upgrade path: a project that ran the earlier revision of this migration has the table
+-- already, so CREATE TABLE IF NOT EXISTS skipped it and it has no repeat_frequency yet.
+ALTER TABLE public.couple_events ADD COLUMN IF NOT EXISTS repeat_frequency TEXT NOT NULL DEFAULT 'none';
+
+-- An earlier revision also stored a repeats_yearly boolean. Convert it in place, then drop
+-- the old column so both paths end up identical.
+DO $upgrade$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'couple_events' AND column_name = 'repeats_yearly'
+  ) THEN
+    EXECUTE $sql$ UPDATE public.couple_events SET repeat_frequency = 'yearly'
+                 WHERE repeats_yearly AND repeat_frequency = 'none' $sql$;
+    EXECUTE 'ALTER TABLE public.couple_events DROP COLUMN repeats_yearly';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'couple_events_repeat_frequency_check') THEN
+    ALTER TABLE public.couple_events ADD CONSTRAINT couple_events_repeat_frequency_check
+      CHECK (repeat_frequency IN ('none', 'weekly', 'monthly', 'yearly'));
+  END IF;
+END
+$upgrade$;
 
 -- The calendar always reads one couple's events, ordered by date.
 CREATE INDEX IF NOT EXISTS idx_couple_events_couple_date

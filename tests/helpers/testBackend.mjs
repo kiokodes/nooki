@@ -127,6 +127,7 @@ export async function installTestBackend(client) {
   return {
     close: () => db.close(),
     exec: async (sql) => { await db.exec('RESET ROLE'); await db.exec(sql); },
+    query: async (sql, params) => { await db.exec('RESET ROLE'); return db.query(sql, params); },
     resetRole: async () => { await db.exec('RESET ROLE'); },
   };
 }

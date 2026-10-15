@@ -25,8 +25,16 @@ import {
 } from '../../lib/calendar';
 import { parseIsoDate } from '../../lib/coupleTime';
 import { useNow } from '../../hooks/useNow';
+import { REPEAT_FREQUENCIES, type CoupleEvent, type RepeatFrequency } from '../../types/database';
 import type { CoupleEventInput } from '../../lib/authService';
-import type { CoupleEvent } from '../../types/database';
+
+/** Readable names for the cycling repeat control. */
+const REPEAT_CONTROL_LABELS: Record<RepeatFrequency, string> = {
+  none: 'Once',
+  weekly: 'Every week',
+  monthly: 'Every month',
+  yearly: 'Every year',
+};
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -43,8 +51,8 @@ interface CalendarModalProps {
 }
 
 type FormState =
-  | { mode: 'create'; date: string; title: string; repeatsYearly: boolean }
-  | { mode: 'edit'; date: string; title: string; repeatsYearly: boolean; eventId: string }
+  | { mode: 'create'; date: string; title: string; repeatFrequency: RepeatFrequency }
+  | { mode: 'edit'; date: string; title: string; repeatFrequency: RepeatFrequency; eventId: string }
   | null;
 
 const iconButtonStyle: React.CSSProperties = {
@@ -115,7 +123,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
 
   const startCreate = () => {
     setFormError(null);
-    setForm({ mode: 'create', date: selected, title: '', repeatsYearly: false });
+    setForm({ mode: 'create', date: selected, title: '', repeatFrequency: 'none' });
   };
 
   const startEdit = (event: CoupleEvent) => {
@@ -125,7 +133,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
       eventId: event.id,
       date: event.event_date,
       title: event.title,
-      repeatsYearly: event.repeats_yearly,
+      repeatFrequency: event.repeat_frequency,
     });
   };
 
@@ -134,7 +142,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
     if (!form) return;
     try {
       setFormError(null);
-      const input = { title: form.title, date: form.date, repeatsYearly: form.repeatsYearly };
+      const input = { title: form.title, date: form.date, repeatFrequency: form.repeatFrequency };
       if (form.mode === 'create') await onAddEvent(input);
       else await onEditEvent(form.eventId, input);
       setForm(null);
@@ -472,24 +480,36 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                     color: tokens.colors.textPrimary,
                   }}
                 />
-                <label
+                <button
+                  type="button"
+                  data-repeat-toggle
+                  aria-label={`Repeats: ${REPEAT_CONTROL_LABELS[form.repeatFrequency]}. Tap to change.`}
+                  title="Tap to change how often this repeats"
+                  onClick={() => setForm((current) => {
+                    if (!current) return current;
+                    const index = REPEAT_FREQUENCIES.indexOf(current.repeatFrequency);
+                    // Cycles Once -> Every week -> Every month -> Every year -> Once.
+                    return { ...current, repeatFrequency: REPEAT_FREQUENCIES[(index + 1) % REPEAT_FREQUENCIES.length] };
+                  })}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '7px',
+                    gap: '6px',
+                    padding: '7px 14px',
+                    borderRadius: tokens.radii.pill,
+                    border: `1.5px solid ${form.repeatFrequency === 'none' ? tokens.colors.borderSoft : tokens.colors.primaryGreen}`,
+                    backgroundColor: form.repeatFrequency === 'none' ? tokens.colors.bgSurfaceSubtle : tokens.colors.primaryGreenSoft,
+                    color: form.repeatFrequency === 'none' ? tokens.colors.textSecondary : tokens.colors.primaryGreenDeep,
                     fontSize: '0.78rem',
-                    fontWeight: 600,
-                    color: tokens.colors.textSecondary,
+                    fontWeight: 700,
                     cursor: 'pointer',
+                    fontFamily: tokens.typography.fontFamily,
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={form.repeatsYearly}
-                    onChange={(event) => setForm({ ...form, repeatsYearly: event.target.checked })}
-                  />
-                  <Repeat size={13} /> Repeats every year
-                </label>
+                  <Repeat size={13} />
+                  {REPEAT_CONTROL_LABELS[form.repeatFrequency]}
+                </button>
               </div>
               {formError && <p role="alert" style={{ margin: 0, fontSize: '0.76rem', color: '#DC2626' }}>{formError}</p>}
               <div style={{ display: 'flex', gap: '8px' }}>

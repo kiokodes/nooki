@@ -1,6 +1,7 @@
 import { requireSupabase } from './supabaseClient';
 import { parseIsoDate } from './coupleTime';
-import type { Profile, Couple, CoupleEvent } from '../types/database';
+import { REPEAT_FREQUENCIES } from '../types/database';
+import type { Profile, Couple, CoupleEvent, RepeatFrequency } from '../types/database';
 
 export interface AuthUser {
   id: string;
@@ -88,7 +89,8 @@ export interface CoupleEventInput {
   title: string;
   /** Plain `YYYY-MM-DD` calendar date. */
   date: string;
-  repeatsYearly: boolean;
+  /** How often it comes back: 'none' fires once, on its own date. */
+  repeatFrequency: RepeatFrequency;
 }
 
 function validateEventInput(input: CoupleEventInput): CoupleEventInput {
@@ -96,7 +98,8 @@ function validateEventInput(input: CoupleEventInput): CoupleEventInput {
   if (!title) throw new Error('Please give this event a name.');
   if (title.length > 120) throw new Error('Event names can be up to 120 characters.');
   if (!parseIsoDate(input.date)) throw new Error('Please choose a valid date.');
-  return { title, date: input.date, repeatsYearly: Boolean(input.repeatsYearly) };
+  const repeatFrequency = REPEAT_FREQUENCIES.includes(input.repeatFrequency) ? input.repeatFrequency : 'none';
+  return { title, date: input.date, repeatFrequency };
 }
 
 export async function fetchCoupleEvents(coupleId: string): Promise<CoupleEvent[]> {
@@ -118,7 +121,7 @@ export async function createCoupleEvent(
       created_by: userId,
       title: clean.title,
       event_date: clean.date,
-      repeats_yearly: clean.repeatsYearly,
+      repeat_frequency: clean.repeatFrequency,
     })
     .select('*')
     .single();
@@ -130,7 +133,7 @@ export async function createCoupleEvent(
 export async function updateCoupleEvent(eventId: string, input: CoupleEventInput): Promise<CoupleEvent> {
   const clean = validateEventInput(input);
   const { data, error } = await requireSupabase().from('couple_events')
-    .update({ title: clean.title, event_date: clean.date, repeats_yearly: clean.repeatsYearly })
+    .update({ title: clean.title, event_date: clean.date, repeat_frequency: clean.repeatFrequency })
     .eq('id', eventId)
     .select('*')
     .single();

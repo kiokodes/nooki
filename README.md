@@ -76,8 +76,9 @@ is not an email/password login credential.
 
 The global header sits above every tab and carries the couple's live status:
 
-- **Names** — `Sam & Ana`, with long names truncating instead of pushing the settings
-  button off-screen.
+- **Initials** — `S & A`. Only the first letters are shown so no name length can crowd the
+  layout; the full names sit in the element's accessible label and tooltip, and are used
+  for personalisation elsewhere (e.g. the calendar's "Ana sees these dates too").
 - **Presence ticker** — a small dot right beside the partner's name, green with a faint
   pulse while they are in the app and grey once they leave. Its tooltip/accessible label
   falls back to `Last seen 12m ago`, then a date after a week.
@@ -113,15 +114,24 @@ Home tab stays exactly as it was behind it:
 - Tapping a day shows what is on it. User events can be added, edited and deleted from
   there (`window.confirm` guards the delete); automatic dates are labelled `automatically`
   and are not editable, because they come from the anniversary.
+- The **repeat control cycles on tap**: `Once → Every week → Every month → Every year →
+  Once`. Weekly repeats return every 7 days, monthly repeats on the same day-of-month
+  (short months borrow their last day, so a 31st event falls on 28/29/30), and a repeat
+  never appears before the date it was set for.
 - Close with the **X**, **Escape** (which first closes the picker or the form), or by
   tapping the dimmed backdrop.
 
-Events live in `couple_events` (`title`, `event_date`, `repeats_yearly`, plus `couple_id`
-and `created_by`). Both partners read and write the same rows, `repeats_yearly` brings an
-event back every year on its month and day (29 Feb events fall on 28 Feb in other years),
-and an event's yearly repeat never shows before the date it was set for. Rows are
-cascaded away when the couple ends, and the RLS policies scope every read and write to
-`public.get_user_couple_id(auth.uid())`, so an unpaired or third account sees nothing.
+Events live in `couple_events` (`title`, `event_date`, `repeat_frequency`
+`'none' | 'weekly' | 'monthly' | 'yearly'`, plus `couple_id` and `created_by`). Both
+partners read and write the same rows. Rows are cascaded away when the couple ends, and
+the RLS policies scope every read and write to `public.get_user_couple_id(auth.uid())`, so
+an unpaired or third account sees nothing.
+
+**Already ran the calendar migration before the repeat control?** Rerun
+`supabase/migrations/202610150002_couple_events.sql`. It is idempotent and upgrades a
+project in place: it adds `repeat_frequency`, converts existing `repeats_yearly = true`
+rows to `'yearly'`, drops the old column, and then `verify.sql` should report **PASS**
+(it fails loudly if the old column is still there).
 
 Presence runs at app level, so a partner still reads as online while this phone browses
 Chat, Media, Discussion or Games. The app writes its own `last_seen_at` on mount, every
@@ -215,7 +225,8 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] The Today card shows today's date and the anniversary/monthsary that fall today.
 - [ ] The calendar icon opens the calendar over the Home tab; the tab is still there when you close it.
 - [ ] Tapping a day adds, edits and deletes an event, and the other device sees the change after a refresh.
-- [ ] A "repeats yearly" event reappears on the same date the following year.
+- [ ] Tapping the repeat chip on the event form cycles Once → week → month → year, and the saved event shows that wording.
+- [ ] A weekly event reappears 7 days later, a monthly one on the same day next month, and a yearly one the following year.
 - [ ] Swipe left/right and the ‹ › buttons move months; the picker jumps to any month and year.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.

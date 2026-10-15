@@ -6,6 +6,7 @@ import {
   formatLastSeen,
   formatPartnerClock,
   formatTogetherDuration,
+  getInitial,
   getPartnerClock,
   getTogetherDuration,
 } from '../../lib/coupleTime';
@@ -25,8 +26,9 @@ interface CoupleHeaderProps {
 /**
  * The global app header, present on every tab.
  *
- * It carries the couple's names, a presence dot that doubles as the online ticker,
- * the partner's local time ("5:14 PM Tue"), and how long they have been together.
+ * It carries the couple's initials (space is at a premium, and full names live in the
+ * Home tab's personalisation), a presence dot that doubles as the online ticker, the
+ * partner's local time ("5:14 PM Tue"), and how long they have been together.
  * It owns its own one-second tick so only this header re-renders as time passes.
  */
 export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
@@ -40,6 +42,7 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
   const together = getTogetherDuration(couple.anniversary_date, now);
   const partnerClock = getPartnerClock(partner.timezone, now);
   const lastSeen = partnerOnline ? `${partner.name} is online` : formatLastSeen(partner.last_seen_at, now);
+  const initials = `${getInitial(profile.name)} & ${getInitial(partner.name)}`;
 
   return (
     <header
@@ -53,17 +56,18 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flex: 1, minWidth: 0, marginRight: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
           <span
+            data-couple-initials={initials}
+            aria-label={`${profile.name} and ${partner.name}`}
+            title={`${profile.name} & ${partner.name}`}
             style={{
               fontSize: '1.15rem',
               fontWeight: 800,
               color: tokens.colors.textPrimary,
-              letterSpacing: '-0.02em',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              letterSpacing: '0.01em',
               whiteSpace: 'nowrap',
             }}
           >
-            {profile.name} &amp; {partner.name}
+            {initials}
           </span>
 
           {/* Presence ticker: green while the partner is in the app, grey once they leave. */}

@@ -156,3 +156,9 @@ export function formatLastSeen(lastSeenAt: string | Date | null | undefined, now
   return `Last seen ${date}`;
 }
 
+
+/** "Sam" -> "S". Used for the compact header and avatars. */
+export function getInitial(name: string | null | undefined): string {
+  const trimmed = (name || '').trim();
+  return trimmed ? trimmed[0].toUpperCase() : '?';
+}

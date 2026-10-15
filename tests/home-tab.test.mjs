@@ -15,7 +15,7 @@ test('couple time helpers: YMD duration, partner clock and last-seen labels', as
   try {
     const {
       getTogetherDuration, formatTogetherDuration, getPartnerClock, formatPartnerClock,
-      formatLastSeen,
+      formatLastSeen, getInitial,
     } = await server.ssrLoadModule('/src/lib/coupleTime.ts');
 
     assert.equal(new Date('2026-10-15T03:42:00Z').getHours(), 3, 'test process must run in UTC');
@@ -50,6 +50,9 @@ test('couple time helpers: YMD duration, partner clock and last-seen labels', as
     assert.deepEqual(getPartnerClock('Africa/Lagos', new Date(Date.UTC(2026, 9, 15, 22, 42))),
       { time: '11:42 PM', weekday: 'Thu' });
     assert.equal(formatPartnerClock({ time: '5:14 PM', weekday: 'Tue' }), '5:14 PM Tue');
+    assert.equal(getInitial('Bob'), 'B');
+    assert.equal(getInitial('  ana '), 'A');
+    assert.equal(getInitial(''), '?');
     assert.equal(getPartnerClock('Not/AZone', new Date()), null);
     assert.equal(getPartnerClock(null, new Date()), null);
     assert.equal(getPartnerClock(undefined, new Date()), null);
@@ -153,9 +156,15 @@ test('global header: live counter, presence ticker and partner clock', async () 
     );
     const appHeader = () => document.querySelector('header');
     assert(appHeader(), 'the global header renders on the unlocked app');
-    assert(appHeader().textContent.includes('Alice & Bob'), 'the header names both partners');
+    const initials = appHeader().querySelector('[data-couple-initials]');
+    assert(initials, 'the header shows the couple as initials');
+    assert.equal(initials.textContent, 'A & B', 'initials keep the header compact');
+    assert.equal(initials.getAttribute('aria-label'), 'Alice and Bob', 'the full names stay available to screen readers');
+    assert.equal(appHeader().textContent.includes('Alice & Bob'), false, 'full names no longer sit in the header');
     assert(appHeader().textContent.includes(`Together for ${expectedDuration}`),
       `expected "Together for ${expectedDuration}" in the header`);
+    // Overly long names cannot stretch the header: only their first letters are shown.
+    assert.equal(coupleTime.getInitial('Alexandra the Great'), 'A');
     assert(/Together for \d+Y \d+M \d+D/.test(appHeader().textContent),
       'the header counter is shown as years, months and days');
     assert(!appHeader().textContent.includes('Together since'), 'the since-date is replaced by the live counter');
@@ -163,9 +172,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
 
     const dot = () => document.querySelector('[data-presence]');
     assert(dot(), 'the header has a presence dot');
-    assert.equal(dot().parentElement.textContent.includes('Alice & Bob'), true, 'the dot sits with the couple names');
-    assert.equal(dot().previousElementSibling.textContent.trim(), 'Alice & Bob',
-      'the dot sits right beside the partner name');
+    assert.equal(dot().parentElement.textContent.includes('A & B'), true, 'the dot sits with the couple initials');
+    assert.equal(dot().previousElementSibling.getAttribute('data-couple-initials'), 'A & B',
+      'the dot sits right beside the initials');
     assert.equal(dot().dataset.presence, 'offline', 'an away partner greys the ticker out');
     assert(dot().getAttribute('aria-label').includes('Last seen 2h ago'),
       'the grey dot still knows when they were last around');

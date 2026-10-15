@@ -60,16 +60,16 @@ const Marker: React.FC<{ item: CalendarItem }> = ({ item }) => {
   );
 };
 
-const ItemRow: React.FC<{ item: CalendarItem; showRepeat?: boolean }> = ({ item, showRepeat }) => (
+const ItemRow: React.FC<{ item: CalendarItem }> = ({ item }) => (
   <li style={rowStyle}>
     <Marker item={item} />
     <span style={{ minWidth: 0 }}>
       <span style={{ fontSize: '0.87rem', fontWeight: 600, color: tokens.colors.textPrimary, wordBreak: 'break-word' }}>
         {item.title}
       </span>
-      {(item.detail || showRepeat) && (
+      {item.detail && (
         <span style={{ display: 'block', fontSize: '0.73rem', color: tokens.colors.textMuted }}>
-          {[item.detail, showRepeat && item.kind === 'event' ? 'every year' : null].filter(Boolean).join(' · ')}
+          {item.detail}
         </span>
       )}
     </span>
@@ -168,7 +168,7 @@ export const TodayCard: React.FC<TodayCardProps> = ({
         <div style={{ marginTop: '10px' }}>
           {todayItems.length > 0 ? (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }} data-today-items>
-              {todayItems.map((item) => <ItemRow key={item.id} item={item} showRepeat />)}
+              {todayItems.map((item) => <ItemRow key={item.id} item={item} />)}
             </ul>
           ) : (
             <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: tokens.colors.textMuted }} data-today-empty>

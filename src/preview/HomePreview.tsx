@@ -12,7 +12,7 @@ import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
 import { HomeView } from '../components/home/HomeView';
 import { CalendarModal } from '../components/calendar/CalendarModal';
-import type { Couple, Profile, CoupleEvent } from '../types/database';
+import type { Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
 
 /**
  * Design preview for the Home tab, served by the dev server at /preview.html.
@@ -41,23 +41,23 @@ const sampleEvent = (
   id: string,
   title: string,
   date: string,
-  repeats_yearly = false,
+  repeat_frequency: RepeatFrequency = 'none',
 ): CoupleEvent => ({
   id,
   couple_id: 'preview-couple',
   created_by: 'preview-sam',
   title,
   event_date: date,
-  repeats_yearly,
+  repeat_frequency,
   created_at: NOW,
   updated_at: NOW,
 });
 
 const STARTING_EVENTS: CoupleEvent[] = [
-  sampleEvent('e1', 'Movie night', dateKeyFromToday(0)),
+  sampleEvent('e1', 'Movie night', dateKeyFromToday(0), 'weekly'),
   sampleEvent('e2', 'Ana flies in ✈️', dateKeyFromToday(1)),
-  sampleEvent('e3', 'Sam’s birthday', dateKeyFromToday(23), true),
-  sampleEvent('e4', 'Call Mum together', dateKeyFromToday(4)),
+  sampleEvent('e3', 'Sam’s birthday', dateKeyFromToday(23), 'yearly'),
+  sampleEvent('e4', 'Rent due together', dateKeyFromToday(4), 'monthly'),
 ];
 
 const PRESETS: Preset[] = [
@@ -174,12 +174,12 @@ export const HomePreview = () => {
             anniversaryDate={couple.anniversary_date}
             saving={false}
             onAddEvent={async (input) => {
-              setEvents((current) => [...current, sampleEvent(`preview-${current.length + 10}`, input.title, input.date, input.repeatsYearly)]);
+              setEvents((current) => [...current, sampleEvent(`preview-${current.length + 10}`, input.title, input.date, input.repeatFrequency)]);
             }}
             onEditEvent={async (eventId, input) => {
               setEvents((current) => current.map((event) => (
                 event.id === eventId
-                  ? { ...event, title: input.title, event_date: input.date, repeats_yearly: input.repeatsYearly }
+                  ? { ...event, title: input.title, event_date: input.date, repeat_frequency: input.repeatFrequency }
                   : event
               )));
             }}

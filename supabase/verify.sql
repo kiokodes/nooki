@@ -49,6 +49,17 @@ BEGIN
   IF has_table_privilege('anon', 'public.couple_events', 'SELECT') THEN
     RAISE EXCEPTION 'Anonymous users must not be able to read couple_events.';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'couple_events' AND column_name = 'repeat_frequency'
+  ) THEN RAISE EXCEPTION 'couple_events.repeat_frequency is missing. Rerun supabase/migrations/202610150002_couple_events.sql.'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'couple_events' AND column_name = 'repeats_yearly'
+  ) THEN RAISE EXCEPTION 'couple_events still has the old repeats_yearly column. Rerun supabase/migrations/202610150002_couple_events.sql.'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'couple_events_repeat_frequency_check') THEN
+    RAISE EXCEPTION 'couple_events.repeat_frequency is missing its allowed-values check. Rerun the calendar migration.';
+  END IF;
   IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'couple_events' AND (
     policyname IN ('Couple members can view their events', 'Couple members can add events',
                    'Couple members can edit their events', 'Couple members can delete their events')
