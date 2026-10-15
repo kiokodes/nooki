@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchGames, playGame, startGame, type GameId, type GameMatch, type GamesSnapshot } from '../lib/gamesService';
+
+/**
+ * True while this phone still owes a move in a match: the Games tab badge.
+ *
+ * Tic-tac-toe hands the turn back and forth, so it is this phone's move when the
+ * turn points at it. Rock-paper-scissors waits for a locked-in pick from each
+ * side, so it is this phone's move until it has locked its own pick in.
+ */
+export function needsMyMove(match: GameMatch, userId: string | null): boolean {
+  if (!userId || match.finished) return false;
+  if (match.game === 'tic-tac-toe') return match.turn_id === userId;
+  return !match.my_pick;
+}
+
 export function useGames(coupleId: string | null, userId: string | null) {
   const scope = `${coupleId}:${userId}`;
   const current = useRef(scope);
@@ -25,6 +39,11 @@ export function useGames(coupleId: string | null, userId: string | null) {
     return () => { clearTimeout(initial); clearInterval(timer); };
   }, [refresh]);
   const data = stored?.scope === scope ? stored.data : null;
+  /** Matches still waiting on this phone — the Games tab badge, like the chat's. */
+  const pendingCount = useMemo(
+    () => (data ? data.matches.filter((match) => needsMyMove(match, userId)).length : 0),
+    [data, userId],
+  );
   const run = async (action: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError(null);
@@ -33,7 +52,7 @@ export function useGames(coupleId: string | null, userId: string | null) {
     finally { lock.current = false; setBusy(false); }
   };
   return {
-    data, error, busy, refresh,
+    data, error, busy, refresh, pendingCount,
     match: data?.matches.find(m => selected?.scope === scope && m.id === selected.id),
     select: (id: string | null) => setSelected(id ? { scope, id } : null),
     start: (game: GameId, daily = false, bestOf = 3) => run(async () => {

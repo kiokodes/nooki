@@ -97,9 +97,6 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
           <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: tokens.colors.textPrimary }}>
             What should we talk about?
           </h2>
-          <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: tokens.colors.textSecondary }}>
-            Pick a corner of your life, then how deep to go.
-          </p>
         </div>
         <button
           type="button"
