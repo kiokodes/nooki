@@ -86,6 +86,64 @@
 .snake-leave-actions .snake-leave-danger { background: #ed91ad; }
 .snake-leave-actions button:disabled { opacity: .55; cursor: default; }
 
-/* --- Sudoku --------------------------------------------------------------- */
-.sudoku-board { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; max-width: 320px; margin: 0 auto 12px; aspect-ratio: 1; }
-.sudoku-cell { aspect-ratio: 1; font-size: 1rem; }
+.game-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.game-error { overflow-wrap: anywhere; }
+.game-card > .game-error { padding: 12px; margin: 0 0 12px; border-radius: 12px; background: #fce7ed; }
+.game-error p { margin: 0 0 10px; }
+
+/* --- Sudoku ---------------------------------------------------------------
+   Cells are grid tracks, not the padded pill buttons used by the game library.
+   Both axes use minmax(0, 1fr): a digit must never set a track's minimum size.
+   Keep these selectors more specific than `.games-view button` and its states. */
+.sudoku-card { min-width: 0; }
+.sudoku-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 12px; }
+.sudoku-header h2 { font-size: 1.05rem; margin: 0; }
+.sudoku-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .75rem; font-weight: 700; color: var(--text-secondary, #7a6e65); font-variant-numeric: tabular-nums; }
+.sudoku-board {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-rows: repeat(9, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1;
+  margin: 0 auto 12px;
+  border: 2px solid #79677f;
+  background: var(--bg-surface, #fff);
+}
+.sudoku-board .sudoku-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #ded5e2;
+  border-bottom: 1px solid #ded5e2;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg-surface, #fff);
+  color: var(--accent-lavender-deep, #7c3aed);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1;
+  touch-action: manipulation;
+}
+.sudoku-board .sudoku-cell[data-box-right=true] { border-right: 2px solid #79677f; }
+.sudoku-board .sudoku-cell[data-box-bottom=true] { border-bottom: 2px solid #79677f; }
+.sudoku-board .sudoku-cell:nth-child(9n) { border-right: 0; }
+.sudoku-board .sudoku-cell:nth-child(n+73) { border-bottom: 0; }
+.sudoku-board .sudoku-cell[data-given=true] { color: var(--text-primary, #372e29); font-weight: 800; background: #faf8fc; }
+.sudoku-board .sudoku-cell[data-selected=true] { background: #e8dff4; box-shadow: inset 0 0 0 2px #9b7aaf; }
+.sudoku-board .sudoku-cell[data-conflict=true] { background: #fde2e2; color: #a5345c; }
+.sudoku-board .sudoku-cell:focus-visible { position: relative; outline: 2px solid #795d88; outline-offset: -3px; }
+.sudoku-board .sudoku-cell:disabled { opacity: 1; }
+.sudoku-card .sudoku-hint { margin: 0 auto 10px; max-width: 320px; text-align: center; font-size: .72rem; color: var(--text-secondary, #7a6e65); }
+.sudoku-keypad { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; width: 100%; max-width: 320px; margin: 0 auto 12px; }
+.sudoku-keypad button { min-width: 0; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: #f4edf5; color: #795d88; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.sudoku-keypad .sudoku-erase { grid-column: 1 / -1; margin-top: 4px; font-size: .8rem; }
+.sudoku-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

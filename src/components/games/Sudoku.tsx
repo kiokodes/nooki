@@ -105,9 +105,9 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
   // keyboard
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (selected === null) return;
-      if (e.key >= '1' && e.key <= '9') place(Number(e.key));
-      else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') place(0);
+      if (selected === null || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key >= '1' && e.key <= '9') { e.preventDefault(); place(Number(e.key)); }
+      else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') { e.preventDefault(); place(0); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -115,10 +115,10 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
 
   if (!puzzle) {
     return (
-      <section style={cardStyle} data-sudoku="setup">
+      <section className="sudoku-card" style={cardStyle} data-sudoku="setup">
         <h2 style={{ fontSize: '1.15rem', margin: '0 0 8px' }}>Sudoku</h2>
         <p style={{ fontSize: '0.85rem', lineHeight: 1.55, color: tokens.colors.textSecondary, margin: '0 0 12px' }}>
-          Fill the 9×9 grid so every row, column and 3×3 box holds 1–9. {partnerName ? '' : ''}
+          Fill the 9×9 grid so every row, column and 3×3 box holds 1–9.
         </p>
         <fieldset style={{ border: 'none', padding: 0, margin: '0 0 12px' }}>
           <legend style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 6 }}>Difficulty</legend>
@@ -138,7 +138,7 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
             ))}
           </div>
           <p style={{ fontSize: '0.75rem', color: tokens.colors.textMuted, margin: '6px 0 0' }}>
-            {mode === 'competition' && 'Race your partner: fastest to finish wins. 3 mistakes each.'}
+            {mode === 'competition' && `Race ${partnerName}: fastest to finish wins. 3 mistakes each.`}
             {mode === 'collaboration' && 'Solve together: you share only 3 wrong tries.'}
             {mode === 'solo' && 'Practice on your own.'}
           </p>
@@ -152,67 +152,54 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
   }
 
   return (
-    <section style={cardStyle} data-sudoku="playing">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <h2 style={{ fontSize: '1.15rem', margin: 0 }}>Sudoku · {difficulty}</h2>
-        <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-          ⏱ {formatTime(elapsed)} · mistakes {mistakes}/{SUDOKU_MAX_MISTAKES}
+    <section className="sudoku-card" style={cardStyle} data-sudoku="playing">
+      <div className="sudoku-header">
+        <h2>Sudoku · {difficulty}</h2>
+        <div className="sudoku-stats">
+          <span aria-label={`Elapsed time ${formatTime(elapsed)}`}>⏱ {formatTime(elapsed)}</span>
+          <span>Mistakes {mistakes}{mode !== 'solo' && `/${SUDOKU_MAX_MISTAKES}`}</span>
         </div>
       </div>
       {finished && (
-        <div style={{ ...cardStyle, backgroundColor: tokens.colors.accentLavenderSoft }} data-sudoku-result={won ? 'won' : 'lost'}>
+        <div style={{ ...cardStyle, backgroundColor: tokens.colors.accentLavenderSoft }} data-sudoku-result={won ? 'won' : 'lost'} role="status">
           <strong>{won ? 'You solved it! 🎉' : 'Too many mistakes — try again.'}</strong>
-          <div style={{ marginTop: 8 }}>
+          <div className="sudoku-actions">
             <button type="button" style={primaryButton} onClick={start}>New puzzle</button>
-            <button type="button" style={secondaryButton} onClick={() => setPuzzle(null)}>Change settings</button>
+            <button type="button" style={secondaryButton} onClick={() => { setPuzzle(null); setStartedAt(null); setSelected(null); }}>Change settings</button>
           </div>
         </div>
       )}
-      <div className="sudoku-board" data-sudoku-board style={{
-        display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 2,
-        maxWidth: 320, margin: '0 auto 12px', aspectRatio: '1',
-        border: `2px solid ${tokens.colors.textPrimary}`,
-      }}>
-        {board.map((v, i) => {
-          const isGiven = givens.has(i);
-          const conflict = conflicts.has(i);
-          const isSel = selected === i;
-          const boxBorderRight = (i % 9 === 2 || i % 9 === 5) ? '2px solid' : '1px solid';
-          const boxBorderBottom = (Math.floor(i / 9) === 2 || Math.floor(i / 9) === 5) ? '2px solid' : '1px solid';
-          return (
-            <button
-              key={i}
-              type="button"
-              className="sudoku-cell"
-              data-sudoku-cell={i}
-              aria-label={`Row ${row(i) + 1} column ${col(i) + 1}`}
-              onClick={() => setSelected(i)}
-              style={{
-                aspectRatio: '1',
-                border: 'none',
-                borderRight: boxBorderRight,
-                borderBottom: boxBorderBottom,
-                borderColor: tokens.colors.textPrimary,
-                backgroundColor: isSel ? tokens.colors.accentLavenderSoft : conflict ? '#fde2e2' : tokens.colors.bgSurface,
-                color: isGiven ? tokens.colors.textPrimary : tokens.colors.accentLavenderDeep,
-                fontWeight: isGiven ? 700 : 500,
-                fontSize: '1rem',
-                cursor: isGiven ? 'default' : 'pointer',
-              }}
-            >
-              {v === 0 ? '' : v}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-        {[1,2,3,4,5,6,7,8,9].map((n) => (
-          <button key={n} type="button" style={digitButton} onClick={() => place(n)} disabled={finished}>{n}</button>
+      <div className="sudoku-board" data-sudoku-board role="group" aria-label="Sudoku board">
+        {board.map((v, i) => (
+          <button
+            key={i}
+            type="button"
+            className="sudoku-cell"
+            data-sudoku-cell={i}
+            data-given={givens.has(i)}
+            data-selected={selected === i}
+            data-conflict={conflicts.has(i)}
+            data-box-right={col(i) === 2 || col(i) === 5}
+            data-box-bottom={row(i) === 2 || row(i) === 5}
+            aria-label={`Row ${row(i) + 1}, column ${col(i) + 1}: ${v || 'empty'}${givens.has(i) ? ', given' : ''}`}
+            aria-pressed={selected === i}
+            aria-invalid={conflicts.has(i)}
+            disabled={finished}
+            onClick={() => setSelected(i)}
+          >
+            {v === 0 ? '' : v}
+          </button>
         ))}
-        <button type="button" style={digitButton} onClick={() => place(0)} disabled={finished}>✕</button>
       </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        <button type="button" style={secondaryButton} onClick={() => setPuzzle(null)}>Settings</button>
+      <p className="sudoku-hint">Choose an empty cell, then a number. Backspace erases.</p>
+      <div className="sudoku-keypad" role="group" aria-label="Sudoku number pad">
+        {[1,2,3,4,5,6,7,8,9].map((n) => (
+          <button key={n} type="button" aria-label={`Enter ${n}`} onClick={() => place(n)} disabled={finished || selected === null || givens.has(selected)}>{n}</button>
+        ))}
+        <button className="sudoku-erase" type="button" aria-label="Erase selected cell" onClick={() => place(0)} disabled={finished || selected === null || givens.has(selected)}>Erase</button>
+      </div>
+      <div className="sudoku-actions">
+        <button type="button" style={secondaryButton} onClick={() => { setPuzzle(null); setStartedAt(null); setSelected(null); }}>Settings</button>
         {onExit && <button type="button" style={secondaryButton} onClick={onExit}>Back</button>}
       </div>
     </section>
@@ -239,12 +226,6 @@ const secondaryButton: React.CSSProperties = {
   font: 'inherit', fontSize: '0.85rem', fontWeight: 700, padding: '10px 16px',
   borderRadius: '14px', border: 'none', cursor: 'pointer',
   backgroundColor: tokens.colors.bgSurfaceSubtle, color: tokens.colors.textSecondary,
-};
-
-const digitButton: React.CSSProperties = {
-  font: 'inherit', fontSize: '1rem', fontWeight: 700, width: 32, height: 32,
-  borderRadius: '10px', border: 'none', cursor: 'pointer',
-  backgroundColor: tokens.colors.bgSurfaceSubtle, color: tokens.colors.textPrimary,
 };
 
 export default Sudoku;

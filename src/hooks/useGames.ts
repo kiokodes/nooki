@@ -21,54 +21,79 @@ export function needsMyMove(match: GameMatch, userId: string | null): boolean {
   return !match.my_pick;
 }
 
+interface PendingAction { scope: string; game: GameId | null }
+interface FailedAction extends PendingAction { message: string; action: () => Promise<void> }
+
 export function useGames(coupleId: string | null, userId: string | null) {
   const scope = `${coupleId}:${userId}`;
   const current = useRef(scope);
-  useEffect(() => { current.current = scope; }, [scope]);
+  useEffect(() => {
+    current.current = scope;
+    return () => { current.current = ''; };
+  }, [scope]);
   const [stored, setStored] = useState<{ scope: string; data: GamesSnapshot } | null>(null);
   const [selected, setSelected] = useState<{ scope: string; id: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const lock = useRef(false);
+  const [connectionError, setConnectionError] = useState<{ scope: string; message: string } | null>(null);
+  const [failure, setFailure] = useState<FailedAction | null>(null);
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const lock = useRef<PendingAction | null>(null);
   const request = useRef(0);
   const refresh = useCallback(async () => {
     if (!coupleId || !userId) return;
     const version = ++request.current;
     try {
       const data = await fetchGames();
-      if (current.current === scope && version === request.current) { setStored({ scope, data }); setError(null); }
-    } catch (e) { if (current.current === scope && version === request.current) setError((e as Error).message); }
+      if (current.current === scope && version === request.current) {
+        setStored({ scope, data });
+        // A successful read says nothing about whether the last action worked.
+        // In particular, an old database can read Games but cannot start Snake.
+        setConnectionError(null);
+      }
+    } catch (e) {
+      if (current.current === scope && version === request.current) {
+        setConnectionError({ scope, message: (e as Error).message });
+      }
+    }
   }, [scope, coupleId, userId]);
   useEffect(() => {
-    // Network reads update state asynchronously, not during effect setup.
     const initial = setTimeout(() => void refresh(), 0);
-    const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 2000);
+    const timer = setInterval(() => {
+      // The action refresh must not be superseded by a background read.
+      if (!document.hidden && lock.current?.scope !== scope) void refresh();
+    }, 2000);
     return () => { clearTimeout(initial); clearInterval(timer); };
-  }, [refresh]);
+  }, [refresh, scope]);
   const data = stored?.scope === scope ? stored.data : null;
+  const activeFailure = failure?.scope === scope ? failure : null;
+  const error = activeFailure?.message ?? (connectionError?.scope === scope ? connectionError.message : null);
+  const busy = pending?.scope === scope;
   /** Matches still waiting on this phone — the Games tab badge, like the chat's. */
   const pendingCount = useMemo(
     () => (data ? data.matches.filter((match) => needsMyMove(match, userId)).length : 0),
     [data, userId],
   );
-  const run = async (action: () => Promise<void>) => {
-    if (lock.current) return;
-    lock.current = true; setBusy(true); setError(null);
-    try { await action(); await refresh(); }
-    catch (e) { if (current.current === scope) setError((e as Error).message); }
-    finally { lock.current = false; setBusy(false); }
+  const run = async (action: () => Promise<void>, game: GameId | null = null) => {
+    if (lock.current?.scope === scope) return;
+    const ticket = { scope, game };
+    lock.current = ticket;
+    setPending(ticket);
+    setFailure(null);
+    try {
+      await action();
+      if (current.current === scope) await refresh();
+    } catch (e) {
+      if (current.current === scope) setFailure({ scope, game, message: (e as Error).message, action });
+    } finally {
+      if (lock.current === ticket) lock.current = null;
+      // Clear this ticket even if the account changed, without clearing a newer
+      // account's action (or leaving the old account permanently busy on return).
+      if (current.current) setPending(active => active === ticket ? null : active);
+    }
   };
   const match = data?.matches.find(m => selected?.scope === scope && m.id === selected.id);
-  /**
-   * True while this phone is in the middle of a ranked snake run. The app asks before
-   * letting a tab change end it: a live run that is left behind is a forfeit.
-   */
+  /** A live ranked run must be forfeited before navigating away. */
   const snakeLive = Boolean(match && !match.finished && match.game === 'snake' && match.snake?.mine?.status === 'running');
-  /**
-   * Progress reports. These deliberately skip the shared busy flag: they happen every
-   * couple of seconds behind the board's back, and must not disable the buttons or wipe
-   * an error the couple needs to read. The board reports its own connection trouble.
-   */
+  /** Progress reports must not disable the controls or wipe an action error. */
   const beat = useCallback(async (matchId: string, ticks: number, changes: SnakeChange[]): Promise<SnakeRun> =>
     beatSnakeRun(matchId, ticks, changes), []);
   const finish = useCallback(async (matchId: string, ticks: number, changes: SnakeChange[]): Promise<SnakeRun> => {
@@ -78,21 +103,22 @@ export function useGames(coupleId: string | null, userId: string | null) {
   }, [refresh]);
   return {
     data, error, busy, refresh, pendingCount, match, snakeLive,
-    select: (id: string | null) => setSelected(id ? { scope, id } : null),
+    errorGame: activeFailure?.game ?? null,
+    pendingGame: busy ? pending.game : null,
+    // Retrying a failed start must actually start/resume the game, not just read Games.
+    retry: () => activeFailure ? run(activeFailure.action, activeFailure.game) : refresh(),
+    select: (id: string | null) => { setFailure(null); setSelected(id ? { scope, id } : null); },
     start: (game: GameId, daily = false, bestOf = 3) => run(async () => {
       const id = await startGame(game, daily, bestOf);
       if (current.current === scope) setSelected({ scope, id });
-    }),
-    play: (match: GameMatch, move: string) => run(async () => { await playGame(match, move); }),
-    /** Deal the food and start this phone's one run. Resuming a live run hands the same one back. */
-    startSnake: (matchId: string) => run(async () => { await startSnakeRun(matchId); }),
+    }, game),
+    play: (match: GameMatch, move: string) => run(async () => { await playGame(match, move); }, match.game),
+    /** Deal this phone's one run. Resuming a live run hands the same one back. */
+    startSnake: (matchId: string) => run(async () => { await startSnakeRun(matchId); }, 'snake'),
     beat,
     finish,
-    /**
-     * Walking out of a live run. Best effort by design: if the call cannot get through,
-     * the run is lost to the grace window anyway, so the caller carries on.
-     */
-    forfeitSnake: (matchId: string) => run(async () => { await forfeitSnakeRun(matchId); }),
+    /** If an exit cannot reach the server, the grace window still forfeits the run. */
+    forfeitSnake: (matchId: string) => run(async () => { await forfeitSnakeRun(matchId); }, 'snake'),
   };
 }
 export type GamesState = ReturnType<typeof useGames>;

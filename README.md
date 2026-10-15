@@ -28,6 +28,26 @@ change. A preview pointing to the production project uses real production data.
 Git-ignored except the blank `.env.example`. Configuration preflight validates presence
 and public-key format, not the remote key's validity or the database's health.
 
+### If Vercel reports `Build blocked: Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY`
+
+This is the environment preflight stopping the build, not a TypeScript/Vite failure.
+The npm `cache-dir` and install-script warnings are not the cause of this exit.
+
+1. In the **same Vercel project** that produced the log, open **Settings → Environment
+   Variables** and add the two exact names above. Get the project URL and public
+   anon/publishable key from your Supabase project's API settings/Connect dialog.
+2. Enable **Production** for production deployments and **Preview** for branch/PR
+   deployments. Production-only values do not reach Preview builds. If a Preview value
+   has a Git-branch restriction, include the branch being deployed (or select all Preview
+   branches). A Git-ignored local `.env.local` is not uploaded by a Git deployment.
+3. Save, then **redeploy the latest commit**. Editing environment variables does not repair
+   an already-failed deployment. A failed build cannot publish its Duel/Sudoku changes;
+   the previous successful deployment may still be what the browser is showing.
+
+Do not remove `check:env`, commit filled-in environment files, or substitute a secret key
+just to make the build green. A successful preflight only checks configuration format;
+apply and verify the database migrations separately.
+
 ## Database setup
 
 ### Existing live project
@@ -435,7 +455,7 @@ at the production project uses real production data.
 cp .env.example .env.local   # fill in the two values
 npm ci
 npm run check:env            # fails closed without valid public config
-npm test                     # 17 tests, no live project contacted
+npm test                     # unit, UI and database tests; no live project contacted
 npm run lint
 npm run build
 ```
@@ -707,6 +727,51 @@ reload mid-run and confirm the run resumes from the last report, and confirm the
 partner's score is nowhere in the other phone's network responses until both runs are in.
 The no-backend development preview remains sample UI, not a local game backend: the
 preview's Snake Duel is played out on the page, and a ranked duel needs the migration.
+
+### Troubleshooting the Duel button
+
+The library button calls `start_game('snake', false, …)`; **Start my run** then calls
+`snake_start`. Both depend on the live database, not just a successful Vercel build.
+Migration `007` alone only accepts Tic Tac Toe and Rock Paper Scissors, so it rejects
+Snake with `Invalid game settings.` even though the Games library loads normally.
+
+In the Supabase project used by the deployment:
+
+1. Apply `supabase/migrations/202610150007_games.sql` if Games has not been installed.
+2. Apply (or rerun) `supabase/migrations/202610150010_snake_duel.sql` **after** `007`.
+3. Run `supabase/verify-games.sql` and require **PASS**, then try Duel again.
+
+Do not rerun the full schema on an existing project. Rerunning `007` after `010`
+overwrites `start_game` and `games_state` with their older versions; rerun `010` last to
+restore Snake support, sealed scores and expiry. The verifier now detects these obsolete
+entry points as well as missing tables/functions and unsafe permissions.
+
+A failed start stays visible next to its library button (or above an open match), names
+the Snake migration when appropriate, and survives background polling. **Try again**
+retries the actual failed action. Starting a duel/run also shows a pending label and blocks
+duplicate taps. Pairing and network errors remain distinct from migration errors.
+
+### Sudoku layout and browser regressions
+
+The board has nine equal rows and columns, continuous cell borders, and thicker 3×3 box
+boundaries. Cells explicitly reset the library buttons' padding/radius/minimum size; the
+board and number pad shrink to their containing card instead of overflowing narrow phones.
+The header wraps, all nine number keys stay together, and Erase has its own row.
+Sudoku and Snake warm-ups do not need the shared Games snapshot to load. Sudoku is still
+local to this device; its competition/collaboration settings are not synchronized with a
+partner's device.
+
+The browser tests render the real Games UI/hook with intercepted HTTP responses (no live
+Supabase calls), check actual cell geometry at 320, 360, 390, 480 and 1024px, and cover
+Duel start/resume, missing-migration errors across polling, retry, and offline local play.
+The PostgreSQL tests additionally run the old/new migrations and the real Duel RPC flow.
+
+```sh
+npx playwright install chromium   # once, on your development/CI machine
+npm run test:browser
+# Or use an already installed Chromium:
+# PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser
+```
 
 ## Media tab: Read together (shared books)
 

@@ -149,7 +149,7 @@ export const SnakeDuel: React.FC<SnakeDuelProps> = ({
           onClick={() => { void games.startSnake(match.id); }}
           data-action="start-my-run"
         >
-          Start my run
+          {games.busy ? 'Starting run…' : 'Start my run'}
         </button>
         <button type="button" className="snake-secondary" onClick={onWarmUp} data-action="warm-up">
           Warm up first

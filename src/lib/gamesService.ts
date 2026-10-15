@@ -59,19 +59,35 @@ export interface GameMatch {
   snake?: SnakeDuel | null;
 }
 export interface GamesSnapshot { today: string; wins: Record<string, number>; matches: GameMatch[] }
-async function rpc<T>(name: string, args = {}): Promise<T> {
+const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. In Supabase SQL Editor, apply 202610150010_snake_duel.sql after 202610150007_games.sql, then run verify-games.sql and try again.';
+
+async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args);
   if (error) {
-    if (['PGRST202', '42P01', '42883'].includes(error.code)) {
-      throw new Error(name.startsWith('snake')
-        ? 'Snake needs a database update. Apply migration 202610150010_snake_duel.sql.'
-        : 'Games needs a database update. Apply migration 202610150007_games.sql.');
+    const snakeRequest = name.startsWith('snake_') || (name === 'start_game' && args.p_game === 'snake');
+    // Migration 007's start_game exists, but only accepts the two original games.
+    // This is not a missing-RPC error: it rejects a perfectly valid Duel button click.
+    const legacySnakeStart = name === 'start_game' && args.p_game === 'snake'
+      && args.p_daily === false && [3, 5].includes(Number(args.p_best_of))
+      && ((error.code === 'P0001' && error.message === 'Invalid game settings.')
+        || (error.code === '23514' && error.message.includes('game_matches_game_check')));
+    if (legacySnakeStart) throw new Error(SNAKE_SETUP_ERROR);
+    if (['PGRST202', '42P01', '42703', '42883'].includes(error.code)) {
+      throw new Error(snakeRequest || error.message.includes('snake_')
+        ? SNAKE_SETUP_ERROR
+        : 'Games needs a database update. Apply migration 202610150007_games.sql, then 202610150010_snake_duel.sql.');
     }
     throw new Error(error.message);
   }
   return data as T;
 }
-export const fetchGames = () => rpc<GamesSnapshot>('games_state');
+export async function fetchGames(): Promise<GamesSnapshot> {
+  const data = await rpc<GamesSnapshot>('games_state');
+  if (!data || !Array.isArray(data.matches) || !data.wins || typeof data.wins !== 'object' || typeof data.today !== 'string') {
+    throw new Error('Games returned an incomplete response. Retry the connection; if it persists, run supabase/verify-games.sql.');
+  }
+  return data;
+}
 export const startGame = (game: GameId, daily: boolean, bestOf: number) => rpc<string>('start_game', { p_game: game, p_daily: daily, p_best_of: bestOf });
 export const playGame = (match: GameMatch, move: string) => rpc<void>('play_game', { p_id: match.id, p_round: match.round, p_move: move });
 

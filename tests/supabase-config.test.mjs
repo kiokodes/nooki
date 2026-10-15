@@ -34,6 +34,16 @@ test('build preflight fails closed without environment configuration', () => {
     const missing = spawnSync(process.execPath, [script], { cwd, env, encoding: 'utf8' });
     assert.equal(missing.status, 1);
     assert.match(missing.stderr, /Build blocked/);
+    assert.match(missing.stderr, /Missing build variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY/);
+    const preview = spawnSync(process.execPath, [script], {
+      cwd, env: { ...env, VERCEL: '1', VERCEL_ENV: 'preview', VITE_SUPABASE_ANON_KEY: publishable }, encoding: 'utf8',
+    });
+    assert.equal(preview.status, 1);
+    assert.match(preview.stderr, /Missing build variables: VITE_SUPABASE_URL\./);
+    assert.match(preview.stderr, /Production-only variables do not reach Preview builds/);
+    assert.match(preview.stderr, /Git branch/);
+    assert.match(preview.stderr, /redeploy/);
+    assert(!preview.stderr.includes(publishable), 'deployment diagnostics never print key values');
     const unsafe = spawnSync(process.execPath, [script], {
       cwd, env: { ...env, VITE_SUPABASE_URL: project, VITE_SUPABASE_ANON_KEY: jwt('service_role') }, encoding: 'utf8',
     });
