@@ -212,7 +212,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(body().includes('This phone'), false, 'the old partner-status card is gone');
     assert.equal(body().includes('Partner status'), false, 'no leftover status card');
 
-    // Daily game card: placeholder "Today's challenge" with Play button and 0-to-0 scoreboard.
+    // Daily game card: "Today's challenge" with Play button and 0-to-0 scoreboard.
     const dailyGameCard = home.querySelector('[data-card="daily-game"]');
     assert(dailyGameCard, 'the Daily game card is on the Home tab');
     assert(dailyGameCard.textContent.includes("Today's challenge"), 'the card shows "Today\'s challenge"');
@@ -229,8 +229,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(scoreboard.querySelector('[data-partner-score="partner"]')?.textContent.includes('0 wins'), true,
       'the partner starts with 0 wins');
     await act(async () => { playButton.click(); });
-    assert(dailyGameCard.textContent.includes('coming soon'), 'tapping Play shows the placeholder notice without leaving Home');
-    assert(document.querySelector('[data-screen="home"]'), 'tapping Play keeps the user on the Home tab');
+    assert(document.querySelector('[aria-label="Games"]'), 'tapping Play opens the Games tab');
+    assert(document.body.textContent.includes('Daily challenge'), 'the daily match loads');
+    await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
 
     // Reserved empty rounded area at the bottom of the Home screen for a future animated scene.
     const sceneArea = home.querySelector('[data-scene-placeholder]');

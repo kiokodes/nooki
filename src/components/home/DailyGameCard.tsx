@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Gamepad2, Play, Trophy } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 
@@ -7,17 +7,19 @@ interface DailyGameCardProps {
   userName?: string;
   /** Partner 2 — the partner on the other end of the distance. */
   partnerName?: string;
-  /** Wins for Partner 1 (0 for now). */
+  /** Wins for Partner 1 (completed matches). */
   userWins?: number;
-  /** Wins for Partner 2 (0 for now). */
+  /** Wins for Partner 2 (completed matches). */
   partnerWins?: number;
+  status?: string;
+  playLabel?: string;
   onPlay?: () => void;
 }
 
 /**
- * Daily game card — a placeholder "Today's challenge" card on the Home tab
+ * Daily game card — a "Today's challenge" card on the Home tab
  * with a play button and a head-to-head scoreboard showing wins for each
- * partner (0 to 0 for now).
+ * partner (saved match wins).
  */
 export const DailyGameCard: React.FC<DailyGameCardProps> = ({
   userName = 'You',
@@ -25,8 +27,9 @@ export const DailyGameCard: React.FC<DailyGameCardProps> = ({
   userWins = 0,
   partnerWins = 0,
   onPlay,
+  status,
+  playLabel = 'Play',
 }) => {
-  const [noticeVisible, setNoticeVisible] = useState(false);
   const firstLabel = userName.trim() || 'You';
   const secondLabel = partnerName.trim() || 'Partner';
 
@@ -85,9 +88,7 @@ export const DailyGameCard: React.FC<DailyGameCardProps> = ({
               color: tokens.colors.textMuted,
             }}
           >
-            {noticeVisible
-              ? 'Daily challenges are coming soon — stay tuned!'
-              : 'A quick head-to-head for the two of you.'}
+            {status || 'A quick head-to-head for the two of you.'}
           </p>
         </div>
 
@@ -96,7 +97,6 @@ export const DailyGameCard: React.FC<DailyGameCardProps> = ({
           data-action="play-daily-game"
           aria-label="Play Today's challenge"
           onClick={() => {
-            setNoticeVisible(true);
             onPlay?.();
           }}
           style={{
@@ -117,11 +117,11 @@ export const DailyGameCard: React.FC<DailyGameCardProps> = ({
           }}
         >
           <Play size={12} fill={tokens.colors.textWhite} strokeWidth={2.2} aria-hidden="true" />
-          <span>Play</span>
+          <span>{playLabel}</span>
         </button>
       </div>
 
-      {/* Head-to-head scoreboard showing wins for each partner (0 to 0 for now) */}
+      {/* Head-to-head scoreboard showing wins for each partner (saved match wins) */}
       <div
         data-scoreboard
         role="group"
