@@ -109,6 +109,12 @@ Supabase project, and lets you flip the partner between online and away and swit
 anniversary examples. It is a dev-server route only: `npm run build` still publishes
 `index.html` alone, and the app itself has no mock/sample mode.
 
+While no `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` values are present, the dev server
+also redirects the root URL (`/`) to `/preview.html` so local development never dead-ends
+on the fail-closed connection screen. Once real values are in `.env.local`, `/` serves the
+app as usual. The dev port is pinned with `strictPort` so it cannot silently drift off
+5173.
+
 ## Checks before pushing
 
 With your real project settings in `.env.local`:
