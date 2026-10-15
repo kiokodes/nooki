@@ -52,10 +52,13 @@
 html, body {
   width: 100%;
   height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
   background-color: var(--bg-desktop);
   font-family: var(--font-family);
   color: var(--text-primary);
-  line-height: 1.6;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -63,9 +66,61 @@ html, body {
 #root {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
+  overflow: hidden;
+}
+
+/* Responsive app viewport and shell:
+   - On phones (<= 480px), the app fills the screen edge-to-edge (100% width, 100dvh height,
+     no outer desktop frame) so it never overflows or forces awkward scrolling.
+   - On desktop/tablet screens, it sits centered as a mobile card. */
+.nooki-viewport {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background-color: var(--bg-desktop);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.nooki-shell {
+  width: 100%;
+  max-width: 390px;
+  height: 100%;
+  max-height: 844px;
+  background-color: var(--bg-canvas);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-card);
+  border-radius: 36px;
+  overflow: hidden;
+}
+
+@media (max-width: 480px) {
+  html, body, .nooki-viewport {
+    background-color: var(--bg-canvas) !important;
+    padding: 0 !important;
+  }
+
+  .nooki-shell {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .nooki-preview-controls,
+  .nooki-preview-caption {
+    display: none !important;
+  }
 }
 
 /* The couple header's presence ticker: a soft pulse only while the partner is online,
@@ -105,9 +160,65 @@ html, body {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* Splash screen (< 0.5s): simple Nooki wordmark + pink and green dots racing across the screen */
+.nooki-splash-wordmark {
+  animation: nooki-wordmark-pop 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.nooki-splash-dot--pink {
+  animation: nooki-dot-race-pink 0.4s cubic-bezier(0.22, 0.82, 0.34, 1) forwards;
+}
+
+.nooki-splash-dot--green {
+  animation: nooki-dot-race-green 0.42s cubic-bezier(0.46, 0.12, 0.2, 1) 0.02s forwards;
+}
+
+@keyframes nooki-wordmark-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes nooki-dot-race-pink {
+  0% {
+    left: -4%;
+    transform: scale(0.85);
+  }
+  50% {
+    left: 58%;
+    transform: scale(1.15);
+  }
+  100% {
+    left: 104%;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes nooki-dot-race-green {
+  0% {
+    left: -4%;
+    transform: scale(0.85);
+  }
+  50% {
+    left: 44%;
+    transform: scale(1.05);
+  }
+  100% {
+    left: 104%;
+    transform: scale(1.1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-modal='calendar'],
-  .nooki-modal-sheet {
+  .nooki-modal-sheet,
+  .nooki-splash-wordmark,
+  .nooki-splash-dot {
     animation: none !important;
   }
 }

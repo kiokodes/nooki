@@ -47,10 +47,11 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
   return (
     <header
       style={{
-        padding: '20px 22px 10px 22px',
+        padding: 'calc(12px + env(safe-area-inset-top, 0px)) 18px 8px 18px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexShrink: 0,
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flex: 1, minWidth: 0, marginRight: '12px' }}>
@@ -60,7 +61,7 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
             aria-label={`${profile.name} and ${partner.name}`}
             title={`${profile.name} & ${partner.name}`}
             style={{
-              fontSize: '1.15rem',
+              fontSize: '1.08rem',
               fontWeight: 800,
               color: tokens.colors.textPrimary,
               letterSpacing: '0.01em',
@@ -89,7 +90,7 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
           {partnerClock && (
             <span
               style={{
-                fontSize: '0.74rem',
+                fontSize: '0.73rem',
                 fontWeight: 600,
                 color: tokens.colors.textMuted,
                 fontVariantNumeric: 'tabular-nums',
@@ -103,7 +104,7 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
         </div>
 
         {couple.anniversary_date && (
-          <span style={{ fontSize: '0.74rem', color: tokens.colors.textMuted }}>
+          <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted }}>
             Together for {formatTogetherDuration(together)}
           </span>
         )}
@@ -113,8 +114,8 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
         onClick={onOpenSettings}
         aria-label="Settings"
         style={{
-          width: '36px',
-          height: '36px',
+          width: '34px',
+          height: '34px',
           borderRadius: tokens.radii.full,
           backgroundColor: tokens.colors.bgSurface,
           border: `1px solid ${tokens.colors.borderSubtle}`,
@@ -127,7 +128,7 @@ export const CoupleHeader: React.FC<CoupleHeaderProps> = ({
           flexShrink: 0,
         }}
       >
-        <Settings size={17} />
+        <Settings size={16} />
       </button>
     </header>
   );

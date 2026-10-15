@@ -55,22 +55,24 @@ export const AuthView: React.FC<AuthModalProps> = ({ onSuccess }) => {
     <div
       style={{
         flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
-        padding: '0 24px',
+        padding: '16px 20px',
       }}
     >
       <div
         style={{
           backgroundColor: tokens.colors.bgSurface,
           borderRadius: tokens.radii.card,
-          padding: '36px 24px',
+          padding: '28px 20px',
           boxShadow: tokens.shadows.card,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '18px',
+          gap: '16px',
         }}
       >
         <div
