@@ -14,6 +14,8 @@ interface HomeViewProps {
   onOpenCalendar: () => void;
   userName?: string;
   partnerName?: string;
+  /** Realtime presence for the other partner; this phone is already active on Home. */
+  partnerOnline?: boolean;
   userWins?: number;
   partnerWins?: number;
   dailyStatus?: string;
@@ -28,7 +30,7 @@ interface HomeViewProps {
  * - The Today card: today's date, anything happening today, and what is coming within the next day.
  * - The Daily game card: a "Today's challenge" card with a play button and a
  *   scoreboard showing wins for each partner (saved match wins).
- * - An empty rounded area at the bottom of the screen, reserved for a future animated scene.
+ * - A shared cozy nook, with a small top-right caption and presence-aware companion art.
  */
 export const HomeView: React.FC<HomeViewProps> = ({
   events,
@@ -38,6 +40,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenCalendar,
   userName,
   partnerName,
+  partnerOnline = false,
   userWins = 0,
   partnerWins = 0,
   onPlayDailyGame,
@@ -80,13 +83,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
         playLabel={dailyLabel}
       />
 
-      {/* Cozy living nook — their little box. Watch-only, never interactive. */}
+      {/* Cozy living nook — our shared little space. Watch-only, never interactive. */}
       <div
         data-scene-placeholder
         data-area="animated-scene"
         data-nooki-nook="cozy"
+        data-partner-online={partnerOnline ? 'true' : 'false'}
         role="region"
-        aria-label="Their cozy nook — watch them just living life together"
+        aria-label="Our little nook — watch the Nookis sharing a cozy moment"
         className="nooki-cozy-nook"
         style={{
           flex: '1 1 145px',
@@ -128,7 +132,39 @@ export const HomeView: React.FC<HomeViewProps> = ({
             pointerEvents: 'none',
           }}
         />
-        <HomeNookiCompanions ambient />
+        <div
+          data-nooki-caption
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '12px',
+            zIndex: 2,
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '5px 9px',
+            borderRadius: tokens.radii.pill,
+            backgroundColor: 'rgba(255,255,255,0.82)',
+            border: `1px solid ${tokens.colors.borderSubtle}`,
+            boxShadow: tokens.shadows.subtle,
+            color: tokens.colors.textMuted,
+            fontFamily: tokens.typography.fontFamily,
+            fontSize: '8.5px',
+            fontWeight: 700,
+            letterSpacing: '0.7px',
+            lineHeight: 1.1,
+            textTransform: 'uppercase',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Our little nook
+        </div>
+        <HomeNookiCompanions
+          ambient
+          partnerOnline={partnerOnline}
+          expression={partnerOnline ? 'affectionate' : 'happy'}
+        />
       </div>
     </section>
   );

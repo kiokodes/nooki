@@ -456,6 +456,7 @@ export const AppPreview = () => {
                 onOpenCalendar={() => setShowCalendar(true)}
                 userName={profile.name}
                 partnerName={partner.name}
+                partnerOnline={partnerOnline}
               />
             ) : (
               /* The real chat: sending, receipts, typing and day separators all work. */

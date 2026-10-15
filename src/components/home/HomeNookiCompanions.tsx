@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NookiPair } from '../common/NookiPair';
 import { COMPANION_ASSETS } from '../../lib/companionAssets';
-import type { HomeNookiCompanionsProps } from '../../types/companions';
+import type { CompanionExpression, HomeNookiCompanionsProps } from '../../types/companions';
 
 /**
  * HomeNookiCompanions — A quiet, affectionate home-screen companion presence.
@@ -14,15 +14,7 @@ import type { HomeNookiCompanionsProps } from '../../types/companions';
  * - Decouples layout from rendering so a future finished animation loop can be dropped in cleanly.
  * - Keeps decorative artwork out of hit-testing and accessibility focus.
  */
-const AMBIENT_WEIGHTS: Record<string, number> = {
-  happy: 35,
-  affectionate: 25,
-  laughing: 15,
-  shy: 15,
-  surprised: 10,
-};
-
-const EXPRESSION_ORDER: Array<import('../../types/companions').CompanionExpression> = [
+const EXPRESSION_ORDER: CompanionExpression[] = [
   'happy',
   'affectionate',
   'laughing',
@@ -30,16 +22,32 @@ const EXPRESSION_ORDER: Array<import('../../types/companions').CompanionExpressi
   'surprised',
 ];
 
-function pickNextAmbient(current: string): import('../../types/companions').CompanionExpression {
-  // Weighted pick among the 4 not-current, so they never freeze on one frame
-  const pool = EXPRESSION_ORDER.filter((e) => e !== current);
-  const total = pool.reduce((sum, e) => sum + (AMBIENT_WEIGHTS[e] ?? 10), 0);
+const TOGETHER_EXPRESSIONS: CompanionExpression[] = ['affectionate', 'laughing', 'happy'];
+const PARTNER_AWAY_EXPRESSIONS: CompanionExpression[] = ['happy', 'shy'];
+
+function safeExpression(expression: string): CompanionExpression {
+  const candidate = expression as CompanionExpression;
+  return EXPRESSION_ORDER.includes(candidate) ? candidate : 'happy';
+}
+
+const AMBIENT_WEIGHTS: Record<'together' | 'partner-away', Partial<Record<CompanionExpression, number>>> = {
+  together: { affectionate: 45, laughing: 35, happy: 20 },
+  'partner-away': { happy: 75, shy: 25 },
+};
+
+function pickNextAmbient(current: CompanionExpression, partnerOnline: boolean): CompanionExpression {
+  // Keep the mood pool in step with live partner presence rather than drifting blindly.
+  const mode = partnerOnline ? 'together' : 'partner-away';
+  const expressions = partnerOnline ? TOGETHER_EXPRESSIONS : PARTNER_AWAY_EXPRESSIONS;
+  const weights = AMBIENT_WEIGHTS[mode];
+  const pool = expressions.filter((expression) => expression !== current);
+  const total = pool.reduce((sum, expression) => sum + (weights[expression] ?? 10), 0);
   let r = Math.random() * total;
-  for (const e of pool) {
-    r -= AMBIENT_WEIGHTS[e] ?? 10;
-    if (r <= 0) return e;
+  for (const expression of pool) {
+    r -= weights[expression] ?? 10;
+    if (r <= 0) return expression;
   }
-  return pool[0] ?? 'happy';
+  return pool[0] ?? (partnerOnline ? 'affectionate' : 'happy');
 }
 
 function dwellFor(expression: string): number {
@@ -54,6 +62,7 @@ export const HomeNookiCompanions: React.FC<HomeNookiCompanionsProps> = ({
   expression = 'happy',
   paused = false,
   ambient = false,
+  partnerOnline = false,
   renderAnimation,
   className,
   style,
@@ -105,26 +114,38 @@ export const HomeNookiCompanions: React.FC<HomeNookiCompanionsProps> = ({
   const shouldAnimate = !prefersReducedMotion && isDocumentVisible && !paused;
 
   // --- Ambient living theatre (watch-only) -------------------------------
-  // When ambient is true we softly crossfade between the five flattened
-  // pair illustrations. The whole stack still breathes with the same
-  // 5s idle, but the expression itself drifts so the box feels alive.
+  // When ambient is true we crossfade between presence-aware expressions:
+  // affectionate/laughing/happy together, or happy/shy while the partner is away.
+  // The whole stack still breathes with the same 5s idle.
   // Timers respect shouldAnimate / prefersReducedMotion / visibility.
-  const [displayExpr, setDisplayExpr] = useState<import('../../types/companions').CompanionExpression>(
-    () => (EXPRESSION_ORDER.includes(expression as any) ? (expression as any) : 'happy'),
-  );
-  const [overlayExpr, setOverlayExpr] = useState<import('../../types/companions').CompanionExpression>(displayExpr);
+  const [displayExpr, setDisplayExpr] = useState<CompanionExpression>(() => safeExpression(expression));
+  const [overlayExpr, setOverlayExpr] = useState<CompanionExpression>(displayExpr);
   const [isFading, setIsFading] = useState(false);
+  const requestedExpression = safeExpression(expression);
+  const requestedExpressionRef = useRef<CompanionExpression>(requestedExpression);
 
-  // Keep ambient start in sync if the caller changes the initial expression
-  // while ambient is off. When ambient is on we let the theatre run.
+  // Snap static art to its prop, and crossfade to a new context expression when
+  // live presence changes while the ambient theatre is running.
   useEffect(() => {
     if (!ambient) {
-      const safe = EXPRESSION_ORDER.includes(expression as any) ? (expression as any) : 'happy';
-      setDisplayExpr(safe);
-      setOverlayExpr(safe);
+      requestedExpressionRef.current = requestedExpression;
+      setDisplayExpr(requestedExpression);
+      setOverlayExpr(requestedExpression);
       setIsFading(false);
+      return;
     }
-  }, [expression, ambient]);
+
+    if (requestedExpressionRef.current === requestedExpression) return;
+    requestedExpressionRef.current = requestedExpression;
+    setOverlayExpr(requestedExpression);
+    setIsFading(true);
+    const fadeId = window.setTimeout(() => {
+      setDisplayExpr(requestedExpression);
+      setIsFading(false);
+    }, 420); // 380ms CSS crossfade + 40ms grace
+
+    return () => window.clearTimeout(fadeId);
+  }, [requestedExpression, ambient]);
 
   // Pre-warm the five images so crossfades never flash
   useEffect(() => {
@@ -146,7 +167,7 @@ export const HomeNookiCompanions: React.FC<HomeNookiCompanionsProps> = ({
     let fadeId: number | undefined;
 
     dwellId = window.setTimeout(() => {
-      const next = pickNextAmbient(displayExpr);
+      const next = pickNextAmbient(displayExpr, partnerOnline);
       setOverlayExpr(next);
       // Next frame so the browser sees overlay at 0 before we fade to 1
       triggerId = window.setTimeout(() => setIsFading(true), 20);
@@ -161,7 +182,7 @@ export const HomeNookiCompanions: React.FC<HomeNookiCompanionsProps> = ({
       if (triggerId !== undefined) window.clearTimeout(triggerId);
       if (fadeId !== undefined) window.clearTimeout(fadeId);
     };
-  }, [ambient, shouldAnimate, prefersReducedMotion, renderAnimation, displayExpr]);
+  }, [ambient, shouldAnimate, prefersReducedMotion, renderAnimation, displayExpr, partnerOnline]);
 
   // When paused / hidden / reduced-motion, snap the theatre closed
   useEffect(() => {
@@ -172,6 +193,7 @@ export const HomeNookiCompanions: React.FC<HomeNookiCompanionsProps> = ({
     <div
       data-component="home-nooki-companions"
       data-companions-active={shouldAnimate ? 'true' : 'false'}
+      data-partner-online={partnerOnline ? 'true' : 'false'}
       role="presentation"
       aria-hidden="true"
       className={className}
@@ -195,10 +217,8 @@ export const HomeNookiCompanions: React.FC<HomeNookiCompanionsProps> = ({
           prefersReducedMotion,
         })
       ) : ambient && !prefersReducedMotion ? (
-        // Ambient living theatre — watch-only. Same breathing wrapper so
-        // existing tests for .nooki-companions-idle / .nooki-companions-art
-        // keep passing, but the inside crossfades between the five flattened
-        // illustrations on a cozy dwell. Nothing is clickable.
+        // Ambient living theatre — watch-only. Same breathing wrapper; the
+        // expression pool follows partner presence. Nothing is clickable.
         <div
           className={`nooki-companions-wrapper ${shouldAnimate ? 'nooki-companions-idle' : 'nooki-companions-paused'}`}
           style={{
