@@ -598,15 +598,20 @@ export const App: React.FC = () => {
             }
 
             // Unread messages are announced on the Chat tab, unanswered questions on
-            // Discuss; both show as the same small count.
-            const unreadBadge = tab.key === 'chat'
+            // Discuss and matches waiting on this phone on Games; all show as the
+            // same small count.
+            const tabBadge = tab.key === 'chat'
               ? chat.unreadCount
               : tab.key === 'discuss'
                 ? discuss.pendingCount
-                : 0;
+                : tab.key === 'games'
+                  ? games.pendingCount
+                  : 0;
             const badgeWords = tab.key === 'discuss'
-              ? `${unreadBadge} question${unreadBadge === 1 ? '' : 's'} waiting`
-              : `${unreadBadge} unread ${unreadBadge === 1 ? 'message' : 'messages'}`;
+              ? `${tabBadge} question${tabBadge === 1 ? '' : 's'} waiting`
+              : tab.key === 'games'
+                ? `${tabBadge} game${tabBadge === 1 ? '' : 's'} waiting for you`
+                : `${tabBadge} unread ${tabBadge === 1 ? 'message' : 'messages'}`;
 
             return (
               <button
@@ -614,7 +619,7 @@ export const App: React.FC = () => {
                 type="button"
                 data-nav-tab={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                aria-label={unreadBadge ? `${tab.label}, ${badgeWords}` : tab.label}
+                aria-label={tabBadge ? `${tab.label}, ${badgeWords}` : tab.label}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -646,9 +651,9 @@ export const App: React.FC = () => {
                   }}
                 >
                   <Icon size={19} strokeWidth={isActive ? 2.4 : 2} />
-                  {unreadBadge > 0 && (
+                  {tabBadge > 0 && (
                     <span className="nooki-nav-badge" data-nav-badge={tab.key} aria-hidden="true">
-                      {unreadBadge > 99 ? '99+' : unreadBadge}
+                      {tabBadge > 99 ? '99+' : tabBadge}
                     </span>
                   )}
                 </div>

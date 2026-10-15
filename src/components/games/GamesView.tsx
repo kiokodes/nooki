@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GAMES } from '../../lib/gamesService';
-import type { GamesState } from '../../hooks/useGames';
+import { needsMyMove, type GamesState } from '../../hooks/useGames';
 import './games.css';
 export function GamesView({ games, userId, partnerName }: { games: GamesState; userId: string; partnerName: string }) {
   const [bestOf, setBestOf] = useState(3);
@@ -29,7 +29,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
         {m.finished && (m.daily_date ? <p>Today’s challenge is complete. Come back after midnight UTC for another, or play freely in Games.</p> : <button disabled={games.busy} onClick={() => void games.start(m.game, false, m.best_of)}>Play again</button>)}
       </div>
     </> : <>
-      {games.data?.matches.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => games.select(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
+      {games.data?.matches.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => games.select(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
       {GAMES.map(game => <article className="game-card" key={game.id}><div className="game-icon" aria-hidden="true">{game.icon}</div><h2>{game.name}</h2><p>{game.description}</p>{game.id === 'rock-paper-scissors' && <fieldset><legend>Match length</legend>{[3,5].map(n => <button key={n} aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}</fieldset>}<button disabled={games.busy || !games.data} onClick={() => void games.start(game.id, false, bestOf)}>Play with {partnerName} →</button></article>)}
       <p className="game-hint">Games are always open for a rematch. Today’s Challenge on Home is one shared match per day.</p>
     </>}
