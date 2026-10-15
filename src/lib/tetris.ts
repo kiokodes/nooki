@@ -5,7 +5,7 @@
  * A run is nothing but a piece sequence plus the list of taps the player made. Both the
  * phone and the database replay those two to arrive at the same board, the same score and
  * the same top-out — which is how the database can verify a score it never watched (see
- * `supabase/migrations/202610150011_tetris_duel.sql`). That only works while this file
+ * `supabase/migrations/202610150012_tetris_duel.sql`). That only works while this file
  * stays free of randomness, timers and DOM access, and while every rule here has a twin in
  * SQL: if you change a constant or a rule, change it in both places, or honest runs will
  * be disqualified.

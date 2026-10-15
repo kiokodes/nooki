@@ -243,7 +243,7 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
     assert.ok(clocked.pieces.length === TETRIS_PIECE_COUNT);
 
     // --- Safe to rerun on a live project: the migration leaves the duels alone ---------
-    const migration = await readFile(new URL('../supabase/migrations/202610150011_tetris_duel.sql', import.meta.url), 'utf8');
+    const migration = await readFile(new URL('../supabase/migrations/202610150012_tetris_duel.sql', import.meta.url), 'utf8');
     const beforeRerun = await games.fetchGames();
     const beforeMigration = beforeRerun.matches.map((item) => [item.id, item.finished, item.winner_id]);
     await db.exec(migration);

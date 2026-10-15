@@ -25,13 +25,18 @@
 --
 -- Everything here is RPC-only, like the rest of Games: `game_matches` still has no table
 -- grants, and the snapshot never publishes an unfinished partner's score (a blind duel).
+--
+-- Run this after `202610150011_chess.sql`. It re-creates `games_state()` and `start_game()`,
+-- and it carries Chess along as it does: the snapshot keeps its `chess` key and the game
+-- check keeps `chess` allowed. Applying it the other way round (before 011) would leave
+-- Chess unable to start, so reorder the two if that is what your project needs.
 BEGIN;
 
 -- The duel lives on the same match row as the other games, so the Games tab badge, the
 -- one-open-match-per-mode rule and the win scoreboard all keep working untouched.
 ALTER TABLE public.game_matches DROP CONSTRAINT IF EXISTS game_matches_game_check;
 ALTER TABLE public.game_matches ADD CONSTRAINT game_matches_game_check
-  CHECK (game IN ('tic-tac-toe','rock-paper-scissors','snake','tetris'));
+  CHECK (game IN ('tic-tac-toe','rock-paper-scissors','snake','chess','tetris'));
 ALTER TABLE public.game_matches ADD COLUMN IF NOT EXISTS tetris jsonb NOT NULL DEFAULT '{}'::jsonb;
 -- Which of the two ways this duel is settled. Null on every other game.
 ALTER TABLE public.game_matches ADD COLUMN IF NOT EXISTS tetris_mode text;
@@ -470,10 +475,11 @@ BEGIN IF cid IS NULL THEN RAISE EXCEPTION 'Pair with your partner to play.'; END
  'wins', (SELECT coalesce(jsonb_object_agg(winner_id,n),'{}') FROM
    (SELECT winner_id,count(*) n FROM public.game_matches WHERE couple_id=cid AND finished AND winner_id IS NOT NULL GROUP BY winner_id) w),
  'matches',coalesce((SELECT jsonb_agg(safe ORDER BY created_at DESC) FROM (
- SELECT created_at, (to_jsonb(m)-'pick_x'-'pick_o'-'snake'-'tetris') || jsonb_build_object(
+ SELECT created_at, (to_jsonb(m)-'pick_x'-'pick_o'-'snake'-'chess'-'tetris') || jsonb_build_object(
  'my_pick',CASE WHEN auth.uid()=player_x THEN pick_x ELSE pick_o END,
  'partner_locked',CASE WHEN auth.uid()=player_x THEN pick_o IS NOT NULL ELSE pick_x IS NOT NULL END,
  'snake',CASE WHEN m.game='snake' THEN public.snake_view(m.snake, auth.uid(), m.finished, m.player_x, m.player_o) END,
+ 'chess',CASE WHEN m.game='chess' THEN public.chess_view(m.chess) END,
  'tetris',CASE WHEN m.game='tetris' THEN public.tetris_view(m.tetris, auth.uid(), m.finished, m.player_x, m.player_o, m.tetris_mode) END) safe
  FROM public.game_matches m WHERE couple_id=cid AND (NOT finished OR daily_date=(now() AT TIME ZONE 'UTC')::date OR id IN (SELECT id FROM public.game_matches WHERE couple_id=cid ORDER BY created_at DESC LIMIT 30))
  ) recent),'[]')) INTO result;

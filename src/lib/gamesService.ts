@@ -106,7 +106,7 @@ async function rpc<T>(name: string, args = {}): Promise<T> {
       throw new Error(name.startsWith('snake')
         ? 'Snake needs a database update. Apply migration 202610150010_snake_duel.sql.'
         : name.startsWith('tetris')
-          ? 'Tetris needs a database update. Apply migration 202610150011_tetris_duel.sql.'
+          ? 'Tetris needs a database update. Apply migration 202610150012_tetris_duel.sql.'
           : 'Games needs a database update. Apply migration 202610150007_games.sql.');
     }
     throw new Error(error.message);
@@ -162,7 +162,7 @@ export const forfeitSnakeRun = (id: string) => rpc<SnakeRun>('snake_forfeit', { 
    Tetris duel. The same bargain as the snake duel, and the same reason for it:
    the database deals the pieces, the phone reports nothing but its taps, and
    the database replays them to work out what the run really scored. See
-   supabase/migrations/202610150011_tetris_duel.sql.
+   supabase/migrations/202610150012_tetris_duel.sql.
    --------------------------------------------------------------------------- */
 
 /** The taps a phone reports, as the wire shape the database stores. */

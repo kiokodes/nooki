@@ -2219,7 +2219,7 @@ COMMIT;
 
 -- ============================================================================
 -- 15c. The Tetris duel: five minutes each, same pieces, two ways to settle it.
--- Mirrors supabase/migrations/202610150011_tetris_duel.sql for brand-new projects.
+-- Mirrors supabase/migrations/202610150012_tetris_duel.sql for brand-new projects.
 -- A run is the piece sequence the database dealt plus the taps the phone reported, and
 -- `tetris_replay` walks those through the same rules as src/lib/tetris.ts — so the score
 -- is never something a phone can claim. The rules come from

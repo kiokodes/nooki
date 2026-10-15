@@ -374,7 +374,7 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All of the migrations are idempotent and safe to rerun; they never drop or rewrite existing
 data (the pairing migration only changes policies, the calendar migration only adds a table
@@ -633,7 +633,7 @@ partners are paired; ending a completed couple requires both partners' agreement
 
 Apply **`supabase/migrations/202610150007_games.sql`** to an existing project before
 shipping Games, then **`supabase/migrations/202610150010_snake_duel.sql`** before shipping
-the Snake Duel, then **`supabase/migrations/202610150011_tetris_duel.sql`** before shipping
+the Snake Duel, then **`supabase/migrations/202610150011_chess.sql`** for Chess, then **`supabase/migrations/202610150012_tetris_duel.sql`** before shipping
 the Tetris Duel, then run **`supabase/verify-games.sql`** in addition to the usual
 `verify.sql`. New projects get all three from `schema.sql`. The migrations are additive
 and rerunnable; they do not reset existing matches or duels. They have not been applied

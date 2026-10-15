@@ -52,29 +52,29 @@ BEGIN
    END IF;
  END LOOP;
 
- -- The Tetris duel (migration 011): the same bargain as Snake, on a different board. The
+ -- The Tetris duel (migration 012): the same bargain as Snake, on a different board. The
  -- piece sequence is dealt here, the taps are checked here, and the score is replayed here.
  IF NOT EXISTS (
    SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='game_matches' AND column_name='tetris'
  ) THEN
-   RAISE EXCEPTION 'Apply supabase/migrations/202610150011_tetris_duel.sql before deploying Tetris.';
+   RAISE EXCEPTION 'Apply supabase/migrations/202610150012_tetris_duel.sql before deploying Tetris.';
  END IF;
  IF NOT EXISTS (
    SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='game_matches' AND column_name='tetris_mode'
  ) THEN
-   RAISE EXCEPTION 'A Tetris duel is fixed to the mode it was started in: rerun migration 011.';
+   RAISE EXCEPTION 'A Tetris duel is fixed to the mode it was started in: rerun migration 012.';
  END IF;
  IF NOT EXISTS (
    SELECT 1 FROM pg_constraint
     WHERE conrelid='public.game_matches'::regclass AND contype='c'
       AND pg_get_constraintdef(oid) LIKE '%tetris%'
  ) THEN
-   RAISE EXCEPTION 'The game_matches game check does not allow tetris: rerun migration 011.';
+   RAISE EXCEPTION 'The game_matches game check does not allow tetris: rerun migration 012.';
  END IF;
  IF to_regprocedure('public.tetris_replay(jsonb,jsonb,integer,integer)') IS NULL THEN
-   RAISE EXCEPTION 'Missing the Tetris replay the score is derived from: apply migration 011.';
+   RAISE EXCEPTION 'Missing the Tetris replay the score is derived from: apply migration 012.';
  END IF;
  FOREACH fn IN ARRAY ARRAY['public.tetris_start(uuid)','public.tetris_beat(uuid,integer,jsonb)','public.tetris_finish(uuid,integer,jsonb)','public.tetris_forfeit(uuid)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Tetris RPC: %',fn; END IF;
