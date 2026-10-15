@@ -1,4 +1,4 @@
-# Nooki · Couples App for Long-Distance Partners 🏡💕
+# Nooki · Cosy App for Long-Distance Couples 🏡💕
 
 Nooki uses React + TypeScript + Vite, Supabase Auth/PostgreSQL, and Vercel.
 
