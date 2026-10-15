@@ -10,8 +10,8 @@
 .games-view button:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; }
 .games-view .game-back { background:transparent; padding-left:0; margin-bottom:12px; }
 .game-icon { font-size:1.8rem; letter-spacing:8px; }
-.games-view fieldset { border:0; padding:0; margin:16px 0; display:flex; gap:8px; }
-.games-view legend { font-size:.75rem; margin-bottom:8px; }
+.games-view fieldset { border:0; padding:0; margin:16px 0; display:flex; flex-wrap:wrap; gap:8px; }
+.games-view legend { font-size:.75rem; font-weight:700; flex:0 0 100%; margin:0 0 8px; }
 .games-view [aria-pressed] { background:#f4edf5; }
 .games-view [aria-pressed=true] { background:#ddc6e4; box-shadow:inset 0 0 0 2px #93749d; }
 .ttt-board { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:320px; margin:20px auto; }
@@ -25,5 +25,16 @@
 .rps-picks button { flex:1; min-width:0; padding:14px 4px; text-transform:capitalize; font-size:.75rem; background:#f4edf5; }
 .rps-picks span { display:block; font-size:2rem; margin-bottom:8px; }
 .game-round { border-top:1px solid #eee4e7; padding:12px 0 0; font-size:.8rem; }
-.games-view .game-resume { display:block; width:100%; text-align:left; background:#e8efdf; }
+.games-view .game-resume { display:block; width:100%; text-align:left; background:#e8efdf; padding:18px 20px; }
 .game-resume small { display:block; margin-top:5px; }
+
+/* Card rhythm.
+   The global reset in index.css sets every margin to 0, so the blocks inside a
+   game card need their own spacing. Without this the copy runs straight into
+   the next element — the call-to-action button in the Tic Tac Toe card ends
+   up sitting on top of the description above it. */
+.game-card > p { margin:0 0 12px; }
+.game-card > p:last-child { margin-bottom:0; }
+.game-card h2 { margin:8px 0 6px; }
+.game-card h3 { margin:18px 0 10px; }
+.game-card .game-hint { margin-top:10px; }
