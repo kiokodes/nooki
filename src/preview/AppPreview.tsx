@@ -11,6 +11,7 @@ import {
 import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
 import { PreviewSnake } from './PreviewSnake';
+import { PreviewTetris } from './PreviewTetris';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { ChatView } from '../components/chat/ChatView';
@@ -214,6 +215,8 @@ export const AppPreview = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<PreviewTab>('home');
+  // Which duel the Games tab is showing: the preview has both, one at a time.
+  const [previewGame, setPreviewGame] = useState<'snake' | 'tetris'>('tetris');
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -449,9 +452,36 @@ export const AppPreview = () => {
             />
 
             {tab === 'games' ? (
-              /* The duel, played out on this page: same board, same rules, no backend. */
+              /* The duels, played out on this page: same boards, same rules, no backend.
+                 A toggle rather than two tabs — the preview is a page, not an app. */
               <section style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px 24px' }}>
-                <PreviewSnake partnerName={partner.name} />
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                  {(['snake', 'tetris'] as const).map((game) => (
+                    <button
+                      key={game}
+                      type="button"
+                      aria-pressed={previewGame === game}
+                      onClick={() => setPreviewGame(game)}
+                      data-preview-game={game}
+                      style={{
+                        font: 'inherit',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        border: 'none',
+                        borderRadius: '14px',
+                        padding: '9px 14px',
+                        cursor: 'pointer',
+                        backgroundColor: previewGame === game ? tokens.colors.primaryPink : tokens.colors.accentLavenderSoft,
+                        color: tokens.colors.textPrimary,
+                      }}
+                    >
+                      {game === 'tetris' ? '🧱 Tetris Duel' : '🐍 Snake Duel'}
+                    </button>
+                  ))}
+                </div>
+                {previewGame === 'tetris'
+                  ? <PreviewTetris partnerName={partner.name} />
+                  : <PreviewSnake partnerName={partner.name} />}
               </section>
             ) : tab === 'home' ? (
               <HomeView
@@ -636,7 +666,9 @@ export const AppPreview = () => {
         {tab === 'chat'
           ? 'Chat preview · sample conversation only · send a message, or make Ana type and reply'
           : tab === 'games'
-            ? 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database'
+            ? (previewGame === 'tetris'
+              ? 'Tetris Duel preview · played out on this page, no backend · the real duel is scored by the database'
+              : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
             : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
       </p>
     </div>

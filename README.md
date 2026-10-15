@@ -245,8 +245,8 @@ profile" RLS policy, so **no migration is required** for any of this. Two caveat
 
 ### Design preview (development only)
 
-`npm run dev` serves a sample-data preview of the header, Home surface, Chat tab and
-Snake Duel at **http://localhost:5173/preview.html**. It uses static names ("Sam & Ana"),
+`npm run dev` serves a sample-data preview of the header, Home surface, Chat tab and both
+duels at **http://localhost:5173/preview.html**. It uses static names ("Sam & Ana"),
 needs no Supabase project, and lets you flip the partner between online and away, switch
 anniversary examples, and open the real calendar modal with sample events where
 add/edit/delete work in memory. The Chat tab is the real component over an in-memory
@@ -254,7 +254,9 @@ transcript, so you can send a message, watch one check turn into two, make Ana t
 her reply, and see the unread badge. The Games tab is the real snake board over a
 simulated duel: deal a run, steer it with the arrow keys, the WASD keys, a swipe or the
 D-pad, watch the leave-and-forfeit question, and see the reveal against a sample partner
-score. It reuses the real header, chat and board components so it cannot drift from the
+score; a toggle above the board switches to the Tetris Duel, where you can play five
+minutes of it with the on-screen pad. It reuses the real header, chat and board components
+so it cannot drift from the
 app — but the preview's duel is played out on the page, since the ranked one depends on the
 database dealing the food and replaying the run. It is a dev-server route only: `npm run build` still publishes
 `index.html` alone, and the app itself has no mock/sample mode.
@@ -372,7 +374,7 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All of the migrations are idempotent and safe to rerun; they never drop or rewrite existing
 data (the pairing migration only changes policies, the calendar migration only adds a table
@@ -386,8 +388,8 @@ column, the realtime `messages` chat (type check, policies, immutability trigger
 publication membership), the Discuss engine (its five tables, the policies that never
 reveal a sealed answer, the canonicalised library, the three question RPCs, and that the
 app cannot write to `questions`), and that `anon` cannot reach couple data. If it raises,
-it names the file to rerun. `verify-games.sql` additionally checks that the Snake Duel's
-replay and its private internals are in place, and that a phone cannot settle a duel or
+it names the file to rerun. `verify-games.sql` additionally checks that both duels'
+replays and their private internals are in place, and that a phone cannot settle a duel or
 score a run without playing it.
 
 **If you already ran the calendar migration before the repeat control existed**, rerun
@@ -613,7 +615,8 @@ mutual-breakup settings are implemented. Media hosts **Read together** (shared b
 one EPUB or PDF in play per couple, a full-screen reader, saved places for both
 partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
 back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes
-Tic Tac Toe, Rock Paper Scissors and the asynchronous Snake Duel, and voice/video calling
+Tic Tac Toe, Rock Paper Scissors, the asynchronous Snake Duel and the asynchronous Tetris
+Duel (five minutes each, in either a sprint or a survival), and voice/video calling
 is still a "coming soon" toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, and the question library is whatever the owner imported into `questions`.
@@ -630,8 +633,9 @@ partners are paired; ending a completed couple requires both partners' agreement
 
 Apply **`supabase/migrations/202610150007_games.sql`** to an existing project before
 shipping Games, then **`supabase/migrations/202610150010_snake_duel.sql`** before shipping
-the Snake Duel, then run **`supabase/verify-games.sql`** in addition to the usual
-`verify.sql`. New projects get both from `schema.sql`. Both migrations are additive
+the Snake Duel, then **`supabase/migrations/202610150011_tetris_duel.sql`** before shipping
+the Tetris Duel, then run **`supabase/verify-games.sql`** in addition to the usual
+`verify.sql`. New projects get all three from `schema.sql`. The migrations are additive
 and rerunnable; they do not reset existing matches or duels. They have not been applied
 to your live project by the frontend build.
 
@@ -678,6 +682,59 @@ to your live project by the frontend build.
 - **Snake Duel · not the daily challenge:** the daily pool stays Tic Tac Toe and Rock
   Paper Scissors (`start_game` never picks snake for a daily match). A duel waits however
   long both partners need, which one UTC day is the wrong container for.
+- **Tetris Duel:** five minutes each, and both partners play the same pieces — dealt once
+  per duel, so the two runs are like for like no matter how far apart in time they happen.
+  Neither partner needs to be online when the other plays. A run starts the moment it is
+  entered and cannot be paused: leaving the run is a forfeit and the partner takes the duel
+  there and then, and a phone that goes quiet for more than **30 seconds** (locked,
+  backgrounded, no signal) is treated as having left. Time in the background is not paused
+  either — the clock keeps running and the pieces keep falling, so a run that is left alone
+  fills its own well. Reloading is the same: you get the 30 seconds to pick the run back up,
+  from the tick the server last heard about. The well is 10×16 and the speed climbs with
+  every ten lines you clear, from 0.75s a row to 0.15s at a hundred lines.
+- **Tetris Duel · the two ways to settle it,** chosen when the duel is started and fixed for
+  its lifetime:
+  - **Sprint** — *highest score in five minutes*. Fill your well early and you bank whatever
+    you had reached, which is usually not enough: the five minutes are the whole game.
+  - **Survival** — *last one stacking wins*. Whoever keeps going for longer takes it, and
+    the score only separates two runs that lasted exactly the same number of ticks. Sitting
+    still is not a way to win this one: a well that is never cleared buries itself in about
+    forty seconds, so you have to keep the board down to stay in it.
+  A sprint and a survival can both be open at once; neither is the other's rematch.
+- **Tetris Duel · the rules come from** [`KPaccarizi/_Tetris_Game`](https://github.com/KPaccarizi/_Tetris_Game),
+  a Pygame coding-challenge entry: the same seven tetrominoes, the same spawn, the same
+  rotation about a piece's first cell, and the same `{1:100, 2:300, 3:700, 4:1500}` for a
+  clear. Its pygame loop is rewritten as a tick simulation so the database can replay it;
+  three of its rough edges are deliberately **not** carried over, and `src/lib/tetris.ts`
+  names all three (a row-clear that left a stale row behind, a game over that waited for
+  the top row to fill, and a rotation that could wander off the top of the board).
+- **Tetris Duel · scorekeeping:** exactly the Snake bargain. The database deals the pieces,
+  the phone reports only its taps and its tick count, and the database replays that history
+  through the same rules as `src/lib/tetris.ts` to derive the score, the lines and the
+  top-out (`tetris_replay`). Reports are append-only, cannot be rewound, and cannot outrun
+  real time (one tick per 50ms, plus six ticks of slack for the round trip), and each side
+  may start exactly one run per duel — so a run cannot be re-rolled, sped up or handed in
+  twice. Both `tetris_replay` and `src/lib/tetris.ts` hold the same constants and the same
+  rules: **changing one without the other disqualifies honest runs**, and the database test
+  compares the two scores precisely because that is the failure mode. As with Snake, the
+  honest limit is that the piece sequence is sent to the phone, so a technical player who
+  scripts a bot could still play a very good run at human speed: this stops score forgery
+  and re-rolls between two people who trust each other, not a tournament.
+- **Tetris Duel · secrecy and warm-up:** a blind duel, the same as Snake — the partner's
+  score is sealed until both runs are in (`tetris_view` strips it from the snapshot), and a
+  partner who is playing right now shows only as *playing right now*. A forfeit ends the
+  duel immediately and reveals the score the leaver had reached. The same board, dealt on
+  the phone itself, never reported and never scored, is offered on the gate, while waiting
+  for the partner, and from the Tetris Duel card in the library.
+- **Tetris Duel · controls:** a phone has no arrow keys, so the board is played with
+  gestures and an on-screen pad: tap to turn the piece, slide sideways to move it, swipe
+  down to slam it, or use the ◀ ▶ ▼ ⟳ ⤓ buttons under the well. The keyboard (arrows and
+  space) works too. Where the piece would land is drawn as a shadow beneath it.
+- **Tetris Duel · leaving a tab and the daily challenge:** a live ranked run guards the
+  app's navigation, exactly as a Snake run does — changing tab asks first, over the board,
+  which keeps running because there is no pause. Neither duel is ever the daily challenge
+  (`start_game` never picks snake or tetris for a daily match): both wait however long the
+  two partners need, which one UTC day is the wrong container for.
 - **Games:** unlimited rematches; starting a game with an unfinished practice match
   resumes that match, including the original match length. A finished duel stays reachable
   from the library's *Last Snake Duel* row, so its result does not vanish.
@@ -693,20 +750,26 @@ to your live project by the frontend build.
   RPC's sanitized snapshot is returned to the couple; other accounts cannot read it.
 - To add another game, extend `GAMES` in `gamesService.ts`, its UI, and the database
   validator/daily selection pool together. No future game is selected until playable. A
-  game with rules of its own (as Snake has) wants its own RPCs plus its own row in the
-  snapshot, the way `snake_*` and `games_state`'s `snake` key do: never hand a phone the
-  authority to score itself.
+  game with rules of its own (as Snake and Tetris have) wants its own RPCs plus its own row
+  in the snapshot, the way `snake_*`/`tetris_*` and `games_state`'s `snake`/`tetris` keys
+  do: never hand a phone the authority to score itself. A game that is played against the
+  clock also wants a pure core next to `src/lib/snake.ts` and `src/lib/tetris.ts`, an SQL
+  replay that mirrors it, and a test that holds the two scores against each other — that
+  test is the only thing standing between a rule change and a week of disqualified runs.
 
 Before release, use two real paired accounts to play each game, verify a secret pick
 is absent from the other device's network responses, resume after a reload, finish a
 daily match, and confirm both devices can only view its result until midnight UTC.
-For the Snake Duel specifically: play both runs on two real phones (one of them in a
+For either duel specifically: play both runs on two real phones (one of them in a
 different time zone), leave a run halfway and confirm the partner is credited with the
 win, lock one phone for longer than 30 seconds mid-run and confirm the run is lost,
 reload mid-run and confirm the run resumes from the last report, and confirm the
 partner's score is nowhere in the other phone's network responses until both runs are in.
+For the Tetris Duel, play one sprint and one survival to completion and check the reveal
+says what you expected, and confirm the two of you were dealt the same pieces.
 The no-backend development preview remains sample UI, not a local game backend: the
-preview's Snake Duel is played out on the page, and a ranked duel needs the migration.
+preview's Snake and Tetris duels are played out on the page (there is a toggle above
+them), and a ranked duel needs its migration.
 
 ## Media tab: Read together (shared books)
 
