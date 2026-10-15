@@ -20,7 +20,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   const openMatch = (id: string | null) => { setWarmUp(null); setSudokuOpen(false); games.select(id); };
   const startWarmUp = () => setWarmUp({ foods: dealPracticeFoods(), nonce: Date.now() });
   /** The most recent snake duel, so its result stays reachable after it leaves the list. */
-  const lastDuel = games.data?.matches.find((match) => match.game === 'snake');
+  const lastDuel = games.data?.matches?.find((match) => match.game === 'snake');
   // A warm-up stands in for whatever the Games tab was showing: the duel panel, or the
   // whole library. It is the same board either way, and it never touches the database.
   // It yields the moment the duel is decided: nobody wants to be practising through the
@@ -69,9 +69,9 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
       <button className="game-back" onClick={() => setWarmUp(null)}>← All games</button>
       {practice}
     </> : <>
-      {games.data?.matches.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => openMatch(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
+      {games.data?.matches?.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => openMatch(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
       {lastDuel?.finished && <button className="game-card game-resume" onClick={() => openMatch(lastDuel.id)} data-last-duel>Last Snake Duel <small>{lastDuel.winner_id === userId ? 'You won' : lastDuel.winner_id ? `${partnerName} won` : 'A draw'} · You {lastDuel.snake?.mine?.score ?? 0} — {lastDuel.snake?.partner.score ?? 0} {partnerName} →</small></button>}
-      {GAMES.map(game => <article className="game-card" key={game.id}><div className="game-icon" aria-hidden="true">{game.icon}</div><h2>{game.name}</h2><p>{game.description}</p>{game.id === 'rock-paper-scissors' && <fieldset><legend>Match length</legend>{[3,5].map(n => <button key={n} aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}</fieldset>}<button disabled={games.busy || !games.data} onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : void games.start(game.id, false, bestOf)}>{game.id === 'snake' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : `Play with ${partnerName} →`}</button>{game.id === 'snake' && <button className="snake-secondary" disabled={games.busy || !games.data} onClick={startWarmUp} data-action="library-warm-up">Warm-up run (not counted)</button>}</article>)}
+      {GAMES.map(game => <article className="game-card" key={game.id}><div className="game-icon" aria-hidden="true">{game.icon}</div><h2>{game.name}</h2><p>{game.description}</p>{game.id === 'rock-paper-scissors' && <fieldset><legend>Match length</legend>{[3,5].map(n => <button key={n} aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}</fieldset>}<button type="button" disabled={games.busy || !games.data} onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : void games.start(game.id, false, bestOf)}>{game.id === 'snake' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : `Play with ${partnerName} →`}</button>{game.id === 'snake' && <button className="snake-secondary" disabled={games.busy || !games.data} onClick={startWarmUp} data-action="library-warm-up">Warm-up run (not counted)</button>}</article>)}
       <p className="game-hint">Games are always open for a rematch. Today’s Challenge on Home is one shared match per day.</p>
     </>}
   </section>;
