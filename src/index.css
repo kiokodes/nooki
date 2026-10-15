@@ -160,17 +160,17 @@ html, body {
   to { transform: translateY(0); opacity: 1; }
 }
 
-/* Splash screen (< 0.5s): simple Nooki wordmark + pink and green dots racing across the screen */
+/* Splash screen (~1.5s): simple Nooki wordmark + pink and green dots racing across the screen */
 .nooki-splash-wordmark {
-  animation: nooki-wordmark-pop 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: nooki-wordmark-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .nooki-splash-dot--pink {
-  animation: nooki-dot-race-pink 0.4s cubic-bezier(0.22, 0.82, 0.34, 1) forwards;
+  animation: nooki-dot-race-pink 1.4s cubic-bezier(0.22, 0.82, 0.34, 1) forwards;
 }
 
 .nooki-splash-dot--green {
-  animation: nooki-dot-race-green 0.42s cubic-bezier(0.46, 0.12, 0.2, 1) 0.02s forwards;
+  animation: nooki-dot-race-green 1.5s cubic-bezier(0.46, 0.12, 0.2, 1) 0.05s forwards;
 }
 
 @keyframes nooki-wordmark-pop {

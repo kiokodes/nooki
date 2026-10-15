@@ -1,11 +1,11 @@
 import React from 'react';
 import { tokens } from '../../tokens/designTokens';
 
-/** Total splash screen duration in milliseconds — kept strictly under 0.5 seconds (500ms). */
-export const SPLASH_DURATION_MS = 450;
+/** Total splash screen duration in milliseconds — extended to show the full animation. */
+export const SPLASH_DURATION_MS = 1500;
 
 /**
- * Fast (< 0.5s) splash screen displaying the simple "Nooki" wordmark and the two
+ * Splash screen (~1.5s) displaying the simple "Nooki" wordmark and the two
  * signature pink and green dots racing from one side of the screen to the other.
  */
 export const SplashScreen: React.FC = () => (
