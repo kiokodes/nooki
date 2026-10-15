@@ -49,6 +49,14 @@ export interface HomeNookiCompanionsProps {
   /** Manual pause switch for the idle animation. */
   paused?: boolean;
   /**
+   * When true, the pair lives on their own: a watch-only ambient theatre that
+   * softly crossfades between the five flattened pair illustrations (happy,
+   * affectionate, laughing, shy, surprised). No clicks, no mood inference.
+   * Defaults to false for test stability and for callers that want a single
+   * static expression. HomeView enables it.
+   */
+  ambient?: boolean;
+  /**
    * Extension point for future finished transparent animation loop
    * (e.g. sitting side by side on a ledge, dangling feet, occasional blinks).
    */
