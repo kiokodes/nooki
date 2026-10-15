@@ -28,6 +28,26 @@ change. A preview pointing to the production project uses real production data.
 Git-ignored except the blank `.env.example`. Configuration preflight validates presence
 and public-key format, not the remote key's validity or the database's health.
 
+### If Vercel reports `Build blocked: Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY`
+
+This is the environment preflight stopping the build, not a TypeScript/Vite failure.
+The npm `cache-dir` and install-script warnings are not the cause of this exit.
+
+1. In the **same Vercel project** that produced the log, open **Settings → Environment
+   Variables** and add the two exact names above. Get the project URL and public
+   anon/publishable key from your Supabase project's API settings/Connect dialog.
+2. Enable **Production** for production deployments and **Preview** for branch/PR
+   deployments. Production-only values do not reach Preview builds. If a Preview value
+   has a Git-branch restriction, include the branch being deployed (or select all Preview
+   branches). A Git-ignored local `.env.local` is not uploaded by a Git deployment.
+3. Save, then **redeploy the latest commit**. Editing environment variables does not repair
+   an already-failed deployment. A failed build cannot publish its Duel/Sudoku changes;
+   the previous successful deployment may still be what the browser is showing.
+
+Do not remove `check:env`, commit filled-in environment files, or substitute a secret key
+just to make the build green. A successful preflight only checks configuration format;
+apply and verify the database migrations separately.
+
 ## Database setup
 
 ### Existing live project
@@ -40,8 +60,9 @@ and public-key format, not the remote key's validity or the database's health.
    `202610150007_games.sql` (Games), `202610150010_snake_duel.sql` (the Snake Duel in
    Games), `202610150011_chess.sql` (Chess in Games), `202610150008_shared_books.sql` and
    `202610150009_two_book_shelf_limit.sql`
-   (shared books). All eleven are
-   safe to rerun and change nothing that already exists: the second adds the shared
+   (shared books). Apply pending migrations in this order; they preserve existing records.
+   Do not rerun older Games migrations over saved Chess matches (see **Troubleshooting
+   the Duel button**). The second adds the shared
    calendar, the third adds the chat log, the fourth adds the Discuss question engine,
    the fifth rewrites reactions into comments and links chat messages to questions, the
    sixth adds chat replies and edits (plus their Realtime publication membership), the
@@ -437,7 +458,7 @@ at the production project uses real production data.
 cp .env.example .env.local   # fill in the two values
 npm ci
 npm run check:env            # fails closed without valid public config
-npm test                     # 17 tests, no live project contacted
+npm test                     # unit, UI and database tests; no live project contacted
 npm run lint
 npm run build
 ```
@@ -634,9 +655,10 @@ Apply **`supabase/migrations/202610150007_games.sql`** to an existing project be
 shipping Games, then **`supabase/migrations/202610150010_snake_duel.sql`** before shipping
 the Snake Duel and **`supabase/migrations/202610150011_chess.sql`** before shipping Chess,
 then run **`supabase/verify-games.sql`** in addition to the usual
-`verify.sql`. New projects get both from `schema.sql`. Both migrations are additive
-and rerunnable; they do not reset existing matches or duels. They have not been applied
-to your live project by the frontend build.
+`verify.sql`. New projects get all three from `schema.sql`. Apply pending Games migrations
+in order (007 → 010 → 011); do not downgrade the shared game constraint by reapplying an
+older migration after Chess has saved matches. The frontend build does not apply migrations
+to your live project.
 
 - **Tic Tac Toe:** a 3×3 board, alternating turns, all eight winning lines and draws.
   The starting partner is X. Moves and results are validated by the database.
@@ -743,6 +765,55 @@ reload mid-run and confirm the run resumes from the last report, and confirm the
 partner's score is nowhere in the other phone's network responses until both runs are in.
 The no-backend development preview remains sample UI, not a local game backend: the
 preview's Snake Duel is played out on the page, and a ranked duel needs the migration.
+
+### Troubleshooting the Duel button
+
+The library button calls `start_game('snake', false, …)`; **Start my run** then calls
+`snake_start`. Both depend on the live database, not just a successful Vercel build.
+Migration `007` alone only accepts Tic Tac Toe and Rock Paper Scissors, so it rejects
+Snake with `Invalid game settings.` even though the Games library loads normally.
+
+In the Supabase project used by the deployment:
+
+1. Apply `supabase/migrations/202610150007_games.sql` if Games has not been installed.
+2. Apply pending `supabase/migrations/202610150010_snake_duel.sql` **after** `007`,
+   then `supabase/migrations/202610150011_chess.sql` for the Chess-enabled release.
+3. Run `supabase/verify-games.sql` and require **PASS**, then try Duel again.
+
+Do not rerun the full schema on an existing project. Rerunning `007` after `010`
+overwrites `start_game` and `games_state` with their older versions. If Chess already has
+saved matches, do **not** rerun the whole older `010` script: its game constraint excludes
+Chess. Take a backup and restore only the affected `start_game` definition from `010` and
+the latest `games_state` definition from `011`, preserving the Chess-enabled constraint.
+The verifier detects obsolete Snake entry points, missing Chess support, missing
+tables/functions and unsafe permissions.
+
+A failed start stays visible next to its library button (or above an open match), names
+the Snake migration when appropriate, and survives background polling. **Try again**
+retries the actual failed action. Starting a duel/run also shows a pending label and blocks
+duplicate taps. Pairing and network errors remain distinct from migration errors.
+
+### Sudoku layout and browser regressions
+
+The board has nine equal rows and columns, continuous cell borders, and thicker 3×3 box
+boundaries. Cells explicitly reset the library buttons' padding/radius/minimum size; the
+board and number pad shrink to their containing card instead of overflowing narrow phones.
+The header wraps, all nine number keys stay together, and Erase has its own row.
+Sudoku and Snake warm-ups do not need the shared Games snapshot to load. Sudoku is still
+local to this device; its competition/collaboration settings are not synchronized with a
+partner's device.
+
+The browser tests render the real Games UI/hook with intercepted HTTP responses (no live
+Supabase calls), check actual cell geometry at 320, 360, 390, 480 and 1024px, and cover
+Duel start/resume, missing-migration errors across polling, retry, and offline local play.
+The PostgreSQL tests additionally run the old/new migrations and the real Duel RPC flow.
+
+```sh
+npx playwright install chromium   # once, on your development/CI machine
+npm run test:browser
+# Or use an already installed Chromium:
+# PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser
+```
 
 ## Media tab: Read together (shared books)
 

@@ -1,4 +1,4 @@
--- Read-only Games preflight; run after verify.sql and migrations 007 and 010.
+-- Read-only Games preflight; run after verify.sql and migrations 007, 010 and 011.
 BEGIN TRANSACTION READ ONLY;
 DO $$
 DECLARE fn text;
@@ -18,6 +18,17 @@ BEGIN
      RAISE EXCEPTION 'Unsafe Games RPC permissions: %',fn;
    END IF;
  END LOOP;
+
+ -- Rerunning 007 after 010 leaves the Snake tables/functions present, but replaces
+ -- these two entry points with pre-Snake versions. Existence checks alone miss that:
+ -- Duel gets "Invalid game settings" and games_state no longer seals Snake scores.
+ IF position('''snake''' IN pg_get_functiondef('public.start_game(text,boolean,integer)'::regprocedure)) = 0 THEN
+   RAISE EXCEPTION 'start_game does not support Snake Duel: rerun migration 010 after migration 007.';
+ END IF;
+ IF position('snake_view' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0
+ OR position('snake_sweep' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0 THEN
+   RAISE EXCEPTION 'games_state is the pre-Snake version: rerun migration 010 after migration 007 to restore sealed scores and expiry.';
+ END IF;
 
  -- The Snake duel (migration 010). Its rules live in the database too: the food is dealt
  -- here, the run reports are checked here, and the score is replayed from them here.
