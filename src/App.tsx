@@ -13,7 +13,9 @@ import { supabaseConfigurationError } from './lib/supabaseClient';
 import { AuthView } from './components/auth/AuthView';
 import { OnboardingView } from './components/auth/OnboardingView';
 import { PairingView } from './components/auth/PairingView';
+import { HomeView } from './components/home/HomeView';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
+import { useCouplePresence } from './hooks/useCouplePresence';
 import {
   getCurrentAuthUser,
   fetchProfile,
@@ -91,6 +93,15 @@ export const App: React.FC = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [couple, setCouple] = useState<Couple | null>(null);
   const [partner, setPartner] = useState<Profile | null>(null);
+
+  // Presence runs for the whole unlocked app (not just the Home tab) so a partner
+  // is still shown as online while this phone is browsing another tab.
+  const { partnerOnline } = useCouplePresence({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+    partnerId: partner?.id ?? null,
+    onPartnerProfile: setPartner,
+  });
 
   const loadUserData = useCallback(async () => {
     try {
@@ -373,33 +384,16 @@ export const App: React.FC = () => {
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span
-                style={{
-                  fontSize: '1.15rem',
-                  fontWeight: 800,
-                  color: tokens.colors.textPrimary,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                {profile.name} &amp; {partner?.name}
-              </span>
-              <span
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: tokens.radii.full,
-                  backgroundColor: tokens.colors.primaryPink,
-                }}
-              />
-            </div>
-            {couple?.anniversary_date && (
-              <span style={{ fontSize: '0.74rem', color: tokens.colors.textMuted }}>
-                Together since {couple.anniversary_date}
-              </span>
-            )}
-          </div>
+          <span
+            style={{
+              fontSize: '1.15rem',
+              fontWeight: 800,
+              color: tokens.colors.textPrimary,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Nooki
+          </span>
 
           <button
             onClick={() => setShowSettings(true)}
@@ -422,92 +416,82 @@ export const App: React.FC = () => {
           </button>
         </header>
 
-        {/* Minimalist, airy tab content */}
-        <section
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0 28px',
-            textAlign: 'center',
-          }}
-        >
-          <div
+        {/* Home tab: live couple cards. Other tabs stay as airy placeholders. */}
+        {isHome && couple && partner ? (
+          <HomeView
+            profile={profile}
+            partner={partner}
+            couple={couple}
+            partnerOnline={partnerOnline}
+          />
+        ) : (
+          <section
             style={{
-              width: '100%',
-              backgroundColor: tokens.colors.bgSurface,
-              borderRadius: tokens.radii.card,
-              padding: '40px 26px',
-              boxShadow: tokens.shadows.card,
+              flex: 1,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: '16px',
+              justifyContent: 'center',
+              padding: '0 28px',
+              textAlign: 'center',
             }}
           >
             <div
               style={{
-                display: 'inline-flex',
+                width: '100%',
+                backgroundColor: tokens.colors.bgSurface,
+                borderRadius: tokens.radii.card,
+                padding: '40px 26px',
+                boxShadow: tokens.shadows.card,
+                display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 16px',
-                borderRadius: tokens.radii.pill,
-                backgroundColor: currentTab.accentSoft,
-                color: currentTab.accentColor,
-                fontSize: '0.78rem',
-                fontWeight: 700,
+                gap: '16px',
               }}
             >
-              <Sparkles size={13} />
-              <span>{isHome ? 'Paired Nook Unlocked' : 'Coming Soon'}</span>
-            </div>
-
-            <h1
-              style={{
-                fontSize: '1.9rem',
-                fontWeight: 800,
-                color: tokens.colors.textPrimary,
-                margin: 0,
-                letterSpacing: '-0.02em',
-              }}
-            >
-              {currentTab.label}
-            </h1>
-
-            <p
-              style={{
-                fontSize: '0.9rem',
-                color: tokens.colors.textSecondary,
-                lineHeight: 1.6,
-                maxWidth: '260px',
-                margin: 0,
-              }}
-            >
-              {isHome
-                ? `You and ${partner?.name} are connected in Our Nook! Features are coming soon.`
-                : `${currentTab.comingSoonSubtitle}. Stay tuned!`}
-            </p>
-
-            {/* Couple details pill on Home screen */}
-            {isHome && couple && (
               <div
                 style={{
-                  marginTop: '6px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  fontSize: '0.76rem',
-                  color: tokens.colors.textMuted,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 16px',
+                  borderRadius: tokens.radii.pill,
+                  backgroundColor: currentTab.accentSoft,
+                  color: currentTab.accentColor,
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
                 }}
               >
-                <span>🌍 {partner?.name}'s Timezone: {partner?.timezone}</span>
-                <span>📅 Anniversary: {couple.anniversary_date} (Locked)</span>
+                <Sparkles size={13} />
+                <span>Coming Soon</span>
               </div>
-            )}
-          </div>
-        </section>
+
+              <h1
+                style={{
+                  fontSize: '1.9rem',
+                  fontWeight: 800,
+                  color: tokens.colors.textPrimary,
+                  margin: 0,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {currentTab.label}
+              </h1>
+
+              <p
+                style={{
+                  fontSize: '0.9rem',
+                  color: tokens.colors.textSecondary,
+                  lineHeight: 1.6,
+                  maxWidth: '260px',
+                  margin: 0,
+                }}
+              >
+                {`${currentTab.comingSoonSubtitle}. Stay tuned!`}
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* Bottom Navigation with 5 tabs */}
         <nav

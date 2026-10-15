@@ -62,6 +62,16 @@ export async function saveOnboardingProfile(userId: string, name: string, timezo
   return data as Profile;
 }
 
+/**
+ * Presence covers "in the app right now"; this timestamp is what the partner's Home tab
+ * falls back to as "Last seen ...". Allowed by the existing "update own profile" RLS policy.
+ */
+export async function touchLastSeen(userId: string): Promise<void> {
+  const { error } = await requireSupabase()
+    .from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
 export async function fetchCouple(coupleId: string): Promise<{ couple: Couple; partner: Profile | null } | null> {
   const client = requireSupabase();
   const { data: couple, error: coupleError } = await client

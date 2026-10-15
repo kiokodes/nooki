@@ -59,24 +59,33 @@ export async function installTestBackend(client) {
   };
   client.from = (table) => {
     if (!['profiles', 'couples'].includes(table)) throw new Error('Unexpected table in test');
-    let upsertData;
+    let writeData;
+    let writeMode;
     const filters = [];
     const query = {
       select() { return query; },
       eq(column, value) { assertIdentifier(column); filters.push([column, '=', value]); return query; },
       neq(column, value) { assertIdentifier(column); filters.push([column, '<>', value]); return query; },
-      upsert(data) { upsertData = data; return query; },
+      upsert(data) { writeData = data; writeMode = 'upsert'; return query; },
+      update(data) { writeData = data; writeMode = 'update'; return query; },
       async maybeSingle() { return execute(); },
       async single() { return execute(); },
+      // The real client's filter builder is awaited directly by `update(...).eq(...)`.
+      then(resolve, reject) { return execute().then(resolve, reject); },
     };
     async function execute() {
       try {
         let result;
-        if (upsertData) {
-          const fields = Object.keys(upsertData);
+        if (writeMode === 'upsert') {
+          const fields = Object.keys(writeData);
           fields.forEach(assertIdentifier);
           result = await db.query(`INSERT INTO public.${table} (${fields.join(', ')}) VALUES (${fields.map((_, i) => `$${i + 1}`).join(', ')})
-            ON CONFLICT (id) DO UPDATE SET ${fields.filter((key) => key !== 'id').map((key) => `${key} = EXCLUDED.${key}`).join(', ')} RETURNING *`, Object.values(upsertData));
+            ON CONFLICT (id) DO UPDATE SET ${fields.filter((key) => key !== 'id').map((key) => `${key} = EXCLUDED.${key}`).join(', ')} RETURNING *`, Object.values(writeData));
+        } else if (writeMode === 'update') {
+          const fields = Object.keys(writeData);
+          fields.forEach(assertIdentifier);
+          const where = filters.length ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${fields.length + i + 1}`).join(' AND ')}` : '';
+          result = await db.query(`UPDATE public.${table} SET ${fields.map((field, i) => `${field} = $${i + 1}`).join(', ')} ${where} RETURNING *`, [...Object.values(writeData), ...filters.map(([, , value]) => value)]);
         } else {
           const where = filters.length ? `WHERE ${filters.map(([field, operator], i) => `${field} ${operator} $${i + 1}`).join(' AND ')}` : '';
           result = await db.query(`SELECT * FROM public.${table} ${where}`, filters.map(([, , value]) => value));
@@ -86,6 +95,7 @@ export async function installTestBackend(client) {
         const data = row ? Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? (key === 'anniversary_date' ? value.toISOString().slice(0, 10) : value.toISOString()) : value])) : null;
         return { data, error: null };
       } catch (error) { return { data: null, error: { message: error.message, code: error.code } }; }
+      finally { writeData = undefined; writeMode = undefined; }
     }
     return query;
   };
