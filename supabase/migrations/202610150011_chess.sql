@@ -378,11 +378,14 @@ BEGIN
   RETURN public.chess_view(st);
 END $$;
 
+-- `authenticated` is revoked by name, as in migration 010: Supabase's default privileges
+-- grant EXECUTE on new public functions directly to authenticated, so a PUBLIC/anon-only
+-- revoke would leave the whole chess referee callable by any signed-in phone.
 REVOKE ALL ON FUNCTION public.chess_start_board(), public.chess_attacked(text[],integer,text),
   public.chess_pseudo(text[],text,integer,integer,integer), public.chess_apply(text[],integer,integer,text,integer),
   public.chess_legal(text[],text,integer,integer,integer,text), public.chess_has_move(text[],text,integer,text),
   public.chess_in_check(text[],text), public.chess_view(jsonb), public.chess_state_json(text),
-  public.start_chess(text), public.chess_move(uuid,integer,text) FROM PUBLIC, anon;
+  public.start_chess(text), public.chess_move(uuid,integer,text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.start_chess(text), public.chess_move(uuid,integer,text) TO authenticated;
 
 -- The snapshot carries the chess position (public information — there is nothing to

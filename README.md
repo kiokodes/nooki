@@ -657,8 +657,11 @@ the Snake Duel and **`supabase/migrations/202610150011_chess.sql`** before shipp
 then run **`supabase/verify-games.sql`** in addition to the usual
 `verify.sql`. New projects get all three from `schema.sql`. Apply pending Games migrations
 in order (007 → 010 → 011); do not downgrade the shared game constraint by reapplying an
-older migration after Chess has saved matches. The frontend build does not apply migrations
-to your live project.
+older migration after Chess has saved matches. Projects that installed 010/011 before
+those migrations revoked the game internals from `authenticated` by name also need
+`supabase/migrations/202610150012_lock_down_game_internals.sql` (privileges only) before
+`verify-games.sql` will pass — see Troubleshooting the Duel button. The frontend build
+does not apply migrations to your live project.
 
 - **Tic Tac Toe:** a 3×3 board, alternating turns, all eight winning lines and draws.
   The starting partner is X. Moves and results are validated by the database.
@@ -779,6 +782,16 @@ In the Supabase project used by the deployment:
 2. Apply pending `supabase/migrations/202610150010_snake_duel.sql` **after** `007`,
    then `supabase/migrations/202610150011_chess.sql` for the Chess-enabled release.
 3. Run `supabase/verify-games.sql` and require **PASS**, then try Duel again.
+
+If `verify-games.sql` instead fails with **"The Snake internals must stay
+server-side: public.snake_commit(uuid,integer,jsonb,boolean)"**, the project was
+installed before migrations 010/011 named `authenticated` in their internal
+`REVOKE`s: Supabase's default privileges grant EXECUTE on every new public
+function directly to `authenticated`, so the internals stayed callable by any
+signed-in phone. Run
+**`supabase/migrations/202610150012_lock_down_game_internals.sql`** — it changes
+privileges only (no functions, tables or data, safe with saved matches, safe to
+run twice) — then rerun `verify-games.sql` and require **PASS**.
 
 Do not rerun the full schema on an existing project. Rerunning `007` after `010`
 overwrites `start_game` and `games_state` with their older versions. If Chess already has

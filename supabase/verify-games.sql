@@ -55,8 +55,11 @@ BEGIN
    END IF;
  END LOOP;
  -- The sweep, the settle and the replay are the server's own business: a phone must not be
- -- able to settle someone else's duel or score a run without playing it.
- FOREACH fn IN ARRAY ARRAY['public.snake_commit(uuid,integer,jsonb,boolean)','public.snake_sweep(uuid)','public.snake_settle(uuid)','public.snake_view(jsonb,uuid,boolean,uuid,uuid)'] LOOP
+ -- able to settle someone else's duel or score a run without playing it. Naming
+ -- `authenticated` matters on a real Supabase project: its default privileges grant
+ -- EXECUTE on new public functions directly to that role, so a revoke that only names
+ -- PUBLIC and anon leaves these callable — which is the failure this check reports.
+ FOREACH fn IN ARRAY ARRAY['public.snake_commit(uuid,integer,jsonb,boolean)','public.snake_sweep(uuid)','public.snake_settle(uuid)','public.snake_view(jsonb,uuid,boolean,uuid,uuid)','public.snake_max_ticks()','public.snake_budget(timestamptz)','public.snake_replay(jsonb,jsonb,integer,integer)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing the Snake internals: %',fn; END IF;
    IF has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
      RAISE EXCEPTION 'The Snake internals must stay server-side: %',fn;
