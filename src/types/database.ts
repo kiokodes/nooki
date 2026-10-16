@@ -250,3 +250,37 @@ export interface Highlight {
   color: HighlightColor;
   created_at: string;
 }
+
+/* ---------------------------------------------------------------------------
+   "I miss you": the taps one partner leaves behind while the other is away.
+   One row per sender per own calendar day, with the total tapped and how many
+   of those the partner has already been shown; the difference is what is
+   waiting. See supabase/migrations/202610150016_miss_you.sql.
+   --------------------------------------------------------------------------- */
+
+/**
+ * One day of the batch `public.receive_miss_you_taps` hands back as it marks it received:
+ * `newly_delivered` is what was waiting for this reader, `tap_count` the whole day.
+ */
+export interface MissYouOpenedTap {
+  tap_date: string;
+  tap_count: number;
+  newly_delivered: number;
+}
+
+export interface MissYouTap {
+  id: string;
+  couple_id: string;
+  /** Who tapped. The row is that account's own record. */
+  sender_id: string;
+  /** The sender's own calendar day as `YYYY-MM-DD` — never a UTC guess. */
+  tap_date: string;
+  /** Every tap of that day, received or not: the "number of taps". */
+  tap_count: number;
+  /** How many of them the partner has been shown. The reset sets this to `tap_count`. */
+  delivered_count: number;
+  /** When the partner last opened them; NULL while nothing has been received yet. */
+  delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

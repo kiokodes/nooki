@@ -82,7 +82,7 @@ export async function touchLastSeen(userId: string): Promise<void> {
  */
 export function describeDatabaseError(error: { message: string; code?: string }): string {
   const missingTable = error.code === '42P01'
-    || /relation .*(couple_events|messages|questions|question_sessions|answers|answer_comments|couple_settings|push_subscriptions).* does not exist/i.test(error.message);
+    || /relation .*(couple_events|messages|questions|question_sessions|answers|answer_comments|couple_settings|push_subscriptions|miss_you_taps).* does not exist/i.test(error.message);
   const missingFunction = error.code === '42883' || /could not find the function/i.test(error.message);
   if (missingTable || missingFunction) {
     return 'The database needs an update. Please ask the app owner to apply the Supabase migrations.';

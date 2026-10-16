@@ -534,3 +534,141 @@ html, body {
   }
 }
 
+
+/* =========================================================================
+   "I miss you": the small button in the nook, and the heart it becomes
+   The button is offered only while the partner is away. Every tap is counted
+   (one row per sender per own day in miss_you_taps); the next time the partner
+   opens Nooki their phone reads the waiting taps, opens them over the load as
+   one big heart, and marks them received — the reset.
+   ========================================================================= */
+
+.nooki-miss-you-button:active {
+  transform: scale(0.96);
+}
+
+.nooki-miss-you-button:focus-visible {
+  outline: 2px solid rgba(236, 72, 153, 0.5);
+  outline-offset: 2px;
+}
+
+/* The count of taps still waiting, so the number is visible to the person tapping. */
+.nooki-miss-you-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  margin-left: 1px;
+  border-radius: 999px;
+  background-color: #ec4899;
+  color: #ffffff;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+/* The receipt: one small heart drifting up out of the pill on every tap. It stays inside
+   the nook, which clips its own corners — a heart cut off at the edge is not a receipt. */
+.nooki-miss-you-puff {
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  color: #ec4899;
+  pointer-events: none;
+  animation: nooki-miss-you-puff 900ms ease-out both;
+}
+
+@keyframes nooki-miss-you-puff {
+  0% {
+    opacity: 0;
+    transform: translateY(2px) scale(0.5);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-13px) scale(1);
+  }
+}
+
+/* The reveal over the load: the overlay fades in, holds, then fades away as a whole.
+   Its duration is set by MISS_YOU_REVEAL_MS in MissYouReveal.tsx, so the last stretch of
+   the keyframes is exactly the last stretch of the moment on screen. */
+.nooki-miss-you-reveal {
+  animation-name: nooki-miss-you-reveal;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+
+@keyframes nooki-miss-you-reveal {
+  0% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  76% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The heart itself: small, out to a size you can feel, and gone. */
+.nooki-miss-you-heart {
+  animation-name: nooki-miss-you-heart;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes nooki-miss-you-heart {
+  0% {
+    opacity: 0;
+    transform: scale(0.18);
+  }
+  34% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  52% {
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.42);
+  }
+}
+
+/* The sentence rises into place a beat after the heart. */
+.nooki-miss-you-message {
+  animation: nooki-miss-you-message 700ms ease-out 300ms both;
+}
+
+@keyframes nooki-miss-you-message {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-miss-you-puff {
+    display: none;
+  }
+  .nooki-miss-you-heart,
+  .nooki-miss-you-message {
+    animation: none !important;
+  }
+  .nooki-miss-you-reveal {
+    animation-name: none;
+    opacity: 1;
+  }
+}

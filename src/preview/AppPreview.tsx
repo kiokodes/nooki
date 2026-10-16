@@ -15,10 +15,12 @@ import { PreviewTetris } from './PreviewTetris';
 import { ChessDuel } from '../components/games/ChessDuel';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
+import { MissYouReveal } from '../components/home/MissYouReveal';
 import { ChatView } from '../components/chat/ChatView';
 import { CalendarModal } from '../components/calendar/CalendarModal';
 import { DangerSettingsModal } from '../components/common/DangerSettingsModal';
 import type { PushNotificationsState } from '../hooks/usePushNotifications';
+import type { MissYouBatch } from '../lib/missYou';
 import type { ChatEntry, Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
 
 /**
@@ -241,6 +243,10 @@ export const AppPreview = () => {
   // app — sign-out, the 18+ gate, the notification card and the danger zone — so being able
   // to open it here is how the panel's scrolling gets looked at on a small screen.
   const [showSettings, setShowSettings] = useState(false);
+  // The "I miss you" button, and the heart it becomes on the other phone. Both are driven
+  // by the real components; the count here is the preview's own, never a backend's.
+  const [missYouTaps, setMissYouTaps] = useState(0);
+  const [missYouReveal, setMissYouReveal] = useState<MissYouBatch | null>(null);
   const [adultEnabled, setAdultEnabled] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const timersRef = useRef<number[]>([]);
@@ -446,7 +452,7 @@ export const AppPreview = () => {
           </button>
         ))}
         <button type="button" style={controlStyle(false)} onClick={() => setPartnerOnline((value) => !value)}>
-          {partnerOnline ? 'Partner is online → show last seen' : 'Partner is away → show online'}
+          {partnerOnline ? 'Partner is online → away (and the nook shows "I miss you")' : 'Partner is away → show online'}
         </button>
         <button type="button" style={controlStyle(partnerTyping)} onClick={() => setPartnerTyping((value) => !value)}>
           {partnerTyping ? 'Ana is typing… (tap to stop)' : 'Make Ana type…'}
@@ -459,6 +465,21 @@ export const AppPreview = () => {
         </button>
         <button type="button" style={controlStyle(showSplash)} onClick={() => setShowSplash(true)}>
           Replay splash
+        </button>
+        <button type="button" style={controlStyle(missYouTaps > 0)} onClick={() => setMissYouTaps(0)}>
+          {missYouTaps > 0 ? `Reset the ${missYouTaps} miss-you taps` : 'I miss you (tap it in the nook)'}
+        </button>
+        <button
+          type="button"
+          style={controlStyle(Boolean(missYouReveal))}
+          onClick={() => setMissYouReveal({
+            count: Math.max(1, missYouTaps),
+            dayTotal: Math.max(1, missYouTaps),
+            allToday: true,
+            lastDate: new Date().toISOString().slice(0, 10),
+          })}
+        >
+          {`Ana missed you ${missYouTaps > 1 ? `${missYouTaps} times today` : 'once'}`}
         </button>
         <button type="button" style={controlStyle(showSettings)} onClick={() => setShowSettings(true)}>
           Couple Settings
@@ -538,6 +559,13 @@ export const AppPreview = () => {
                 userName={profile.name}
                 partnerName={partner.name}
                 partnerOnline={partnerOnline}
+                missYou={{
+                  visible: !partnerOnline,
+                  sentCount: missYouTaps,
+                  partnerName: partner.name,
+                  error: null,
+                  onTap: () => setMissYouTaps((value) => value + 1),
+                }}
               />
             ) : (
               /* The real chat: sending, receipts, typing and day separators all work. */
@@ -558,6 +586,15 @@ export const AppPreview = () => {
                 onDismissError={() => {}}
                 questionBySessionId={PREVIEW_SESSION_QUESTIONS}
                 onOpenQuestion={() => {}}
+              />
+            )}
+
+            {/* The big heart Ana's taps become on Sam's phone, over whatever tab is open. */}
+            {missYouReveal && (
+              <MissYouReveal
+                batch={missYouReveal}
+                senderName={partner.name}
+                onDismiss={() => setMissYouReveal(null)}
               />
             )}
 
