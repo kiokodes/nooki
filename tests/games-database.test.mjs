@@ -93,10 +93,10 @@ test('games: saved multiplayer, daily limit, sealed picks and authoritative scor
   const direct = await supabase.rpc('start_chess', { p_mode: 'classic' });
   assert.equal(direct.error?.code, '23514', 'the downgraded check rejects the chess insert');
   assert.match(direct.error.message, /game_matches_game_check/);
-  await assert.rejects(games.startChess('classic'), /202610150013_restore_chess_game_check\.sql/);
+  await assert.rejects(games.startChess('classic'), /202610150014_restore_chess_tetris_game_check\.sql/);
   // The targeted repair restores just the check: verify passes, twice is harmless,
   // and a chess match can finally be started and preserved by what follows.
-  const repair = await readFile(new URL('../supabase/migrations/202610150013_restore_chess_game_check.sql',import.meta.url),'utf8');
+  const repair = await readFile(new URL('../supabase/migrations/202610150014_restore_chess_tetris_game_check.sql',import.meta.url),'utf8');
   await db.exec(repair);
   await db.exec(verify);
   await db.exec(repair);

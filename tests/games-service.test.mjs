@@ -23,9 +23,11 @@ test('games service distinguishes Snake setup failures from pairing, network and
     await assert.rejects(games.startGame('snake', false, 3), /202610150010_snake_duel.sql/);
     // The same violation on start_chess means Chess is installed but the game check
     // predates it: users get the named repair, never the raw constraint wording.
-    await assert.rejects(games.startChess('classic'), /Chess needs a database update\..*202610150013_restore_chess_game_check\.sql/);
+    await assert.rejects(games.startChess('classic'), /Chess needs a database update\..*202610150014_restore_chess_tetris_game_check\.sql/);
     await assert.rejects(games.startChess('classic'), (err) => !err.message.includes('violates check constraint'),
       'the raw Postgres constraint error must not reach the user');
+    // Tetris' start hits the same downgraded check the same way.
+    await assert.rejects(games.startTetris('sprint'), /Tetris Duel needs a database update\..*202610150014_restore_chess_tetris_game_check\.sql/);
     fail('PGRST202', 'Could not find public.snake_start in the schema cache');
     await assert.rejects(games.startSnakeRun('match'), /202610150010_snake_duel.sql/);
     fail('42883', 'function public.snake_sweep(uuid) does not exist');

@@ -193,6 +193,40 @@ test('snake UI: the gate, a playable board, the leave question, warm-ups and the
     assert.ok(calls.filter(([name]) => name === 'beat').every(([, ticks]) => ticks > 0));
     await act(async () => root2.unmount());
 
+    // --- A steer made while a report is on the wire is not lost -------------------------
+    // The snake keeps moving while the report travels, and the queue it holds is the live
+    // one. Count the queue after the round trip instead of before and every steer made in
+    // those few hundred milliseconds is dropped — which leaves the server replaying a run
+    // that was never played, and scoring it accordingly.
+    calls.length = 0;
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    const root2b = createRoot(document.getElementById('root'));
+    await act(async () => root2b.render(React.createElement(SnakeBoard, {
+      foods,
+      warmUp: false,
+      live: true,
+      onBeat: (ticks, changes) => { calls.push(['beat', ticks, changes]); return ticks > 0 ? held : Promise.resolve(); },
+      onFinish: () => Promise.resolve(),
+      onExit: () => {},
+    })));
+    // Steer a little so the run is still alive when the second report goes out: the board
+    // starts in the middle pointing at the right-hand wall.
+    await key('ArrowUp');
+    await settle(700);
+    await key('ArrowLeft');
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1500)); });
+    assert.equal(calls.length, 1, 'a report is on the wire');
+    await key('ArrowDown');                        // ...and the player keeps playing under it
+    await settle(200);
+    await act(async () => { release(); });
+    await settle(2200);
+    const secondBeat = calls.filter(([name]) => name === 'beat')[1];
+    assert.ok(secondBeat, 'the board reports in again');
+    assert.ok(secondBeat[2].some((change) => change.dir === 'down'),
+      'and the steer made mid-flight is in it, not quietly dropped');
+    await act(async () => root2b.unmount());
+
     // --- A crash is a score even when the phone cannot reach the server ----------------
     // The leave question itself is owned by SnakeDuel and checked above; this is the one
     // case it does not cover, because the run is over rather than abandoned.
@@ -264,6 +298,8 @@ test('snake preview: the sample duel plays, and leaving it forfeits to the sampl
     await waitFor(() => document.querySelector('[data-card="today"]'), 'the preview should open on Home');
     assert(gamesTab(), 'the preview nav offers Games');
     await act(async () => { gamesTab().click(); });
+    // The Games tab shows one duel at a time, and it opens on Tetris: ask for Snake.
+    await act(async () => { document.querySelector('[data-preview-game="snake"]').click(); });
     const gate = document.querySelector('[data-preview-snake="gate"]');
     assert(gate, 'the sample duel opens on its gate');
     assert(gate.textContent.includes('No pause, ever'), 'and says there is no pause');

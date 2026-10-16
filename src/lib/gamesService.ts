@@ -2,6 +2,8 @@ import { requireSupabase } from './supabaseClient';
 import type { SnakeChange, SnakePoint } from './snake';
 import type { ChessColor, ChessEndReason, ChessPieceType, ChessState } from './chess';
 import { isSnakeDirection } from './snake';
+import type { TetrisInput, TetrisMode } from './tetris';
+import { isTetrisAction } from './tetris';
 
 export const GAMES = [
   { id: 'tic-tac-toe', name: 'Tic Tac Toe', icon: '✕ ◯', description: 'Three in a row. A little friendly rivalry.' },
@@ -23,6 +25,12 @@ export const GAMES = [
     name: 'Sudoku',
     icon: '9️⃣',
     description: 'Fill the grid. Easy, medium or hard — solo, race your partner, or solve together.',
+  },
+  {
+    id: 'tetris',
+    name: 'Tetris Duel',
+    icon: '🧱',
+    description: 'Five minutes each, same pieces. Highest score, or last one stacking.',
   },
 ] as const;
 export type GameId = typeof GAMES[number]['id'];
@@ -57,6 +65,42 @@ export interface SnakeDuel {
   partner: SnakeSide;
 }
 
+/** How a partner's half of a Tetris duel reads, without ever showing a sealed score. */
+export interface TetrisSide {
+  status: 'waiting' | 'running' | 'done' | 'forfeit';
+  ended: string | null;
+  /** Only present once the duel is over: a blind duel keeps the score sealed until then. */
+  score?: number | null;
+  /** Lines cleared, and how many ticks the run lasted. Only once it is over. */
+  lines?: number | null;
+  ticks?: number | null;
+  /** Only present while they are actually playing, so you can tell they are on it. */
+  last_seen?: string | null;
+}
+
+/** This phone's own run: the pieces the database dealt, and everything reported so far. */
+export interface TetrisRun extends TetrisSide {
+  score: number;
+  lines: number;
+  ticks: number;
+  /** Taps already reported, `[tick, action]` pairs. */
+  inputs: [number, string][];
+  /** The duel's whole piece sequence, 0–6, in the order they appear. */
+  pieces: number[];
+  started_at: string;
+  last_seen: string;
+  deadline: string;
+  /** Set when the run is over: `top` (the well filled), `cap` (time up) or `forfeit`. */
+  ended: string | null;
+}
+
+export interface TetrisDuel {
+  /** Which of the two ways this duel is settled. Fixed when the duel was started. */
+  mode: TetrisMode | null;
+  mine: TetrisRun | null;
+  partner: TetrisSide;
+}
+
 /** A chess match as the database reports it: the position, and only the position. */
 export interface ChessSnapshot {
   mode: 'classic' | 'capture-race' | 'queen-hunt';
@@ -78,17 +122,21 @@ export interface GameMatch {
   rounds: { round: number; x: string; o: string; winner: string | null }[];
   /** Present on snake duels only: the run this phone may play, and the partner's status. */
   snake?: SnakeDuel | null;
+  /** Present on Tetris duels only: this phone's run, the partner's status and the mode. */
+  tetris?: TetrisDuel | null;
   /** Present on chess matches only: the position the database has validated. */
   chess?: ChessSnapshot | null;
 }
 export interface GamesSnapshot { today: string; wins: Record<string, number>; matches: GameMatch[] }
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
-const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150013_restore_chess_game_check.sql. Run verify-games.sql before retrying.';
+const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
+const TETRIS_SETUP_ERROR = 'Tetris Duel needs a database update. Apply migration 202610150012_tetris_duel.sql after 202610150011_chess.sql; if Tetris is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
 
 async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args);
   if (error) {
     const snakeRequest = name.startsWith('snake_') || (name === 'start_game' && args.p_game === 'snake');
+    const tetrisRequest = name.startsWith('tetris_') || name === 'start_tetris';
     // Migration 007's start_game exists, but only accepts the two original games.
     // This is not a missing-RPC error: it rejects a perfectly valid Duel button click.
     const legacySnakeStart = name === 'start_game' && args.p_game === 'snake'
@@ -103,12 +151,20 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
     const legacyChessStart = name === 'start_chess'
       && error.code === '23514' && error.message.includes('game_matches_game_check');
     if (legacyChessStart) throw new Error(CHESS_SETUP_ERROR);
+    // Same story for Tetris: migration 012's check names 'tetris', but a project whose
+    // constraint was last replaced by an older migration rejects start_tetris' INSERT
+    // with the same raw violation. Name the repair instead.
+    const legacyTetrisStart = name === 'start_tetris'
+      && error.code === '23514' && error.message.includes('game_matches_game_check');
+    if (legacyTetrisStart) throw new Error(TETRIS_SETUP_ERROR);
     if (['PGRST202', '42P01', '42703', '42883'].includes(error.code)) {
       throw new Error(snakeRequest || error.message.includes('snake_')
         ? SNAKE_SETUP_ERROR
-        : name.includes('chess') || error.message.includes('chess_')
-          ? CHESS_SETUP_ERROR
-          : 'Games needs a database update. Apply migrations 202610150007_games.sql, 202610150010_snake_duel.sql, then 202610150011_chess.sql.');
+        : tetrisRequest || error.message.includes('tetris_')
+          ? TETRIS_SETUP_ERROR
+          : name.includes('chess') || error.message.includes('chess_')
+            ? CHESS_SETUP_ERROR
+            : 'Games needs a database update. Apply migrations 202610150007_games.sql, 202610150010_snake_duel.sql, 202610150011_chess.sql, then 202610150012_tetris_duel.sql.');
     }
     throw new Error(error.message);
   }
@@ -208,3 +264,45 @@ export const beatSnakeRun = (id: string, ticks: number, changes: SnakeChange[]) 
 export const finishSnakeRun = (id: string, ticks: number, changes: SnakeChange[]) =>
   rpc<SnakeRun>('snake_finish', { p_id: id, p_ticks: ticks, p_dirs: snakeChangeRows(changes) });
 export const forfeitSnakeRun = (id: string) => rpc<SnakeRun>('snake_forfeit', { p_id: id });
+
+/* ---------------------------------------------------------------------------
+   Tetris duel. The same bargain as the snake duel, and the same reason for it:
+   the database deals the pieces, the phone reports nothing but its taps, and
+   the database replays them to work out what the run really scored. See
+   supabase/migrations/202610150012_tetris_duel.sql.
+   --------------------------------------------------------------------------- */
+
+/** The taps a phone reports, as the wire shape the database stores. */
+export const tetrisInputRows = (inputs: TetrisInput[]): [number, string][] => inputs.map((input) => [input.tick, input.action]);
+
+/** The duel's piece sequence, as tetromino kinds. */
+export function tetrisPieces(pieces: number[] | undefined): number[] {
+  if (!Array.isArray(pieces)) return [];
+  return pieces.filter((kind) => Number.isInteger(kind) && kind >= 0 && kind < 7).map((kind) => Number(kind));
+}
+
+/** A run's reported history, as the core's own tap list. */
+export function tetrisInputs(inputs: [number, string][] | undefined): TetrisInput[] {
+  if (!Array.isArray(inputs)) return [];
+  const list: TetrisInput[] = [];
+  for (const row of inputs) {
+    if (!Array.isArray(row) || row.length !== 2) continue;
+    const tick = Number(row[0]);
+    if (!Number.isInteger(tick) || tick < 0 || !isTetrisAction(row[1])) continue;
+    list.push({ tick, action: row[1] });
+  }
+  return list;
+}
+
+/**
+ * Open (or resume) a Tetris duel in one of the two modes. Its own RPC, the way Chess has
+ * `start_chess`: `start_game` is left exactly as it is, so no project ends up with two
+ * overloads of it and every other game keeps the call it has always made.
+ */
+export const startTetris = (mode: TetrisMode) => rpc<string>('start_tetris', { p_mode: mode });
+export const startTetrisRun = (id: string) => rpc<TetrisRun>('tetris_start', { p_id: id });
+export const beatTetrisRun = (id: string, ticks: number, inputs: TetrisInput[]) =>
+  rpc<TetrisRun>('tetris_beat', { p_id: id, p_ticks: ticks, p_inputs: tetrisInputRows(inputs) });
+export const finishTetrisRun = (id: string, ticks: number, inputs: TetrisInput[]) =>
+  rpc<TetrisRun>('tetris_finish', { p_id: id, p_ticks: ticks, p_inputs: tetrisInputRows(inputs) });
+export const forfeitTetrisRun = (id: string) => rpc<TetrisRun>('tetris_forfeit', { p_id: id });

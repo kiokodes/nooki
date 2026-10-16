@@ -14,7 +14,7 @@ import { PairingView } from './components/auth/PairingView';
 import { CoupleHeader } from './components/common/CoupleHeader';
 import { SplashScreen, SPLASH_DURATION_MS } from './components/common/SplashScreen';
 import { GamesView } from './components/games/GamesView';
-import { SnakeLeaveDialog } from './components/games/SnakeLeaveDialog';
+import { DuelLeaveDialog } from './components/games/DuelLeaveDialog';
 import { useGames } from './hooks/useGames';
 import { HomeView } from './components/home/HomeView';
 import { ChatView } from './components/chat/ChatView';
@@ -168,15 +168,16 @@ export const App: React.FC = () => {
   const games = useGames(couple?.id ?? null, currentUser?.id ?? null);
 
   /**
-   * Every way out of the Games tab goes through here. A live snake run has no pause and no
-   * second chance, so a tab change while one is on screen is a forfeit, and the couple is
-   * asked before it happens — with the snake still moving behind the question.
+   * Every way out of the Games tab goes through here. A live duel run — snake or Tetris —
+   * has no pause and no second chance, so a tab change while one is on screen is a forfeit,
+   * and the couple is asked before it happens — with the run still going behind the
+   * question.
    */
   const requestTab = useCallback((key: TabKey) => {
     if (key === activeTab) return;
-    if (activeTab === 'games' && games.snakeLive && games.match) setPendingTab(key);
+    if (activeTab === 'games' && games.duelLive && games.match) setPendingTab(key);
     else setActiveTab(key);
-  }, [activeTab, games.snakeLive, games.match]);
+  }, [activeTab, games.duelLive, games.match]);
 
   const discuss = useDiscuss({
     coupleId: couple?.id ?? null,
@@ -785,10 +786,11 @@ export const App: React.FC = () => {
           />
         )}
 
-        {/* Leaving the Games tab in the middle of a ranked snake run: asked here, over the
+        {/* Leaving the Games tab in the middle of a ranked duel run: asked here, over the
             board, which keeps running while the question is on screen. */}
         {pendingTab && games.match && (
-          <SnakeLeaveDialog
+          <DuelLeaveDialog
+            runLabel={games.duelLive === 'tetris' ? 'your Tetris run' : 'your run'}
             partnerName={partner.name}
             busy={games.busy}
             onKeepPlaying={() => setPendingTab(null)}

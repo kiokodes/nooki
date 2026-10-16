@@ -113,11 +113,14 @@ test('Duel opens, resumes the same match, and starts a moving board', async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   const state = await mockGames(page);
   await page.goto('/tests/browser/games.html');
-  await page.getByRole('button', { name: 'Duel Ana →', exact: true }).click();
+  // Both duels invite you the same way, so name the card: an unscoped "Duel Ana →"
+  // matches the Snake and the Tetris card alike.
+  const duel = page.locator('article[data-game="snake"]').getByRole('button', { name: 'Duel Ana →', exact: true });
+  await duel.click();
   await expect(page.locator('[data-snake-gate]')).toBeVisible();
   expect(state.starts).toBe(1);
   await page.getByRole('button', { name: '← All games', exact: true }).click();
-  await page.getByRole('button', { name: 'Duel Ana →', exact: true }).click();
+  await duel.click();
   await expect(page.locator('[data-snake-gate]')).toBeVisible();
   expect(state.snapshot.matches).toHaveLength(1);
   await page.getByRole('button', { name: 'Start my run', exact: true }).click();
@@ -131,8 +134,8 @@ test('Duel shows progress and prevents duplicate starts while its request is pen
   const state = await mockGames(page, { waitForStart });
   try {
     await page.goto('/tests/browser/games.html');
-    await page.getByRole('button', { name: 'Duel Ana →', exact: true }).click();
-    const opening = page.getByRole('button', { name: 'Opening duel…', exact: true });
+    await page.locator('article[data-game="snake"]').getByRole('button', { name: 'Duel Ana →', exact: true }).click();
+    const opening = page.locator('article[data-game="snake"]').getByRole('button', { name: 'Opening duel…', exact: true });
     await expect(opening).toBeVisible();
     await expect(opening).toBeDisabled();
     await expect(opening).toHaveAttribute('aria-busy', 'true');

@@ -1,4 +1,4 @@
--- Read-only Games preflight; run after verify.sql and migrations 007, 010 and 011.
+-- Read-only Games preflight; run after verify.sql and migrations 007, 010, 011 and 012.
 BEGIN TRANSACTION READ ONLY;
 DO $$
 DECLARE fn text;
@@ -78,7 +78,7 @@ BEGIN
     WHERE conrelid='public.game_matches'::regclass AND contype='c'
       AND pg_get_constraintdef(oid) LIKE '%chess%'
  ) THEN
-   RAISE EXCEPTION 'The game_matches game check does not allow chess: rerun migration 011, or apply migration 202610150013_restore_chess_game_check.sql to restore just this check.';
+   RAISE EXCEPTION 'The game_matches game check does not allow chess: rerun migration 011, or apply migration 202610150014_restore_chess_tetris_game_check.sql to restore just this check.';
  END IF;
  FOREACH fn IN ARRAY ARRAY['public.start_chess(text)','public.chess_move(uuid,integer,text)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Chess RPC: %',fn; END IF;
@@ -92,6 +92,43 @@ BEGIN
      RAISE EXCEPTION 'The Chess internals must stay server-side: %',fn;
    END IF;
  END LOOP;
+
+ -- The Tetris duel (migration 012): the same bargain as Snake, on a different board. The
+ -- piece sequence is dealt here, the taps are checked here, and the score is replayed here.
+ IF NOT EXISTS (
+   SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='game_matches' AND column_name='tetris'
+ ) THEN
+   RAISE EXCEPTION 'Apply supabase/migrations/202610150012_tetris_duel.sql before deploying Tetris.';
+ END IF;
+ IF NOT EXISTS (
+   SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='game_matches' AND column_name='tetris_mode'
+ ) THEN
+   RAISE EXCEPTION 'A Tetris duel is fixed to the mode it was started in: rerun migration 012.';
+ END IF;
+ IF NOT EXISTS (
+   SELECT 1 FROM pg_constraint
+    WHERE conrelid='public.game_matches'::regclass AND contype='c'
+      AND pg_get_constraintdef(oid) LIKE '%tetris%'
+ ) THEN
+   RAISE EXCEPTION 'The game_matches game check does not allow tetris: rerun migration 012, or apply migration 202610150014_restore_chess_tetris_game_check.sql to restore just this check.';
+ END IF;
+ IF to_regprocedure('public.tetris_replay(jsonb,jsonb,integer,integer)') IS NULL THEN
+   RAISE EXCEPTION 'Missing the Tetris replay the score is derived from: apply migration 012.';
+ END IF;
+ FOREACH fn IN ARRAY ARRAY['public.start_tetris(text)','public.tetris_start(uuid)','public.tetris_beat(uuid,integer,jsonb)','public.tetris_finish(uuid,integer,jsonb)','public.tetris_forfeit(uuid)'] LOOP
+   IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Tetris RPC: %',fn; END IF;
+   IF NOT has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
+     RAISE EXCEPTION 'Unsafe Tetris RPC permissions: %',fn;
+   END IF;
+ END LOOP;
+ FOREACH fn IN ARRAY ARRAY['public.tetris_commit(uuid,integer,jsonb,boolean)','public.tetris_sweep(uuid)','public.tetris_settle(uuid)','public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text)','public.tetris_max_ticks()','public.tetris_budget(timestamptz)','public.tetris_replay(jsonb,jsonb,integer,integer)'] LOOP
+   IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing the Tetris internals: %',fn; END IF;
+   IF has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
+     RAISE EXCEPTION 'The Tetris internals must stay server-side: %',fn;
+   END IF;
+ END LOOP;
 END $$;
-SELECT 'PASS: Games RPCs, the Snake replay, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
+SELECT 'PASS: Games RPCs, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;

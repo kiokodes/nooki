@@ -1,4 +1,6 @@
--- Restore 'chess' in the game_matches game check on projects where it went missing.
+-- Restore 'chess' (and 'tetris') in the game_matches game check where they went
+-- missing. (Renumbered from 013 to 014 when the Tetris duel took 012, and widened
+-- to restore the Tetris name too.)
 --
 -- Why this exists: the check constraint is replaced wholesale by each Games migration,
 -- so its contents are whatever the *last* migration to touch it said. A project that
@@ -10,6 +12,10 @@
 --
 --   new row for relation "game_matches" violates check constraint
 --   "game_matches_game_check"
+--
+-- (The same trap exists for Tetris any time an older migration — 010 or 011 — is
+-- rerun after 012; the restored check below is the current full list, so this one
+-- repair covers both.)
 --
 -- This file changes that one constraint only: no functions, tables or rows are
 -- touched, existing matches (of any game) are preserved, and it is safe to run
@@ -32,6 +38,6 @@ END $$;
 
 ALTER TABLE public.game_matches DROP CONSTRAINT IF EXISTS game_matches_game_check;
 ALTER TABLE public.game_matches ADD CONSTRAINT game_matches_game_check
-  CHECK (game IN ('tic-tac-toe', 'rock-paper-scissors', 'snake', 'chess'));
+  CHECK (game IN ('tic-tac-toe', 'rock-paper-scissors', 'snake', 'chess', 'tetris'));
 
 COMMIT;

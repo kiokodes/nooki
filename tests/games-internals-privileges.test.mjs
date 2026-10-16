@@ -9,7 +9,7 @@ const readSql = (relative) => readFile(new URL(relative, import.meta.url), 'utf8
 // EXECUTE on every newly created public function directly to anon and authenticated.
 // The test backend creates those roles bare, so migrations whose REVOKE named only
 // PUBLIC and anon looked locked down locally while every signed-in phone on the real
-// project kept a direct grant on the Snake/Chess internals — and verify-games.sql
+// project kept a direct grant on the Snake/Chess/Tetris internals — and verify-games.sql
 // failed with "The Snake internals must stay server-side: public.snake_commit(...)".
 // This test recreates the Supabase privilege environment so it cannot regress.
 test('games internals stay server-side under Supabase default privileges', async () => {
@@ -29,7 +29,7 @@ test('games internals stay server-side under Supabase default privileges', async
     `);
     await db.exec(await readSql('../supabase/schema.sql'));
     const verify = await readSql('../supabase/verify-games.sql');
-    const repair = await readSql('../supabase/migrations/202610150012_lock_down_game_internals.sql');
+    const repair = await readSql('../supabase/migrations/202610150013_lock_down_game_internals.sql');
 
     const privilege = async (role, fn) => (await db.query(
       `SELECT has_function_privilege($1, $2::regprocedure, 'EXECUTE') AS allowed`, [role, fn],
@@ -41,11 +41,18 @@ test('games internals stay server-side under Supabase default privileges', async
       'public.snake_replay(jsonb,jsonb,integer,integer)',
       'public.chess_legal(text[],text,integer,integer,integer,text)',
       'public.chess_view(jsonb)', 'public.chess_start_board()',
+      'public.tetris_commit(uuid,integer,jsonb,boolean)', 'public.tetris_sweep(uuid)',
+      'public.tetris_settle(uuid)', 'public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text)',
+      'public.tetris_max_ticks()', 'public.tetris_budget(timestamptz)',
+      'public.tetris_replay(jsonb,jsonb,integer,integer)',
     ];
     const entryPoints = [
       'public.snake_start(uuid)', 'public.snake_beat(uuid,integer,jsonb)',
       'public.snake_finish(uuid,integer,jsonb)', 'public.snake_forfeit(uuid)',
       'public.start_chess(text)', 'public.chess_move(uuid,integer,text)',
+      'public.start_tetris(text)', 'public.tetris_start(uuid)',
+      'public.tetris_beat(uuid,integer,jsonb)', 'public.tetris_finish(uuid,integer,jsonb)',
+      'public.tetris_forfeit(uuid)',
     ];
     const assertLockedDown = async (when) => {
       for (const fn of internals) {
@@ -68,6 +75,7 @@ test('games internals stay server-side under Supabase default privileges', async
     await db.exec(`
       GRANT EXECUTE ON FUNCTION public.snake_commit(uuid,integer,jsonb,boolean) TO authenticated;
       GRANT EXECUTE ON FUNCTION public.chess_legal(text[],text,integer,integer,integer,text) TO authenticated;
+      GRANT EXECUTE ON FUNCTION public.tetris_commit(uuid,integer,jsonb,boolean) TO authenticated;
     `);
     await assert.rejects(db.exec(verify), /The Snake internals must stay server-side: public\.snake_commit/,
       'the preflight names the exposed internal, as it did on the live project');
