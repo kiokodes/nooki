@@ -518,8 +518,8 @@ export const App: React.FC = () => {
             partnerOnline={partnerOnline}
             userWins={games.data?.wins[currentUser.id] ?? 0}
             partnerWins={games.data?.wins[partner.id] ?? 0}
-            dailyStatus={games.data?.matches.find(m => m.daily_date === games.data?.today)?.finished ? 'Completed today · next challenge at midnight UTC' : 'One shared match a day · resets at midnight UTC'}
-            dailyLabel={games.data?.matches.find(m => m.daily_date === games.data?.today)?.finished ? 'View result' : games.data?.matches.some(m => m.daily_date === games.data?.today) ? 'Resume' : 'Play'}
+            dailyStatus={games.data?.matches?.find(m => m.daily_date === games.data?.today)?.finished ? 'Completed today · next challenge at midnight UTC' : 'One shared match a day · resets at midnight UTC'}
+            dailyLabel={games.data?.matches?.find(m => m.daily_date === games.data?.today)?.finished ? 'View result' : games.data?.matches?.some(m => m.daily_date === games.data?.today) ? 'Resume' : 'Play'}
             onPlayDailyGame={() => { setActiveTab('games'); void games.start('tic-tac-toe', true); }}
           />
         ) : activeTab === 'games' ? (

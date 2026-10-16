@@ -7,6 +7,9 @@ import { SnakeBoard } from './SnakeBoard';
 import { SnakeDuel } from './SnakeDuel';
 import { TetrisBoard } from './TetrisBoard';
 import { TetrisDuel } from './TetrisDuel';
+import { Sudoku } from './Sudoku';
+import { ChessDuel } from './ChessDuel';
+import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import './games.css';
 
 /** A practice run in progress: its own pieces or food, dealt on this phone and never reported. */
@@ -21,14 +24,18 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   const [bestOf, setBestOf] = useState(3);
   const [mode, setMode] = useState<TetrisMode>('sprint');
   const [warmUp, setWarmUp] = useState<WarmUp | null>(null);
+  const [sudokuOpen, setSudokuOpen] = useState(false);
+  const [chessMode, setChessMode] = useState<ChessMode>('classic');
   const m = games.match;
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
-  const openMatch = (id: string | null) => { setWarmUp(null); games.select(id); };
+  const openMatch = (id: string | null) => { setWarmUp(null); setSudokuOpen(false); games.select(id); };
   const startTetrisWarmUp = () => setWarmUp({ game: 'tetris', foods: [], pieces: dealPracticePieces(), nonce: Date.now() });
   const startSnakeWarmUp = () => setWarmUp({ game: 'snake', foods: dealPracticeFoods(), pieces: [], nonce: Date.now() });
+  // Keep failed starts beside the button that was tapped, not above an offscreen header.
+  const inlineErrorGame = !m && !sudokuOpen && !warmUp ? games.errorGame : null;
   /** The most recent duel of either kind, so its result stays reachable after it leaves the list. */
-  const lastDuel = games.data?.matches.find((match) => match.game === 'snake' || match.game === 'tetris');
+  const lastDuel = games.data?.matches?.find((match) => match.game === 'snake' || match.game === 'tetris');
   // A warm-up stands in for whatever the Games tab was showing: the duel panel, or the
   // whole library. It is the same board either way, and it never touches the database.
   // It yields the moment the duel is decided: nobody wants to be practising through the
@@ -45,16 +52,30 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
     won: lastDuel.winner_id === userId,
     drawn: lastDuel.winner_id === null,
     mine: lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? 0,
-    theirs: lastDuel.snake?.partner.score ?? lastDuel.tetris?.partner.score ?? 0,
+    // Optional chaining all the way down: a duel's own column is an empty object until the
+    // migration that manages it is applied, and a sealed score has no `score` key at all.
+    theirs: lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? 0,
   } : null;
 
   return <section className="games-view" aria-label="Games">
     <header><span className="games-eyebrow">A little friendly rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : 'Play together'}</h1>{m && <p>{m.daily_date ? `Daily challenge · ${m.daily_date} (UTC)` : 'Just for fun · unlimited rematches'}</p>}</header>
-    {games.error && <div role="alert" className="game-card"><p>{games.error}</p><button onClick={() => void games.refresh()}>Retry connection</button></div>}
+    {games.error && !inlineErrorGame && <GameError games={games} card />}
     {!games.data && !games.error && <p role="status">Loading your games…</p>}
     {m ? <>
       <button className="game-back" onClick={() => openMatch(null)}>← All games</button>
-      {practice ?? (m.game === 'snake' ? (
+      {practice ?? (m.game === 'chess' ? (
+        <ChessDuel
+          partnerName={partnerName}
+          onExit={() => openMatch(null)}
+          online={{
+            match: m,
+            userId,
+            busy: games.busy,
+            onMove: (move) => void games.playChess(m, move),
+            onRematch: (nextMode) => void games.startChess(nextMode),
+          }}
+        />
+      ) : m.game === 'snake' ? (
         <SnakeDuel
           match={m}
           userId={userId}
@@ -89,14 +110,79 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
         {m.finished && (m.daily_date ? <p>Today’s challenge is complete. Come back after midnight UTC for another, or play freely in Games.</p> : <button disabled={games.busy} onClick={() => void games.start(m.game, false, m.best_of)}>Play again</button>)}
       </div>
       ))}
+    </> : sudokuOpen ? <>
+      <button className="game-back" onClick={() => setSudokuOpen(false)}>← All games</button>
+      <Sudoku partnerName={partnerName} onExit={() => setSudokuOpen(false)} />
     </> : warmUp ? <>
       <button className="game-back" onClick={() => setWarmUp(null)}>← All games</button>
       {practice}
     </> : <>
-      {games.data?.matches.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => openMatch(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
+      {games.data?.matches?.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => openMatch(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
       {lastDuelLine && <button className="game-card game-resume" onClick={() => openMatch(lastDuel?.id ?? null)} data-last-duel>Last {lastDuelLine.name} <small>{lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You {lastDuelLine.mine} — {lastDuelLine.theirs} {partnerName} →</small></button>}
-      {GAMES.map(game => <article className="game-card" key={game.id}><div className="game-icon" aria-hidden="true">{game.icon}</div><h2>{game.name}</h2><p>{game.description}</p>{game.id === 'rock-paper-scissors' && <fieldset><legend>Match length</legend>{[3,5].map(n => <button key={n} aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}</fieldset>}{game.id === 'tetris' && <fieldset><legend>How the duel is decided</legend>{(['sprint','survival'] as TetrisMode[]).map(option => <button key={option} aria-pressed={mode === option} onClick={() => setMode(option)} data-tetris-mode-option={option}>{tetrisModeLabel(option)}</button>)}</fieldset>}<button disabled={games.busy || !games.data} onClick={() => void (game.id === 'tetris' ? games.start(game.id, false, bestOf, mode) : games.start(game.id, false, bestOf))}>{game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : `Play with ${partnerName} →`}</button>{game.id === 'snake' && <button className="snake-secondary" disabled={games.busy || !games.data} onClick={startSnakeWarmUp} data-action="library-warm-up">Warm-up run (not counted)</button>}{game.id === 'tetris' && <button className="tetris-secondary" disabled={games.busy || !games.data} onClick={startTetrisWarmUp} data-action="library-warm-up-tetris">Warm-up run (not counted)</button>}</article>)}
+      {GAMES.map(game => (
+        <article className="game-card" key={game.id} data-game={game.id}>
+          <div className="game-icon" aria-hidden="true">{game.icon}</div>
+          <h2>{game.name}</h2>
+          <p>{game.description}</p>
+          {game.id === 'rock-paper-scissors' && (
+            <fieldset>
+              <legend>Match length</legend>
+              {[3, 5].map(n => <button key={n} type="button" aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}
+            </fieldset>
+          )}
+          {game.id === 'chess' && (
+            <fieldset>
+              <legend>Choose your duel</legend>
+              {CHESS_MODES.map(modeOption => (
+                <button key={modeOption.id} type="button" aria-pressed={chessMode === modeOption.id} onClick={() => setChessMode(modeOption.id)}>
+                  {modeOption.icon} {modeOption.name}
+                </button>
+              ))}
+            </fieldset>
+          )}
+          {game.id === 'tetris' && (
+            <fieldset>
+              <legend>How the duel is decided</legend>
+              {(['sprint','survival'] as TetrisMode[]).map(option => <button key={option} type="button" aria-pressed={mode === option} onClick={() => setMode(option)} data-tetris-mode-option={option}>{tetrisModeLabel(option)}</button>)}
+            </fieldset>
+          )}
+          {games.error && inlineErrorGame === game.id && <GameError games={games} />}
+          <div className="game-actions">
+            <button
+              type="button"
+              disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
+              aria-busy={games.pendingGame === game.id}
+              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : void games.start(game.id, false, bestOf)}
+            >
+              {games.pendingGame === game.id
+                ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : 'Opening game…'
+                : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
+            </button>
+            {game.id === 'snake' && (
+              <button type="button" className="snake-secondary" disabled={games.busy} onClick={startSnakeWarmUp} data-action="library-warm-up">
+                Warm-up run (not counted)
+              </button>
+            )}
+            {game.id === 'tetris' && (
+              <button type="button" className="tetris-secondary" disabled={games.busy} onClick={startTetrisWarmUp} data-action="library-warm-up-tetris">
+                Warm-up run (not counted)
+              </button>
+            )}
+          </div>
+        </article>
+      ))}
       <p className="game-hint">Games are always open for a rematch. Today’s Challenge on Home is one shared match per day.</p>
     </>}
   </section>;
+}
+
+function GameError({ games, card = false }: { games: GamesState; card?: boolean }) {
+  return (
+    <div role="alert" className={card ? 'game-card game-error' : 'game-error'}>
+      <p>{games.error}</p>
+      <button type="button" disabled={games.busy} onClick={() => void (games.retry ?? games.refresh)()}>
+        {games.errorGame ? 'Try again' : 'Retry connection'}
+      </button>
+    </div>
+  );
 }

@@ -12,6 +12,7 @@ import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
 import { PreviewSnake } from './PreviewSnake';
 import { PreviewTetris } from './PreviewTetris';
+import { ChessDuel } from '../components/games/ChessDuel';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { ChatView } from '../components/chat/ChatView';
@@ -455,7 +456,8 @@ export const AppPreview = () => {
               /* The duels, played out on this page: same boards, same rules, no backend.
                  A toggle rather than two tabs — the preview is a page, not an app. */
               <section style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px 24px' }}>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <ChessDuel partnerName={partner.name} />
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', marginTop: '12px' }}>
                   {(['snake', 'tetris'] as const).map((game) => (
                     <button
                       key={game}
@@ -676,3 +678,4 @@ export const AppPreview = () => {
 };
 
 export default AppPreview;
+;

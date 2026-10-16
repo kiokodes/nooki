@@ -85,7 +85,7 @@ export const TetrisDuel: React.FC<TetrisDuelProps> = ({
           <button
             type="button"
             disabled={games.busy}
-            onClick={() => { onWarmUpSkip(); void games.start('tetris', false, 3, mode); }}
+            onClick={() => { onWarmUpSkip(); void games.startTetrisDuel(mode); }}
           >
             Start a new duel
           </button>

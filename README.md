@@ -28,6 +28,26 @@ change. A preview pointing to the production project uses real production data.
 Git-ignored except the blank `.env.example`. Configuration preflight validates presence
 and public-key format, not the remote key's validity or the database's health.
 
+### If Vercel reports `Build blocked: Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY`
+
+This is the environment preflight stopping the build, not a TypeScript/Vite failure.
+The npm `cache-dir` and install-script warnings are not the cause of this exit.
+
+1. In the **same Vercel project** that produced the log, open **Settings → Environment
+   Variables** and add the two exact names above. Get the project URL and public
+   anon/publishable key from your Supabase project's API settings/Connect dialog.
+2. Enable **Production** for production deployments and **Preview** for branch/PR
+   deployments. Production-only values do not reach Preview builds. If a Preview value
+   has a Git-branch restriction, include the branch being deployed (or select all Preview
+   branches). A Git-ignored local `.env.local` is not uploaded by a Git deployment.
+3. Save, then **redeploy the latest commit**. Editing environment variables does not repair
+   an already-failed deployment. A failed build cannot publish its Duel/Sudoku changes;
+   the previous successful deployment may still be what the browser is showing.
+
+Do not remove `check:env`, commit filled-in environment files, or substitute a secret key
+just to make the build green. A successful preflight only checks configuration format;
+apply and verify the database migrations separately.
+
 ## Database setup
 
 ### Existing live project
@@ -38,13 +58,16 @@ and public-key format, not the remote key's validity or the database's health.
    `202610150003_messages.sql`, `202610150004_discuss_questions.sql`,
    `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`,
    `202610150007_games.sql` (Games), `202610150010_snake_duel.sql` (the Snake Duel in
-   Games), `202610150008_shared_books.sql` and `202610150009_two_book_shelf_limit.sql`
-   (shared books). All ten are
-   safe to rerun and change nothing that already exists: the second adds the shared
+   Games), `202610150011_chess.sql` (Chess in Games), `202610150008_shared_books.sql` and
+   `202610150009_two_book_shelf_limit.sql`
+   (shared books). Apply pending migrations in this order; they preserve existing records.
+   Do not rerun older Games migrations over saved Chess matches (see **Troubleshooting
+   the Duel button**). The second adds the shared
    calendar, the third adds the chat log, the fourth adds the Discuss question engine,
    the fifth rewrites reactions into comments and links chat messages to questions, the
    sixth adds chat replies and edits (plus their Realtime publication membership), the
-   seventh adds Games, the tenth adds the Snake Duel's verified runs to Games, and the
+   seventh adds Games, the tenth adds the Snake Duel's verified runs to Games, the
+   eleventh adds Chess's database referee to Games, and the
    last two add the shared-books shelf.
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
@@ -437,7 +460,7 @@ at the production project uses real production data.
 cp .env.example .env.local   # fill in the two values
 npm ci
 npm run check:env            # fails closed without valid public config
-npm test                     # 17 tests, no live project contacted
+npm test                     # unit, UI and database tests; no live project contacted
 npm run lint
 npm run build
 ```
@@ -615,9 +638,9 @@ mutual-breakup settings are implemented. Media hosts **Read together** (shared b
 one EPUB or PDF in play per couple, a full-screen reader, saved places for both
 partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
 back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes
-Tic Tac Toe, Rock Paper Scissors, the asynchronous Snake Duel and the asynchronous Tetris
-Duel (five minutes each, in either a sprint or a survival), and voice/video calling
-is still a "coming soon" toast. No sample conversations or questions
+Tic Tac Toe, Rock Paper Scissors, Chess, Sudoku, the asynchronous Snake Duel and the
+asynchronous Tetris Duel (five minutes each, in either a sprint or a survival), and
+voice/video calling is still a "coming soon" toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, and the question library is whatever the owner imported into `questions`.
 Scenes and illustrated backgrounds are deliberately out of scope for now: the Discuss tab
@@ -633,11 +656,14 @@ partners are paired; ending a completed couple requires both partners' agreement
 
 Apply **`supabase/migrations/202610150007_games.sql`** to an existing project before
 shipping Games, then **`supabase/migrations/202610150010_snake_duel.sql`** before shipping
-the Snake Duel, then **`supabase/migrations/202610150011_chess.sql`** for Chess, then **`supabase/migrations/202610150012_tetris_duel.sql`** before shipping
-the Tetris Duel, then run **`supabase/verify-games.sql`** in addition to the usual
-`verify.sql`. New projects get all three from `schema.sql`. The migrations are additive
-and rerunnable; they do not reset existing matches or duels. They have not been applied
-to your live project by the frontend build.
+the Snake Duel, then **`supabase/migrations/202610150011_chess.sql`** before shipping
+Chess, then **`supabase/migrations/202610150012_tetris_duel.sql`** before shipping the
+Tetris Duel, then run **`supabase/verify-games.sql`** in addition to the usual
+`verify.sql`. New projects get all four from `schema.sql`. The migrations are additive
+and rerunnable; they do not reset existing matches or duels. Apply pending Games
+migrations in order (007 → 010 → 011 → 012); do not downgrade the shared game constraint
+by reapplying an older migration after Chess or Tetris has saved matches. The frontend
+build does not apply migrations to your live project.
 
 - **Tic Tac Toe:** a 3×3 board, alternating turns, all eight winning lines and draws.
   The starting partner is X. Moves and results are validated by the database.
@@ -682,6 +708,39 @@ to your live project by the frontend build.
 - **Snake Duel · not the daily challenge:** the daily pool stays Tic Tac Toe and Rock
   Paper Scissors (`start_game` never picks snake for a daily match). A duel waits however
   long both partners need, which one UTC day is the wrong container for.
+- **Chess:** adapted clean-room from
+  [PyChess](https://github.com/Kingcitaldo125/PyChess/tree/main/chess) — its 8×8 cell
+  board, per-piece move generators, line-of-sight blocking and attack-based check test,
+  re-implemented in `src/lib/chess.ts`. No PyChess code or PNG pieces are copied (it is
+  GPL-3.0, and its bishop/queen movement, pawn blocking and checkmate test are broken or
+  missing); the board here is a CSS grid of buttons with Unicode glyphs. The engine plays
+  full normal chess — legal-move filtering (a pinned piece cannot expose its king),
+  castling, en passant, promotion with a picker (underpromotion included), checkmate over
+  all replies, stalemate, insufficient material, fifty-move and threefold draws — plus
+  Nooki's situational layer, chosen by whoever starts the match: **Classic Duel**
+  (checkmate wins), **Capture Race** (first to capture **7** enemy pieces wins the moment
+  the seventh capture lands) and **Queen Hunt** (capture the opponent's *original* queen
+  — a promoted queen does not count — to win on the spot). In every mode checkmate still
+  wins and being checkmated still loses: goal moves are legal moves, so they can never
+  leave your own king in check, and there is no move after you are mated for a goal to
+  save you. Kings are never captured.
+- **Chess · the referee is the database:** apply
+  **`supabase/migrations/202610150011_chess.sql`** before shipping Chess
+  (`verify-games.sql` checks it too). Like the Snake duel, the rules live on both sides:
+  `chess_attacked` / `chess_pseudo` / `chess_legal` / `chess_has_move` in SQL mirror
+  `src/lib/chess.ts`, and the only thing a phone may send is `chess_move` with a move in
+  coordinate notation (`e2e4`, `e7e8q`, or `resign`) plus the match's round, checked
+  exactly as `play_game` checks it. The server decides whose piece it is, whether the
+  move is legal, what it captured, and whether checkmate, a draw, the Capture Race or
+  the Queen Hunt ends the match — a phone can never claim a capture, or a queen, it did
+  not really make. The starter is White (`player_x`); the position lives in the match's
+  `chess` jsonb (64 piece codes — `wQ` the original queen, `wQ*` a promoted one —
+  castling rights, the en-passant square, captures, history, repetition counts, which
+  the snapshot strips). There are no secrets to seal, so the snapshot shows the whole
+  position to both partners. One open chess match per couple, as with the other games;
+  resigning is always allowed, on either turn. Chess is not in the daily pool. The
+  design preview still plays pass-and-play on one phone, with undo, because it has no
+  backend by design.
 - **Tetris Duel:** five minutes each, and both partners play the same pieces — dealt once
   per duel, so the two runs are like for like no matter how far apart in time they happen.
   Neither partner needs to be online when the other plays. A run starts the moment it is
@@ -737,7 +796,8 @@ to your live project by the frontend build.
   two partners need, which one UTC day is the wrong container for.
 - **Games:** unlimited rematches; starting a game with an unfinished practice match
   resumes that match, including the original match length. A finished duel stays reachable
-  from the library's *Last Snake Duel* row, so its result does not vanish.
+  from the library's *Last Duel* row — whichever of the two it was — so its result does
+  not vanish.
 - **Home → Today's Challenge:** randomly selects either available game on the first
   start and saves that choice for both partners. Exactly one shared match per couple
   per **UTC day**, enforced by a database unique constraint and serialized starts.
@@ -770,6 +830,63 @@ says what you expected, and confirm the two of you were dealt the same pieces.
 The no-backend development preview remains sample UI, not a local game backend: the
 preview's Snake and Tetris duels are played out on the page (there is a toggle above
 them), and a ranked duel needs its migration.
+
+### Troubleshooting the Duel button
+
+The library button calls `start_game('snake', false, …)`; **Start my run** then calls
+`snake_start`. The Tetris Duel is the same shape with its own entry point: the card calls
+`start_tetris(mode)` and **Start my 5 minutes** calls `tetris_start` — a duel fixed to a
+mode gets an RPC of its own, exactly as Chess does, so `start_game` is left alone for the
+games that were already working. All of them depend on the live database, not just a
+successful Vercel build. Migration `007` alone only accepts Tic Tac Toe and Rock Paper
+Scissors, so it rejects Snake with `Invalid game settings.` even though the Games library
+loads normally, and a Tetris card on a project without `012` reports `012` by name.
+
+In the Supabase project used by the deployment:
+
+1. Apply `supabase/migrations/202610150007_games.sql` if Games has not been installed.
+2. Apply pending `supabase/migrations/202610150010_snake_duel.sql` **after** `007`,
+   then `supabase/migrations/202610150011_chess.sql` for the Chess-enabled release, then
+   `supabase/migrations/202610150012_tetris_duel.sql` for Tetris.
+3. Run `supabase/verify-games.sql` and require **PASS**, then try Duel again.
+
+Do not rerun the full schema on an existing project. Rerunning `007` after `010`
+overwrites `start_game` and `games_state` with their older versions. If Chess already has
+saved matches, do **not** rerun the whole older `010` script: its game constraint excludes
+Chess. Take a backup and restore only the affected `start_game` definition from `010` and
+the latest `games_state` definition — from `012` on a project that has Tetris, otherwise
+`011` — preserving the Chess-enabled constraint. Tetris is the one game here that adds no
+`start_game` of its own, so a restoration that keeps `start_game` intact keeps Tetris
+starting too.
+The verifier detects obsolete Snake entry points, missing Chess support, missing
+tables/functions and unsafe permissions.
+
+A failed start stays visible next to its library button (or above an open match), names
+the Snake migration when appropriate, and survives background polling. **Try again**
+retries the actual failed action. Starting a duel/run also shows a pending label and blocks
+duplicate taps. Pairing and network errors remain distinct from migration errors.
+
+### Sudoku layout and browser regressions
+
+The board has nine equal rows and columns, continuous cell borders, and thicker 3×3 box
+boundaries. Cells explicitly reset the library buttons' padding/radius/minimum size; the
+board and number pad shrink to their containing card instead of overflowing narrow phones.
+The header wraps, all nine number keys stay together, and Erase has its own row.
+Sudoku and Snake warm-ups do not need the shared Games snapshot to load. Sudoku is still
+local to this device; its competition/collaboration settings are not synchronized with a
+partner's device.
+
+The browser tests render the real Games UI/hook with intercepted HTTP responses (no live
+Supabase calls), check actual cell geometry at 320, 360, 390, 480 and 1024px, and cover
+Duel start/resume, missing-migration errors across polling, retry, and offline local play.
+The PostgreSQL tests additionally run the old/new migrations and the real Duel RPC flow.
+
+```sh
+npx playwright install chromium   # once, on your development/CI machine
+npm run test:browser
+# Or use an already installed Chromium:
+# PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser
+```
 
 ## Media tab: Read together (shared books)
 

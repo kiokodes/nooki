@@ -34,6 +34,7 @@ test('tetris UI: the gate, a playable board, the leave question, warm-ups and th
       select: (...args) => calls.push(['select', ...args]),
       start: (...args) => calls.push(['start', ...args]),
       startTetris: (...args) => calls.push(['startTetris', ...args]),
+      startTetrisDuel: (...args) => calls.push(['startTetrisDuel', ...args]),
       beatTetris: (...args) => calls.push(['beatTetris', ...args]),
       finishTetris: (...args) => calls.push(['finishTetris', ...args]),
       forfeitTetris: (...args) => calls.push(['forfeitTetris', ...args]),
@@ -60,10 +61,10 @@ test('tetris UI: the gate, a playable board, the leave question, warm-ups and th
     // Both duels invite you the same way, so the button has to be found inside the card.
     const cardButton = (text) => [...tetrisCard.querySelectorAll('button')].find((item) => item.textContent === text);
     await act(async () => cardButton('Duel Bob →').click());
-    assert.deepEqual(calls.pop(), ['start', 'tetris', false, 3, 'sprint'], 'and the duel starts in the chosen mode');
+    assert.deepEqual(calls.pop(), ['startTetrisDuel', 'sprint'], 'and the duel starts in the chosen mode');
     await act(async () => picker[1].click());
     await act(async () => cardButton('Duel Bob →').click());
-    assert.deepEqual(calls.pop(), ['start', 'tetris', false, 3, 'survival']);
+    assert.deepEqual(calls.pop(), ['startTetrisDuel', 'survival']);
     await act(async () => [...tetrisCard.querySelectorAll('button')].at(-1).click());
     assert(document.querySelector('.tetris-board'), 'a warm-up board opens straight from the library');
     assert(document.body.textContent.includes('Not counted'), 'and says that it does not count');
@@ -192,7 +193,7 @@ test('tetris UI: the gate, a playable board, the leave question, warm-ups and th
     assert.equal(document.querySelector('[data-tetris-score-partner]').textContent, '4100');
     assert(result.textContent.includes('the well filled up'), 'and it says how their run ended');
     await act(async () => button('Start a new duel').click());
-    assert.deepEqual(calls.pop(), ['start', 'tetris', false, 3, 'sprint']);
+    assert.deepEqual(calls.pop(), ['startTetrisDuel', 'sprint']);
 
     // --- Survival is settled on stacking time, and says so ------------------------------
     await render(React.createElement(GamesView, {

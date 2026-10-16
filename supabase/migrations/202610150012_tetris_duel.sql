@@ -26,10 +26,10 @@
 -- Everything here is RPC-only, like the rest of Games: `game_matches` still has no table
 -- grants, and the snapshot never publishes an unfinished partner's score (a blind duel).
 --
--- Run this after `202610150011_chess.sql`. It re-creates `games_state()` and `start_game()`,
--- and it carries Chess along as it does: the snapshot keeps its `chess` key and the game
--- check keeps `chess` allowed. Applying it the other way round (before 011) would leave
--- Chess unable to start, so reorder the two if that is what your project needs.
+-- Run this after `202610150011_chess.sql`: it re-creates `games_state()`, and it carries
+-- Chess along as it does — the snapshot keeps its `chess` key and the game check keeps
+-- `chess` allowed. Applying it the other way round (before 011) would leave Chess unable
+-- to start, so reorder the two if that is what your project needs.
 BEGIN;
 
 -- The duel lives on the same match row as the other games, so the Games tab badge, the
@@ -486,41 +486,33 @@ BEGIN IF cid IS NULL THEN RAISE EXCEPTION 'Pair with your partner to play.'; END
  RETURN result;
 END $$;
 
-CREATE OR REPLACE FUNCTION public.start_game(p_game text, p_daily boolean DEFAULT false, p_best_of integer DEFAULT 3, p_mode text DEFAULT NULL)
+-- Starting a Tetris duel gets its own RPC, the way Chess does, rather than a fourth
+-- argument on `start_game`. Two reasons, and the second is the one that matters: a Tetris
+-- duel is fixed to a mode in a way no other game is, and adding a fourth parameter would
+-- leave *two* `start_game` functions on the project — so a three-argument call (every
+-- other game, and any re-run of migration 007 or 011) would stop resolving with
+-- "function start_game(...) is not unique". One function per way of starting a game.
+CREATE OR REPLACE FUNCTION public.start_tetris(p_mode text)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE cid uuid := public.get_user_couple_id(auth.uid()); partner uuid; mid uuid; chosen text;
+DECLARE cid uuid := public.get_user_couple_id(auth.uid()); partner uuid; mid uuid;
 BEGIN
  IF cid IS NULL THEN RAISE EXCEPTION 'Pair with your partner to play.'; END IF;
- -- Serialize starts across both phones, including daily random selection.
+ IF p_mode IS NULL OR p_mode NOT IN ('sprint','survival') THEN RAISE EXCEPTION 'Invalid game settings.'; END IF;
+ -- Serialize starts across both phones, so two taps cannot open two duels.
  PERFORM 1 FROM public.couples WHERE id=cid FOR UPDATE;
  SELECT id INTO partner FROM public.profiles WHERE couple_id=cid AND id<>auth.uid();
  IF partner IS NULL THEN RAISE EXCEPTION 'Both partners must be paired.'; END IF;
- IF p_daily IS NULL OR p_game IS NULL OR p_game NOT IN ('tic-tac-toe','rock-paper-scissors','snake','tetris') OR p_best_of IS NULL OR p_best_of NOT IN (3,5) THEN RAISE EXCEPTION 'Invalid game settings.'; END IF;
- IF p_game = 'tetris' AND p_mode IS NULL THEN RAISE EXCEPTION 'A Tetris duel needs a mode.'; END IF;
- IF p_game = 'tetris' AND p_mode NOT IN ('sprint','survival') THEN RAISE EXCEPTION 'Invalid game settings.'; END IF;
- IF p_daily THEN
-   SELECT id INTO mid FROM public.game_matches WHERE couple_id=cid AND daily_date=(now() AT TIME ZONE 'UTC')::date;
- ELSE
-   -- A Tetris duel is fixed to the mode it was started in, so a sprint and a survival can
-   -- both be open at once without either of them being the other's rematch.
-   SELECT id INTO mid FROM public.game_matches WHERE couple_id=cid AND game=p_game AND daily_date IS NULL AND NOT finished
-     AND (p_game <> 'tetris' OR tetris_mode = p_mode);
- END IF;
+ -- A duel is fixed to the mode it was started in, so a sprint and a survival can both be
+ -- open at once without either of them being the other's rematch.
+ SELECT id INTO mid FROM public.game_matches
+  WHERE couple_id=cid AND game='tetris' AND daily_date IS NULL AND NOT finished AND tetris_mode=p_mode;
  IF mid IS NOT NULL THEN RETURN mid; END IF;
- -- Neither duel is ever the daily challenge: both wait for partners to play whenever suits
- -- them, which is not a thing a single UTC day should be asked to hold.
- chosen := CASE WHEN p_daily THEN (ARRAY['tic-tac-toe','rock-paper-scissors'])[1+floor(random()*2)::integer] ELSE p_game END;
- INSERT INTO public.game_matches(couple_id,game,daily_date,player_x,player_o,turn_id,best_of,tetris_mode)
- VALUES(cid,chosen,CASE WHEN p_daily THEN (now() AT TIME ZONE 'UTC')::date END,auth.uid(),partner,auth.uid(),CASE WHEN p_daily THEN 3 ELSE p_best_of END,CASE WHEN chosen='tetris' THEN p_mode END) RETURNING id INTO mid;
+ INSERT INTO public.game_matches(couple_id,game,player_x,player_o,turn_id,best_of,tetris_mode)
+ VALUES(cid,'tetris',auth.uid(),partner,auth.uid(),3,p_mode) RETURNING id INTO mid;
  RETURN mid;
 END $$;
 
--- `start_game` gained the mode a Tetris duel is started in, which makes it a different
--- function to the three-argument one Games shipped with: drop that one, so there is exactly
--- one way to start a match and no stale overload for a caller to land on, and give the new
--- one the same permissions the old one had.
-DROP FUNCTION IF EXISTS public.start_game(text, boolean, integer);
-REVOKE ALL ON FUNCTION public.start_game(text, boolean, integer, text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.start_game(text, boolean, integer, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.start_tetris(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.start_tetris(text) TO authenticated;
 
 COMMIT;

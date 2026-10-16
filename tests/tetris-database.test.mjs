@@ -73,12 +73,12 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
 
     // --- A duel is started once and picked back up, not restarted ---------------------
     await login('a');
-    const duel = await games.startGame('tetris', false, 3, 'sprint');
-    assert.equal(await games.startGame('tetris', false, 3, 'sprint'), duel, 'one open sprint per couple');
-    await assert.rejects(games.startGame('tetris', false, 3), /needs a mode/, 'a Tetris duel is started in a mode');
-    await assert.rejects(games.startGame('tetris', false, 3, 'longest'), /Invalid game settings/, 'and only in one of the two');
+    const duel = await games.startTetris('sprint');
+    assert.equal(await games.startTetris('sprint'), duel, 'one open sprint per couple');
+    await assert.rejects(games.startTetris(null), /Invalid game settings/, 'a Tetris duel is started in a mode');
+    await assert.rejects(games.startTetris('longest'), /Invalid game settings/, 'and only in one of the two');
     // The other mode is a different duel, not a rematch of this one.
-    const survival = await games.startGame('tetris', false, 3, 'survival');
+    const survival = await games.startTetris('survival');
     assert.notEqual(survival, duel, 'a sprint and a survival can both be open');
     const opened = await match(duel);
     assert.equal(opened.game, 'tetris');
@@ -183,7 +183,7 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
     assert.ok(longPlayed.state.ticks > quickPlayed.state.ticks, 'having lasted more ticks');
 
     // --- Leaving is a forfeit, there and then, even with no run from the partner -------
-    const second = await games.startGame('tetris', false, 3, 'sprint');
+    const second = await games.startTetris('sprint');
     await login('a');
     await games.startTetrisRun(second);
     const beforeForfeit = await games.fetchGames();
@@ -201,7 +201,7 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
     assert.equal(winnerSees.tetris.partner.score, lost.tetris.mine.score, 'the revealed score is what the leaver had reached');
 
     // --- A phone that goes quiet loses the run (the 30-second grace) -------------------
-    const third = await games.startGame('tetris', false, 3, 'sprint');
+    const third = await games.startTetris('sprint');
     await login('a');
     await games.startTetrisRun(third);
     await backdate(third, a.id, 45, 'last_seen');
@@ -218,7 +218,7 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
     assert.equal(late.status, 'forfeit', 'the late report is told the run is already lost');
 
     // --- A phone that keeps reporting when the five minutes are up simply stops there ---
-    const fourth = await games.startGame('tetris', false, 3, 'sprint');
+    const fourth = await games.startTetris('sprint');
     await login('a');
     const clocked = await games.startTetrisRun(fourth);
     await dealPieces(fourth, a.id, pieces);
