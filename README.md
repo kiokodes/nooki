@@ -352,6 +352,11 @@ a link back to those answers) attached. It is built from:
 - **History** — every question this couple has asked, newest first, each marked
   *Revealed*, *Waiting* or *Your turn*. Opening one shows the same sealed or revealed
   view; a sealed one never shows the partner's answer, because it was never sent.
+- **History filter** — the *Filter* button beside *Categories* opens a menu of the
+  library's categories (the ones this couple may see, each with how many past questions
+  it holds) and narrows the history to the one chosen. *All categories* puts the whole
+  history back; a category nothing has been asked in yet says so instead of showing an
+  empty list.
 - **Unanswered badge** — sessions without your answer badge the Discuss tab in the bottom
   nav and repeat the count in the tab header, live, even while this phone sits on Home,
   Media or Games. Screen readers hear *"Discuss, 1 question waiting"*.

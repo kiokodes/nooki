@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, History, X } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { CategoryPicker } from './CategoryPicker';
@@ -52,10 +52,18 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
   const [screen, setScreen] = useState<Screen>('browse');
   const [draft, setDraft] = useState<{ question: Question; remaining: number } | null>(null);
   const [filters, setFilters] = useState<Filters>({ category: null, seriousness: null });
+  /** The category the history list is narrowed to, or null for every question. */
+  const [historyCategory, setHistoryCategory] = useState<string | null>(null);
   const [openSessionId, setOpenSessionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const openDetail = discuss.sessions.find((entry) => entry.session.id === openSessionId) ?? null;
+
+  // The history filter offers the library's categories, in the order the picker uses.
+  const historyCategories = useMemo(
+    () => discuss.categories.map((entry) => entry.category),
+    [discuss.categories],
+  );
 
   // A tap on a question card in the chat lands here, however deep in a session this
   // screen currently sits. Keyed on the nonce so re-tapping the same quote reopens it;
@@ -338,6 +346,9 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
       {!showMigrationCard && screen === 'history' && (
         <HistoryList
           sessions={discuss.sessions}
+          categories={historyCategories}
+          filter={historyCategory}
+          onFilterChange={setHistoryCategory}
           userId={userId}
           partnerName={partnerName}
           onOpen={(sessionId) => {
