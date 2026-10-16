@@ -66,7 +66,8 @@ apply and verify the database migrations separately.
    `202610150008_shared_books.sql` and
    `202610150009_two_book_shelf_limit.sql`
    (shared books), then `202610150015_web_push.sql` (notifications; optional, and the only
-   migration that is — every other table works without it). Apply pending migrations in
+   migration that is — every other table works without it), then
+   `202610150016_miss_you.sql` (the "I miss you" button). Apply pending migrations in
    this order; they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
    `202610150014_restore_chess_tetris_game_check.sql` are repairs, not part of a fresh
@@ -79,13 +80,15 @@ apply and verify the database migrations separately.
    sixth adds chat replies and edits (plus their Realtime publication membership), the
    seventh adds Games, the tenth adds the Snake Duel's verified runs to Games, the
    eleventh adds Chess's database referee to Games, the twelfth adds the Tetris Duel's
-   verified runs to Games, and the last two add the shared-books shelf.
+   verified runs to Games, the last two add the shared-books shelf, and the miss-you one
+   adds the tap table behind the "I miss you" button (`202610150016`, the only one the
+   frontend never writes directly).
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
-   anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat
-   and the Discuss tables, reveal policy and question RPCs. It must return **PASS**; if it
-   complains about `couple_events`, `messages` or `questions`, that migration step was
-   skipped.
+   anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat,
+   the Discuss tables, reveal policy and question RPCs, the web-push device table and the
+   miss-you tap table. It must return **PASS**; if it complains about `couple_events`,
+   `messages`, `questions` or `miss_you_taps`, that migration step was skipped.
 4. Redeploy the updated frontend immediately after the migration.
 
 The migration preserves existing couples and invite codes. It makes creation/linking
@@ -111,8 +114,9 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 ### Brand-new, empty Supabase project only
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
-(including `couple_events`, `messages`, the five Discuss tables, the shared-books tables
-and `push_subscriptions`), RLS policies, pairing, question and push-device RPCs, the
+(including `couple_events`, `messages`, the five Discuss tables, the shared-books tables,
+`push_subscriptions` and `miss_you_taps`), RLS policies, pairing, question, push-device and
+miss-you RPCs, the
 anniversary and answer-reveal triggers, the Realtime publication membership for the chat
 and Discuss tables, the mutual-breakup RPCs and the private `shared-books` storage bucket;
 it does not populate user/couple records, and it contains no questions — import those
@@ -206,8 +210,8 @@ The Home tab shows:
 - A **Daily game card** (`src/components/home/DailyGameCard.tsx`): a playable
   **"Today's challenge"** card with a **Play** button and a head-to-head scoreboard
   showing wins for each partner (saved daily and practice wins).
-- An **empty rounded area at the bottom of the screen**, reserved for a future animated
-  scene.
+- The **cozy nook** at the bottom of the screen — the shared room the companions stand in,
+  with the "I miss you" button in its top-left corner (see below).
 
 The full calendar is a **modal over the current tab** — never a page of its own, so the
 Home tab stays exactly as it was behind it:
@@ -237,6 +241,49 @@ an unpaired or third account sees nothing.
 project in place: it adds `repeat_frequency`, converts existing `repeats_yearly = true`
 rows to `'yearly'`, drops the old column, and then `verify.sql` should report **PASS**
 (it fails loudly if the old column is still there).
+
+### The "I miss you" button
+
+The one thing in the nook that can be tapped, and the only feature meant for the half of the
+couple who is in the app alone. It is offered only while the partner is away — when presence
+says they are in the app, the corner of the nook is empty — and every tap is counted, so
+the gesture survives the wait.
+
+- **Tapping.** Each tap writes one tap under the tapper's own calendar day (`tap_date`, never
+  a UTC guess, so an 11pm tap is tonight's). A day of tapping is one row with a count, not a
+  pile of rows: `record_miss_you_tap` upserts it and returns how many of them the partner has
+  not opened yet — the little number on the button. It is instant on screen, because the tap
+  already happened in the person's hands.
+- **Receiving.** The next time the partner opens Nooki, their phone peeks the waiting taps
+  and calls `receive_miss_you_taps`, which hands the batch back **and** marks it received in
+  the same step — that is the reset. The heart is then drawn over the load screen
+  (`MissYouReveal`), expands, and fades away on its own; tapping it, Escape, or the timer
+  closes it sooner. Nothing behind it is blocked while it is up, and reduced-motion readers
+  get the same words with no growth.
+- **The words** (`src/lib/missYou.ts`, pure and testable): one waiting tap is a soft hello —
+  `Hi, Jayo missed you`; several from the same day are counted — `Jayo missed you 4 times
+  today`; a second batch later the same day says `4 more times today`, because the count
+  resets the moment the partner receives it; and taps left over from earlier days drop the
+  "today" claim rather than lie about it — `Jayo missed you 5 times`.
+- **Only what is waiting is ever counted.** The day's total is kept (`tap_count`), and
+  `delivered_count` records how much of it has been opened, so a tap that greets someone
+  once never greets them twice. The batch a phone opens is remembered for the session, so
+  switching tabs does not replay the heart.
+- **When the count is read.** Both halves peek on unlock and again whenever the app comes
+  back to the front — the moment a partner is most likely to have left something behind. So
+  the tapper's number drops back to nothing once their taps have been received, without a
+  reload, and a tap left for someone who is mid-session still opens the next time they look
+  at their phone.
+- **Privacy.** `miss_you_taps` can be read by the two partners and written by nobody: both
+  writes are `SECURITY DEFINER` functions, the couple comes from the caller's own profile
+  rather than the phone, and a third account that names someone else's id gets nothing. A
+  couple that ends takes its taps with it (`ON DELETE CASCADE`), and `verify.sql` fails
+  loudly on a project that has not run `supabase/migrations/202610150016_miss_you.sql`.
+
+**The migration is required before deploying this button.** A project without it has no
+table and no function to count with, so the button says "The database needs an update.
+Please ask the app owner to apply supabase/migrations/202610150016_miss_you.sql" rather than
+appearing to work. The migration is additive and rerunnable: it never resets a count.
 
 ## The Chat tab
 
@@ -709,21 +756,30 @@ of a fetch handler), the manifest and icon sizes an install needs, the RPCs an a
 uses to claim, release and re-claim a device under RLS, cascade when an account or couple
 is deleted, and that `verify.sql` catches a project missing the push migration — plus the
 Edge Function's own checks (no private key in the file, a 404/410 device deleted, the
-partner rather than the author notified).
+partner rather than the author notified), and the miss-you button: the taps that are
+waiting (received ones are never counted twice, a partner away for a weekend adds up
+without claiming "today"), the wording for one tap, four taps, a second batch the same day
+and a batch across two days, the taps counted per sender and per own calendar day in the
+database (a wrong clock refused, one row per day, receiving as the reset that keeps the
+day's record, a third account and a self-receive refused, direct writes to the table denied
+by RLS, cascade when the couple ends, safe re-migration and `verify.sql` catching a
+half-applied one) — plus the live tab: the button in the top-left of the nook only while the
+partner is away, three taps counted on the button and in the database, and the other
+phone's load opening the big heart with the sentence and marking the taps received, once.
 
 A successful build does **not** verify a deployed key, email delivery, an applied live
 migration, or two-device connectivity. Complete the acceptance test below as well.
 
 ## Push and deploy
 
-Work for this Arena session stays on `arena/049bd1b6-nooki`:
+Work for this Arena session stays on `arena/73eb8e71-nooki`:
 
 ```sh
 git status
 git diff --check
 git add .
-git commit -m "Add web push notifications: a per-device switch, the send-push Edge Function and a message webhook"
-git push origin arena/049bd1b6-nooki
+git commit -m "Add the I miss you button: taps counted per partner and per day, and the heart the other phone opens"
+git push origin arena/73eb8e71-nooki
 ```
 
 Open a pull request from that branch to `main`. Test the Vercel preview with its environment
@@ -751,6 +807,10 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] Closing one app greys the dot within about a minute and its tooltip reads "Last seen ...".
 - [ ] The header clock beside the dot matches the partner's own device time and weekday, and never shows your own clock.
 - [ ] The Today card shows today's date and the anniversary/monthsary that fall today.
+- [ ] With one app open and the other closed, the nook shows a small "I miss you" pill in its top-left corner; open both and it disappears.
+- [ ] Tapping it a few times shows the count on the button (2, 3…) and never on the other phone yet.
+- [ ] Opening the other app shows a big heart expanding over the load with "… missed you N times today" (a single tap reads "Hi, … missed you"), fading away on its own.
+- [ ] Opening that second app again shows no heart: the taps were received, and the count starts again from one.
 - [ ] The calendar icon opens the calendar over the Home tab; the tab is still there when you close it.
 - [ ] Tapping a day adds, edits and deletes an event, and the other device sees the change after a refresh.
 - [ ] Tapping the repeat chip on the event form cycles Once → week → month → year, and the saved event shows that wording.
@@ -871,6 +931,10 @@ asynchronous Tetris Duel (five minutes each, in either a sprint or a survival), 
 voice/video calling is still a "coming soon" toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, and the question library is whatever the owner imported into `questions`.
+Home also carries the **"I miss you" button** in the nook — the small pink pill in the
+top-left corner, offered only while the partner is away. Taps are counted per partner and
+per day, and the other phone opens them over its next load as a big heart with a sentence
+that counts them ("Hi, Jayo missed you", "Jayo missed you 4 times today"), then resets.
 Scenes and illustrated backgrounds are deliberately out of scope for now: the Discuss tab
 uses the plain sage accent colour like every other surface.
 

@@ -333,7 +333,57 @@ BEGIN
      OR has_table_privilege('anon', 'public.push_subscriptions', 'DELETE') THEN
     RAISE EXCEPTION 'Anonymous users must not be able to read or write push_subscriptions.';
   END IF;
+  -- Miss you: one row per sender per day, counted by a function and read by the couple.
+  IF to_regclass('public.miss_you_taps') IS NULL THEN
+    RAISE EXCEPTION 'Missing miss_you_taps table. Apply supabase/migrations/202610150016_miss_you.sql.';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'miss_you_taps' AND NOT c.relrowsecurity
+  ) THEN RAISE EXCEPTION 'Row-level security must be enabled on miss_you_taps. Rerun supabase/migrations/202610150016_miss_you.sql.'; END IF;
+  IF (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'miss_you_taps'
+      AND column_name IN ('id', 'couple_id', 'sender_id', 'tap_date', 'tap_count',
+                          'delivered_count', 'delivered_at', 'created_at', 'updated_at')) <> 9 THEN
+    RAISE EXCEPTION 'miss_you_taps is missing columns. Rerun supabase/migrations/202610150016_miss_you.sql.';
+  END IF;
+  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'miss_you_taps'
+      AND policyname = 'Couple members can view their miss-yous') <> 1 THEN
+    RAISE EXCEPTION 'The miss_you_taps read policy is missing. Rerun supabase/migrations/202610150016_miss_you.sql.';
+  END IF;
+  IF to_regclass('public.miss_you_taps_one_row_per_day') IS NULL THEN
+    RAISE EXCEPTION 'miss_you_taps is missing its one-row-per-sender-per-day constraint. Rerun supabase/migrations/202610150016_miss_you.sql.';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.miss_you_taps'::regclass
+    AND tgname = 'miss_you_taps_set_updated_at' AND tgenabled = 'O'
+  ) THEN RAISE EXCEPTION 'Missing miss_you_taps updated_at trigger. Apply supabase/migrations/202610150016_miss_you.sql.'; END IF;
+  FOREACH signature IN ARRAY ARRAY[
+    'public.record_miss_you_tap(date)',
+    'public.receive_miss_you_taps(uuid)'
+  ] LOOP
+    IF to_regprocedure(signature) IS NULL THEN
+      RAISE EXCEPTION 'Missing function %. Apply supabase/migrations/202610150016_miss_you.sql.', signature;
+    END IF;
+    IF NOT has_function_privilege('authenticated', signature, 'EXECUTE') THEN
+      RAISE EXCEPTION 'Authenticated users cannot execute %.', signature;
+    END IF;
+    IF has_function_privilege('anon', signature, 'EXECUTE') THEN
+      RAISE EXCEPTION 'Anonymous users must not have access to %.', signature;
+    END IF;
+  END LOOP;
+  IF NOT has_table_privilege('authenticated', 'public.miss_you_taps', 'SELECT') THEN
+    RAISE EXCEPTION 'Authenticated users need select on miss_you_taps.';
+  END IF;
+  -- The counts are the functions' business: a phone may never write the table itself, or a
+  -- tap could be invented, erased or delivered without ever being shown.
+  IF has_table_privilege('authenticated', 'public.miss_you_taps', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.miss_you_taps', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.miss_you_taps', 'DELETE')
+     OR has_table_privilege('anon', 'public.miss_you_taps', 'SELECT') THEN
+    RAISE EXCEPTION 'miss_you_taps must only be written through its functions. Rerun supabase/migrations/202610150016_miss_you.sql.';
+  END IF;
 END;
 $$;
-SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages, the Discuss question tables and the web-push device table are present. Still complete the two-device acceptance test.' AS result;
+SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages, the Discuss question tables, the web-push device table and the miss-you tap table are present. Still complete the two-device acceptance test.' AS result;
 COMMIT;

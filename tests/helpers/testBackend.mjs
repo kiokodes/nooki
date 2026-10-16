@@ -23,6 +23,8 @@ export async function installTestBackend(client) {
     GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles, public.couples, public.couple_events TO authenticated;
     GRANT SELECT, INSERT, DELETE ON public.push_subscriptions TO authenticated;
+    -- The miss-you table is read by the app and written only by its functions.
+    GRANT SELECT ON public.miss_you_taps TO authenticated;
   `);
   const users = new Map();
   let currentUser = null;
@@ -94,7 +96,7 @@ export async function installTestBackend(client) {
     if (![
       'profiles', 'couples', 'couple_events', 'messages',
       'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
-      'shared_books', 'reading_progress', 'highlights', 'push_subscriptions',
+      'shared_books', 'reading_progress', 'highlights', 'push_subscriptions', 'miss_you_taps',
     ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;
@@ -118,6 +120,7 @@ export async function installTestBackend(client) {
       limit(count) { rowLimit = count; return query; },
       eq(column, value) { assertIdentifier(column); filters.push([column, '=', value]); return query; },
       neq(column, value) { assertIdentifier(column); filters.push([column, '<>', value]); return query; },
+      gte(column, value) { assertIdentifier(column); filters.push([column, '>=', value]); return query; },
       // `= ANY($n)`: PostgREST's `in`, which takes one array parameter.
       in(column, values) {
         assertIdentifier(column);
