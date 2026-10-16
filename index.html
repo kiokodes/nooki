@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Nooki · Our Shared Nook</title>
+    <!--
+      Installed-app identity. `display: standalone` in the manifest is what makes iOS treat
+      the site as a web app — and on iPhone and iPad that install is the precondition for
+      web push (a Safari tab has no Push API at all). The Apple-specific tags below are what
+      iOS reads for the icon, name and status bar; the manifest is what every other browser
+      uses. Keep this block and nooki-sw.js in step with "Push notifications" in the README.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#FAF6EE" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Nooki" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <!-- Friendly rounded typography: Nunito / Quicksand -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

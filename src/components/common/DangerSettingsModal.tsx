@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { AlertTriangle, LogOut, HeartCrack, Lock } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { requestOrConfirmBreakup, cancelBreakup } from '../../lib/authService';
+import { PushNotificationsCard } from './PushNotificationsCard';
+import type { PushNotificationsState } from '../../hooks/usePushNotifications';
 import type { Couple, Profile } from '../../types/database';
 
 interface DangerSettingsModalProps {
@@ -13,6 +15,8 @@ interface DangerSettingsModalProps {
   partnerAdultQuestionsEnabled: boolean;
   adultQuestionsSaving: boolean;
   onToggleAdultQuestions: (enabled: boolean) => Promise<void>;
+  /** This device's notification switch, owned by the app (see usePushNotifications). */
+  pushNotifications: PushNotificationsState;
   onClose: () => void;
   onCoupleEnded: () => void;
   onSignOut: () => void;
@@ -26,6 +30,7 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
   partnerAdultQuestionsEnabled,
   adultQuestionsSaving,
   onToggleAdultQuestions,
+  pushNotifications,
   onClose,
   onCoupleEnded,
   onSignOut,
@@ -283,6 +288,9 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
             </span>
           )}
         </div>
+
+        {/* Notifications: this device only, and only where the browser can actually do it. */}
+        <PushNotificationsCard state={pushNotifications} partnerName={partnerName} />
 
         {/* Danger Zone: End Couple (Mutual Agreement Required) */}
         <div

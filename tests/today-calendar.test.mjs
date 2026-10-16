@@ -296,6 +296,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const discussMigration = await readFile(new URL('../supabase/migrations/202610150004_discuss_questions.sql', import.meta.url), 'utf8');
   const linksMigration = await readFile(new URL('../supabase/migrations/202610150005_discuss_comments_chat_links.sql', import.meta.url), 'utf8');
   const repliesMigration = await readFile(new URL('../supabase/migrations/202610150006_chat_replies_edits.sql', import.meta.url), 'utf8');
+  const pushMigration = await readFile(new URL('../supabase/migrations/202610150015_web_push.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -336,6 +337,13 @@ test('verify.sql spots a live project that is missing a migration', async () => 
 
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(repliesMigration);
+    // Everything but web push: the preflight names that migration too, rather than letting
+    // the settings switch reach an RPC that does not exist yet.
+    await assert.rejects(db.exec(verification), /202610150015_web_push\.sql/,
+      'the preflight must send the owner to the push migration');
+
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(pushMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -358,6 +366,7 @@ async function server_paths() {
   const discuss = await read('../supabase/migrations/202610150004_discuss_questions.sql');
   const links = await read('../supabase/migrations/202610150005_discuss_comments_chat_links.sql');
   const replies = await read('../supabase/migrations/202610150006_chat_replies_edits.sql');
+  const push = await read('../supabase/migrations/202610150015_web_push.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -441,26 +450,27 @@ async function server_paths() {
   check('schema.sql on a project with no auto-grant', freshNew, true);
   await freshNew.db.close();
 
+  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push];
   const existingOld = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links, replies,
-            pairing, calendar, chat, discuss, links, replies],
+    // Every migration twice: a live project may have run any of them before.
+    steps: [schemaBeforeCalendar, ...allMigrations, ...allMigrations],
   });
   check('existing project, all migrations run twice', existingOld, true);
   await existingOld.db.close();
 
   const existingNew = await run({
     defaults: '',
-    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links, replies,
-            pairing, calendar, chat, discuss, links, replies],
+    steps: [schemaBeforeCalendar, ...allMigrations, ...allMigrations],
   });
   check('existing project with no auto-grant', existingNew, true);
   await existingNew.db.close();
 
   const upgraded = await run({
     defaults: legacyDefaults,
-    steps: [schemaBeforeCalendar, pairing, legacyCalendar, calendar, chat, discuss, links, replies,
-            calendar, chat, discuss, links, replies],
+    steps: [schemaBeforeCalendar, pairing, legacyCalendar,
+            calendar, chat, discuss, links, replies, push,
+            calendar, chat, discuss, links, replies, push],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -504,8 +514,26 @@ async function server_paths() {
   assert(stillBlocked, 'the preflight keeps pressing until replies and edits land');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(replies);
+  // ...and then web push, the newest migration of all, which the preflight asks for last.
+  await assert.rejects(missingLinks.db.exec(verify), /202610150015_web_push\.sql/,
+    'the preflight keeps pressing until the push migration lands');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(push);
   await missingLinks.db.exec(verify);
   await missingLinks.db.close();
+
+  // A project with every other release but no web push is blocked, and told which migration
+  // to run: the settings switch would otherwise reach an RPC that does not exist yet.
+  const missingPush = await run({
+    defaults: legacyDefaults,
+    steps: [schemaBeforeCalendar, pairing, calendar, chat, discuss, links, replies],
+  });
+  check('preflight blocks a project without the web-push migration', missingPush, false);
+  assert.match(missingPush.message, /202610150015_web_push\.sql/, 'the message names the missing push migration');
+  try { await missingPush.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingPush.db.exec(push);
+  await missingPush.db.exec(verify);
+  await missingPush.db.close();
 
   // The preflight must block a project that lost its API-role grants.
   const broken = await run({

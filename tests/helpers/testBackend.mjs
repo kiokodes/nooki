@@ -22,6 +22,7 @@ export async function installTestBackend(client) {
   await db.exec(`
     GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles, public.couples, public.couple_events TO authenticated;
+    GRANT SELECT, INSERT, DELETE ON public.push_subscriptions TO authenticated;
   `);
   const users = new Map();
   let currentUser = null;
@@ -93,7 +94,7 @@ export async function installTestBackend(client) {
     if (![
       'profiles', 'couples', 'couple_events', 'messages',
       'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
-      'shared_books', 'reading_progress', 'highlights',
+      'shared_books', 'reading_progress', 'highlights', 'push_subscriptions',
     ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;
@@ -196,7 +197,9 @@ export async function installTestBackend(client) {
   // RLS is bypassed as the owner; callers must sign in again afterwards.
   return {
     close: () => db.close(),
-    exec: async (sql) => { await db.exec('RESET ROLE'); await db.exec(sql); },
+    // Returns the statement results, so a test can read what a script printed (the same
+    // shape `db.exec` gives directly).
+    exec: async (sql) => { await db.exec('RESET ROLE'); return db.exec(sql); },
     query: async (sql, params) => { await db.exec('RESET ROLE'); return db.query(sql, params); },
     resetRole: async () => { await db.exec('RESET ROLE'); },
     // verify.sql opens its own read-only transaction: a script that raises on purpose
@@ -215,5 +218,7 @@ function toRow(row) {
 }
 
 function assertIdentifier(value) {
-  if (!/^[a-z_]+$/.test(value)) throw new Error('Invalid identifier in test query');
+  // Lower-case Postgres identifiers, digits allowed after the first character: the push
+  // RPCs take `p256dh`/`p_auth`, and the real client sends exactly those names.
+  if (!/^[a-z_][a-z0-9_]*$/.test(value)) throw new Error('Invalid identifier in test query');
 }

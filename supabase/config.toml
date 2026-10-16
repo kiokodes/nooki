@@ -1,0 +1,14 @@
+# Supabase project configuration for this repository.
+#
+# The CLI only reads this file for local `supabase` commands (`supabase functions serve`,
+# `supabase functions deploy`); nothing in the app imports it. It is committed so the
+# function's gateway settings travel with the code they belong to.
+#
+# `send-push` is called by a Database Webhook, which authenticates the same way as a
+# service key rather than as a signed-in user, so the platform-level JWT check is turned
+# off here and the function does its own check inside (see index.ts). This is exactly the
+# configuration the Supabase docs describe for a webhook-driven push sender, and it is
+# why the table and the secrets stay unreachable from a phone.
+
+[functions.send-push]
+verify_jwt = false

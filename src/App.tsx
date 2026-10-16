@@ -28,6 +28,13 @@ import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
+import { usePushNotifications } from './hooks/usePushNotifications';
+import {
+  PUSH_DEEP_LINK_TABS,
+  isPushOpenTabMessage,
+  releaseAllPushSubscriptions,
+  setPushBadge,
+} from './lib/pushService';
 import {
   getCurrentAuthUser,
   fetchProfile,
@@ -118,9 +125,18 @@ const shellStyle: React.CSSProperties = {
   overflow: 'hidden',
 };
 
-export const App: React.FC = () => {
+interface AppProps {
+  /**
+   * The tab a tapped notification asked for, read once from `/?nooki=…` before the first
+   * render (see main.tsx). Starting here rather than in an effect means the app opens
+   * straight onto the chat instead of painting Home first.
+   */
+  initialTab?: TabKey | null;
+}
+
+export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // Navigation & Modal State
-  const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab ?? 'home');
   // A tab the couple asked for while a ranked snake run was live: the run cannot be
   // paused, so leaving the Games tab is a forfeit and they get asked first.
   const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
@@ -179,6 +195,11 @@ export const App: React.FC = () => {
     else setActiveTab(key);
   }, [activeTab, games.duelLive, games.match]);
 
+  // Read through a ref so the service-worker listener registered once on mount always
+  // calls the current requestTab (it closes over the live duel and the active tab).
+  const requestTabRef = useRef(requestTab);
+  useEffect(() => { requestTabRef.current = requestTab; }, [requestTab]);
+
   const discuss = useDiscuss({
     coupleId: couple?.id ?? null,
     userId: currentUser?.id ?? null,
@@ -191,6 +212,14 @@ export const App: React.FC = () => {
     coupleId: couple?.id ?? null,
     userId: currentUser?.id ?? null,
     partnerId: partner?.id ?? null,
+  });
+
+  // This device's notification switch, and the deep link a tapped notification carries.
+  // App-level like the chat: the home-screen badge is cleared from here, and a
+  // notification tapped while the app is closed lands on the right tab on first paint.
+  const push = usePushNotifications({
+    userId: currentUser?.id ?? null,
+    coupleId: couple?.id ?? null,
   });
 
   // The full-screen reader is a layer over whatever tab is open (Chat jumps come
@@ -381,6 +410,36 @@ export const App: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
+  // The app is usually already open when a notification is tapped (the service worker
+  // focuses this window rather than opening a second copy), and a focused window does not
+  // reload — so it switches tabs by message. Through requestTab, so leaving a live duel
+  // still asks before forfeiting it.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      if (!isPushOpenTabMessage(event.data)) return;
+      const { tab } = event.data;
+      if ((PUSH_DEEP_LINK_TABS as readonly string[]).includes(tab)) {
+        requestTabRef.current(tab as TabKey);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onServiceWorkerMessage);
+  }, []);
+
+  // The home-screen icon shows the same number as the Chat tab badge, and drops to nothing
+  // the moment those messages are actually read (the chat on screen and the app awake — the
+  // same condition that stamps read receipts). While the app is closed nothing here runs:
+  // the service worker is the only thing that touches the badge then, using the count the
+  // sender put in the payload.
+  const pushBadge = push.enabled
+    ? (activeTab === 'chat' && appVisible ? 0 : chat.unreadCount)
+    : null;
+  useEffect(() => {
+    if (pushBadge === null) return;
+    void setPushBadge(pushBadge);
+  }, [pushBadge]);
+
   useEffect(() => {
     // Defer the external session load so StrictMode's discarded mount does not start a duplicate request.
     let cancelled = false;
@@ -408,6 +467,9 @@ export const App: React.FC = () => {
 
   const handleSignOut = async () => {
     try {
+      // This phone stops being reachable the moment it signs out, though the browser keeps
+      // its own push subscription so signing back in is one tap rather than a new prompt.
+      await releaseAllPushSubscriptions();
       await signOutUser();
       setShowSettings(false);
       await loadUserData();
@@ -777,6 +839,7 @@ export const App: React.FC = () => {
             partnerAdultQuestionsEnabled={discuss.partnerAdultEnabled}
             adultQuestionsSaving={discuss.adultSaving}
             onToggleAdultQuestions={(enabled) => discuss.setAdultEnabled(enabled).then(() => undefined)}
+            pushNotifications={push}
             onClose={() => setShowSettings(false)}
             onCoupleEnded={() => {
               setShowSettings(false);

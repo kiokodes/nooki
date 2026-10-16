@@ -275,7 +275,65 @@ BEGIN
     SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'couples'
     AND policyname = 'Authenticated users can create couples'
   ) THEN RAISE EXCEPTION 'Old couple creation policy is still active. Apply the pairing migration.'; END IF;
+  -- Web push: the per-device address book the send-push Edge Function reads. The app can
+  -- only ever see and claim its own devices, and nothing anonymous can reach the table.
+  IF to_regclass('public.push_subscriptions') IS NULL THEN
+    RAISE EXCEPTION 'Missing push_subscriptions table. Apply supabase/migrations/202610150015_web_push.sql.';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'push_subscriptions' AND NOT c.relrowsecurity
+  ) THEN RAISE EXCEPTION 'Row-level security must be enabled on push_subscriptions. Rerun supabase/migrations/202610150015_web_push.sql.'; END IF;
+  IF (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'push_subscriptions'
+      AND column_name IN ('id', 'user_id', 'couple_id', 'endpoint', 'p256dh', 'auth', 'created_at', 'updated_at')) <> 8 THEN
+    RAISE EXCEPTION 'push_subscriptions is missing columns. Rerun supabase/migrations/202610150015_web_push.sql.';
+  END IF;
+  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'push_subscriptions'
+      AND policyname IN ('Users can read their own push devices', 'Users can add their own push devices',
+                         'Users can remove their own push devices')) <> 3 THEN
+    RAISE EXCEPTION 'Required push_subscriptions RLS policies are missing. Rerun supabase/migrations/202610150015_web_push.sql.';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'push_subscriptions'
+    AND cmd = 'UPDATE'
+  ) THEN RAISE EXCEPTION 'push_subscriptions must not be directly updatable: the RPCs keep couple_id honest. Rerun supabase/migrations/202610150015_web_push.sql.'; END IF;
+  IF to_regclass('public.push_subscriptions_endpoint_key') IS NULL THEN
+    RAISE EXCEPTION 'push_subscriptions is missing its one-row-per-browser unique constraint. Rerun supabase/migrations/202610150015_web_push.sql.';
+  END IF;
+  IF (SELECT count(*) FROM pg_constraint WHERE conname IN (
+    'push_subscriptions_endpoint_length', 'push_subscriptions_p256dh_length', 'push_subscriptions_auth_length'
+  )) <> 3 THEN RAISE EXCEPTION 'Required push_subscriptions column checks are missing. Rerun supabase/migrations/202610150015_web_push.sql.'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.push_subscriptions'::regclass
+    AND tgname = 'push_subscriptions_set_updated_at' AND tgenabled = 'O'
+  ) THEN RAISE EXCEPTION 'Missing push_subscriptions updated_at trigger. Apply supabase/migrations/202610150015_web_push.sql.'; END IF;
+  FOREACH signature IN ARRAY ARRAY[
+    'public.register_push_subscription(text,text,text)',
+    'public.release_push_subscription(text)',
+    'public.release_my_push_subscriptions()'
+  ] LOOP
+    IF to_regprocedure(signature) IS NULL THEN
+      RAISE EXCEPTION 'Missing function %. Apply supabase/migrations/202610150015_web_push.sql.', signature;
+    END IF;
+    IF NOT has_function_privilege('authenticated', signature, 'EXECUTE') THEN
+      RAISE EXCEPTION 'Authenticated users cannot execute %.', signature;
+    END IF;
+    IF has_function_privilege('anon', signature, 'EXECUTE') THEN
+      RAISE EXCEPTION 'Anonymous users must not have access to %.', signature;
+    END IF;
+  END LOOP;
+  IF NOT has_table_privilege('authenticated', 'public.push_subscriptions', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.push_subscriptions', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.push_subscriptions', 'DELETE') THEN
+    RAISE EXCEPTION 'Authenticated users need select, insert and delete on push_subscriptions.';
+  END IF;
+  IF has_table_privilege('anon', 'public.push_subscriptions', 'SELECT')
+     OR has_table_privilege('anon', 'public.push_subscriptions', 'INSERT')
+     OR has_table_privilege('anon', 'public.push_subscriptions', 'DELETE') THEN
+    RAISE EXCEPTION 'Anonymous users must not be able to read or write push_subscriptions.';
+  END IF;
 END;
 $$;
-SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages and the Discuss question tables are present. Still complete the two-device acceptance test.' AS result;
+SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages, the Discuss question tables and the web-push device table are present. Still complete the two-device acceptance test.' AS result;
 COMMIT;

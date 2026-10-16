@@ -3579,4 +3579,158 @@ END $$;
 REVOKE ALL ON FUNCTION public.start_tetris(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.start_tetris(text) TO authenticated;
 
+-- ============================================================================
+-- 17. Web push: one row per browser that agreed to be notified
+-- Mirrors supabase/migrations/202610150015_web_push.sql (a live project runs that
+-- file; this section is what a brand-new project gets in one go). The notifications
+-- themselves are sent by the `send-push` Edge Function, called by a Database Webhook
+-- on `messages` and signed with Nooki's own VAPID keypair — no third-party push
+-- service is involved. See "Push notifications" in the README.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  couple_id UUID REFERENCES public.couples(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint),
+  CONSTRAINT push_subscriptions_endpoint_length CHECK (char_length(endpoint) BETWEEN 12 AND 1024),
+  CONSTRAINT push_subscriptions_p256dh_length CHECK (char_length(p256dh) BETWEEN 8 AND 255),
+  CONSTRAINT push_subscriptions_auth_length CHECK (char_length(auth) BETWEEN 8 AND 255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON public.push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_couple ON public.push_subscriptions(couple_id);
+
+CREATE OR REPLACE FUNCTION public.set_push_subscription_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at := timezone('utc'::text, now());
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS push_subscriptions_set_updated_at ON public.push_subscriptions;
+CREATE TRIGGER push_subscriptions_set_updated_at
+BEFORE UPDATE ON public.push_subscriptions
+FOR EACH ROW EXECUTE FUNCTION public.set_push_subscription_updated_at();
+
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can read their own push devices" ON public.push_subscriptions;
+CREATE POLICY "Users can read their own push devices" ON public.push_subscriptions
+FOR SELECT TO authenticated
+USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can add their own push devices" ON public.push_subscriptions;
+CREATE POLICY "Users can add their own push devices" ON public.push_subscriptions
+FOR INSERT TO authenticated
+WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can remove their own push devices" ON public.push_subscriptions;
+CREATE POLICY "Users can remove their own push devices" ON public.push_subscriptions
+FOR DELETE TO authenticated
+USING (user_id = auth.uid());
+
+-- Claim this browser as one of the signed-in account's devices, or refresh its keys.
+-- `couple_id` comes from the caller's profile, never from the phone. A device that is now
+-- signed in as someone else moves to that account: it still only ever receives what the
+-- sender would have sent that account anyway.
+CREATE OR REPLACE FUNCTION public.register_push_subscription(
+  p_endpoint TEXT,
+  p_p256dh TEXT,
+  p_auth TEXT
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  caller UUID := auth.uid();
+  cid UUID;
+  clean_endpoint TEXT := btrim(coalesce(p_endpoint, ''));
+  clean_p256dh TEXT := btrim(coalesce(p_p256dh, ''));
+  clean_auth TEXT := btrim(coalesce(p_auth, ''));
+  sid UUID;
+BEGIN
+  IF caller IS NULL THEN
+    RAISE EXCEPTION 'Sign in to turn on notifications.';
+  END IF;
+  IF char_length(clean_endpoint) NOT BETWEEN 12 AND 1024
+     OR clean_endpoint !~ '^https://'
+     OR char_length(clean_p256dh) NOT BETWEEN 8 AND 255
+     OR char_length(clean_auth) NOT BETWEEN 8 AND 255 THEN
+    RAISE EXCEPTION 'That push subscription is not valid.';
+  END IF;
+
+  SELECT couple_id INTO cid FROM public.profiles WHERE id = caller;
+
+  INSERT INTO public.push_subscriptions (user_id, couple_id, endpoint, p256dh, auth)
+  VALUES (caller, cid, clean_endpoint, clean_p256dh, clean_auth)
+  ON CONFLICT (endpoint) DO UPDATE
+    SET user_id = EXCLUDED.user_id,
+        couple_id = EXCLUDED.couple_id,
+        p256dh = EXCLUDED.p256dh,
+        auth = EXCLUDED.auth
+  RETURNING id INTO sid;
+
+  RETURN sid;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.release_push_subscription(p_endpoint TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  caller UUID := auth.uid();
+  removed INTEGER;
+BEGIN
+  IF caller IS NULL THEN
+    RAISE EXCEPTION 'Sign in to turn off notifications.';
+  END IF;
+  DELETE FROM public.push_subscriptions
+   WHERE user_id = caller AND endpoint = btrim(coalesce(p_endpoint, ''));
+  GET DIAGNOSTICS removed = ROW_COUNT;
+  RETURN removed > 0;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.release_my_push_subscriptions()
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  caller UUID := auth.uid();
+  removed INTEGER;
+BEGIN
+  IF caller IS NULL THEN
+    RAISE EXCEPTION 'Sign in to turn off notifications.';
+  END IF;
+  DELETE FROM public.push_subscriptions WHERE user_id = caller;
+  GET DIAGNOSTICS removed = ROW_COUNT;
+  RETURN removed;
+END;
+$$;
+
+GRANT SELECT, INSERT, DELETE ON public.push_subscriptions TO authenticated;
+REVOKE ALL ON public.push_subscriptions FROM anon;
+
+REVOKE ALL ON FUNCTION public.register_push_subscription(TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.release_push_subscription(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.release_my_push_subscriptions() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.register_push_subscription(TEXT, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.release_push_subscription(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.release_my_push_subscriptions() TO authenticated;
+
 COMMIT;
