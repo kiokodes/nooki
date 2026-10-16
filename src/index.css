@@ -160,6 +160,32 @@ html, body {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* Couple Settings: the sheet is capped by the phone frame around it and only the block
+   below its pinned header scrolls, so a new setting lengthens the panel instead of pushing
+   it off the screen. Containment matters here — without it, a drag that reaches the end of
+   the list hands the scroll to the tab behind the modal. The thin bar is deliberately
+   faint: it is a hint that there is more below, not chrome. */
+.nooki-settings-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-soft) transparent;
+  scrollbar-gutter: stable;
+}
+
+.nooki-settings-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nooki-settings-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nooki-settings-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--border-soft);
+  border-radius: 9999px;
+}
+
 /* Splash screen (~1.5s): simple Nooki wordmark + pink and green dots racing across the screen.
    The dots are raced with `transform`, never `left`. Animating `left` runs on the main
    thread, which on a phone is busy mounting the app and restoring the session while the
