@@ -339,9 +339,39 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  // The splash is dismissed by the race itself (SplashScreen reports the green dot's
+  // animationend); this timer is only the fallback for browsers where that event can
+  // never arrive (reduced-motion readers get no animation, so no animationend). Even
+  // the fallback must not start counting until the splash has actually been painted:
+  // on a phone the main thread can still be mounting the app when a plain mount timer
+  // starts, so the 1.5s would elapse before the first visible frame and the race would
+  // be gone before it was ever seen. Waiting for two animation frames guarantees at
+  // least one presented splash frame before the countdown begins — and a splash opened
+  // in a background tab simply waits there until it is brought to the front and seen.
+  // The frame scheduling mirrors SnakeBoard: jsdom has no requestAnimationFrame.
   useEffect(() => {
-    const timer = setTimeout(() => setSplashDone(true), SPLASH_DURATION_MS);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    const startCountdown = () => {
+      if (!cancelled) timer = setTimeout(() => setSplashDone(true), SPLASH_DURATION_MS);
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      firstFrame = requestAnimationFrame(() => {
+        secondFrame = requestAnimationFrame(startCountdown);
+      });
+    } else {
+      timer = setTimeout(startCountdown, 0);
+    }
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(firstFrame);
+        cancelAnimationFrame(secondFrame);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -398,12 +428,14 @@ export const App: React.FC = () => {
     );
   }
 
-  // 1. Splash screen (< 0.5s: simple Nooki wordmark + racing green & pink dots)
+  // 1. Splash screen (~1.5s: simple Nooki wordmark + racing green & pink dots).
+  // It leaves when the race has actually finished on screen (or the painted-frame
+  // fallback timer above fires), never merely because wall-clock time passed unseen.
   if (loading || !splashDone) {
     return (
       <div className="nooki-viewport" style={viewportStyle}>
         <main className="nooki-shell" style={shellStyle}>
-          <SplashScreen />
+          <SplashScreen onAnimationComplete={() => setSplashDone(true)} />
         </main>
       </div>
     );
