@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": [],
+    /* Deno's `npm:` specifiers, mapped onto the same packages installed here, so the
+       function is checked against the real web-push types rather than a stand-in. */
+    "paths": {
+      "npm:web-push@3.6.7": ["./node_modules/@types/web-push"],
+      "npm:web-push": ["./node_modules/@types/web-push"],
+      "npm:@supabase/supabase-js@2": ["./node_modules/@supabase/supabase-js"]
+    }
+  },
+  "include": ["supabase/functions/**/*.ts"]
+}

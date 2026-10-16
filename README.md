@@ -18,9 +18,12 @@ For local development, copy `.env.example` to `.env.local` and fill in:
 
 - `VITE_SUPABASE_URL`: the HTTPS project URL.
 - `VITE_SUPABASE_ANON_KEY`: the project's **public anon key or publishable key**.
+- `VITE_VAPID_PUBLIC_KEY`: optional. The **public** half of the VAPID keypair used to sign
+  web push notifications. Without it the app deploys exactly as before and the settings
+  switch stays off; every other tab is unaffected. See **Push notifications** below.
 
-In Vercel → Project Settings → Environment Variables, set both for **Production** and
-any **Preview** environment you intend to test. Both must belong to the same Supabase
+In Vercel → Project Settings → Environment Variables, set these for **Production** and
+any **Preview** environment you intend to test. They must belong to the same Supabase
 project where you apply the SQL. Values are bundled at build time: redeploy after any
 change. A preview pointing to the production project uses real production data.
 
@@ -62,7 +65,9 @@ apply and verify the database migrations separately.
    `202610150012_tetris_duel.sql` (the Tetris Duel in Games),
    `202610150008_shared_books.sql` and
    `202610150009_two_book_shelf_limit.sql`
-   (shared books). Apply pending migrations in this order; they preserve existing records.
+   (shared books), then `202610150015_web_push.sql` (notifications; optional, and the only
+   migration that is — every other table works without it). Apply pending migrations in
+   this order; they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
    `202610150014_restore_chess_tetris_game_check.sql` are repairs, not part of a fresh
    install: run them only if `verify-games.sql` names them — see **Troubleshooting the
@@ -106,11 +111,13 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 ### Brand-new, empty Supabase project only
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
-(including `couple_events`, `messages`, the five Discuss tables and the shared-books
-tables), RLS policies, pairing and question RPCs, the anniversary and answer-reveal
-triggers, the Realtime publication membership for the chat and Discuss tables, the
-mutual-breakup RPCs and the private `shared-books` storage bucket; it does not
-populate user/couple records, and it contains no questions — import those separately.
+(including `couple_events`, `messages`, the five Discuss tables, the shared-books tables
+and `push_subscriptions`), RLS policies, pairing, question and push-device RPCs, the
+anniversary and answer-reveal triggers, the Realtime publication membership for the chat
+and Discuss tables, the mutual-breakup RPCs and the private `shared-books` storage bucket;
+it does not populate user/couple records, and it contains no questions — import those
+separately. Notifications additionally need the `send-push` Edge Function, its VAPID
+secret and the `messages` Database Webhook, which no SQL file can create for you.
 
 ## Supabase Auth configuration
 
@@ -394,6 +401,126 @@ half-formed. The same normalisers exist in the app (`src/lib/questionFormat.ts`)
 database, and the test suite feeds every accepted spelling through both to keep them in
 step — edit one, edit the other.
 
+## Push notifications
+
+A quiet alert on your partner's phone when a message arrives — including while Nooki is
+closed and the phone is locked. It is standard **Web Push**, with no notification service,
+SDK or account anywhere in the path: Nooki generates its own VAPID keypair, an Edge
+Function in your own Supabase project encrypts and signs each payload, and the browser's
+own push service (FCM for Chrome/Edge, Mozilla for Firefox, Apple for Safari and iOS)
+relays it. That relay is how every notification system reaches a sleeping phone — native
+apps included — and it needs no credentials, keys or billing from you.
+
+| Piece | File |
+| --- | --- |
+| The table, RLS and the three device RPCs | `supabase/migrations/202610150015_web_push.sql` |
+| The send-time "server": who to notify, and the VAPID signing | `supabase/functions/send-push/index.ts` |
+| Its gateway setting (the webhook is not a signed-in user) | `supabase/config.toml` |
+| Browser transport: subscribe, release, badge, deep link | `src/lib/pushService.ts`, `src/lib/pushConfig.mjs` |
+| This device's state | `src/hooks/usePushNotifications.ts` |
+| The switch, and one explanation per platform | `src/components/common/PushNotificationsCard.tsx` |
+| The notifications themselves, and the tap | `public/nooki-sw.js` |
+| Installed-app identity (required on iOS) | `public/manifest.webmanifest`, `index.html`, `public/icons/` |
+
+### What each platform requires
+
+| Where | Push arrives with the app closed? | What the user must do |
+| --- | --- | --- |
+| Android — Chrome, Firefox, Edge, Samsung Internet | Yes | Nothing beyond the switch in Couple Settings |
+| Desktop Chrome / Edge / Firefox | Yes, while the browser is running | Nothing beyond the switch |
+| Desktop Safari (16.1+), macOS Sonoma+ | Yes, while the browser is running | Nothing; **Add to Dock** also earns an icon badge |
+| **iPhone / iPad (16.4+, including iOS 26)** | Yes | **Share → Add to Home Screen**, then open Nooki from the new icon and switch notifications on |
+
+On iOS the Push API only exists for a web app added to the Home Screen: a Safari tab cannot
+subscribe at any API level, and a permission prompt that did not come from a tap is
+ignored. The settings card detects that and shows the two steps instead of a switch that
+could not work (`support = 'needs-install'`). Nothing asks for permission on load, on any
+platform.
+
+### Turning it on (one-time, ~10 minutes)
+
+1. **Apply the migration.** Run `supabase/migrations/202610150015_web_push.sql` in the SQL
+   Editor (or, on a brand-new project, use `schema.sql`, which already contains it). Add it
+   to the list in **Deploying this release** if you keep your own runbook.
+2. **Generate a keypair, once, anywhere:**
+   ```sh
+   npx web-push generate-vapid-keys
+   ```
+3. **Set the public half for the frontend** as `VITE_VAPID_PUBLIC_KEY` (Vercel → Settings →
+   Environment Variables, Production *and* Preview), then redeploy — the value is inlined
+   at build time. A missing or malformed key is a warning, not a failed build: push stays
+   off and everything else works.
+4. **Deploy the sender and give it its secrets:**
+   ```sh
+   supabase functions deploy send-push --no-verify-jwt
+   supabase secrets set VAPID_PUBLIC_KEY=<the public half> \
+     VAPID_PRIVATE_KEY=<the private half> \
+     VAPID_SUBJECT=mailto:you@example.com \
+     PUSH_WEBHOOK_SECRET=<a long random string>
+   ```
+   `--no-verify-jwt` is required: a Database Webhook presents a service key rather than a
+   signed-in user's token, and `send-push` does its own authorisation check instead (the
+   `PUSH_WEBHOOK_SECRET` you set below, or at minimum the Authorization header every
+   Supabase webhook sends). The private half must never appear in a `VITE_` variable, in
+   the repository, or in the app bundle.
+5. **Add the webhook** (Dashboard → Database → Webhooks → Create):
+   - Table `messages`, event **Insert**.
+   - Type **Supabase Edge Function**, function `send-push`, method `POST`.
+   - HTTP header `Authorization: Bearer <the same PUSH_WEBHOOK_SECRET>`.
+6. **Verify**, then switch it on per device: Couple Settings → **Notifications**. The
+   switch is per browser, not per account — a phone and a laptop are two independent
+   devices, and turning one off never touches the other.
+
+`supabase/verify.sql` checks the table, its RLS policies, the "no direct update" rule and
+the three RPCs, so a half-applied push migration is caught by the same preflight as
+everything else. The function's own TypeScript is checked by `npm run check:functions`
+(against the real `web-push` types, with `supabase/functions/deno.d.ts` standing in for the
+Deno globals); it cannot be *executed* locally, so deploy it and send yourself a message
+before telling anyone it is finished. Signing out releases every device of the account server-side (the browser
+keeps its subscription, so signing back in is one tap rather than a fresh prompt), and a
+device that the push service reports as gone (404/410 — app deleted, permission withdrawn)
+is deleted from the table rather than retried forever.
+
+### What a notification shows, and what it does not
+
+The title is the sender's name and the body is the first ~140 characters of the message —
+a lock screen is a public surface, so there is no "reply in app" permalink into a
+conversation and no message history beyond the one that arrived. Tapping it opens the Chat
+tab (`/?nooki=chat`), focusing the copy of Nooki that is already open instead of starting a
+second one; leaving a live duel still asks before forfeiting it. While the app is open the
+home-screen icon shows the unread count (Badging API), cleared exactly where the messages
+are actually read.
+
+The payload carries only the sender's name, the preview, the tab and the unread count. The
+device's endpoint and public keys live in `push_subscriptions`, readable only by their own
+account — not by the partner, and not by `anon` — and the private VAPID key exists only as
+a function secret. `send-push` needs the service key because the sender must read the
+*recipient's* devices; that key never leaves the function.
+
+### Known limits
+
+- **iOS reach is gated by the install step.** A partner who never adds Nooki to their Home
+  Screen cannot receive anything on an iPhone, however the app is configured. The card
+  explains the two steps; a previously dismissed notification permission shows
+  `support = 'blocked'` and points at Settings instead of asking again.
+- **You cannot test it from a laptop.** Push needs an HTTPS origin with a real service
+  worker and, for iOS, a device. Use the deployed Vercel URL and two phones; the local
+  preview page has no backend and never registers a subscription.
+- **The Vite dev server is fine for the API**, but a service worker on `localhost:5173`
+  will be registered for that origin — remove it in DevTools → Application if you switch
+  projects, or a stale worker can serve a stale subscription.
+
+### Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| The card says notifications are off "for this Nooki yet" | `VITE_VAPID_PUBLIC_KEY` is missing or malformed in the environment the build used. Rebuild and redeploy; check the build log for the warning. |
+| The switch turns itself off again | The RPC failed: the push migration was not applied, or `PUSH_WEBHOOK_SECRET`/VAPID secrets are missing on the function. `verify.sql` and the function's logs will say which. |
+| Subscribed, nothing arrives | The webhook is not on `messages`/Insert, its Authorization header does not match `PUSH_WEBHOOK_SECRET`, or the message had a NULL `sender_id` (system notes are deliberately not announced). Supabase → Edge Functions → `send-push` logs show every call. |
+| Works on Android, silent on iPhone | The app is in a Safari tab rather than added to the Home Screen. Push cannot exist there. |
+| The function will not boot: `Cannot find module 'https'` (or a web-push error at import) | The pinned `npm:web-push@3.6.7` could not run on that runtime. Replace it with Deno's own implementation (`jsr:@negrel/webpush`), which changes only the import and the two calls (`setVapidDetails`/`sendNotification`) — the payload, the secrets and the webhook stay exactly as they are. |
+| It worked, then stopped after a few days | The browser rotated its subscription. Opening the app re-claims it automatically (the registration refresh runs on load); if it recurs weekly, check the function logs for 410s against a stale endpoint. |
+
 ## Deploying this release — exact steps
 
 ### 1. Database (Supabase dashboard → SQL Editor)
@@ -403,7 +530,7 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All of the migrations are idempotent and safe to rerun; they never drop or rewrite existing
 data (the pairing migration only changes policies, the calendar migration only adds a table
@@ -416,7 +543,8 @@ RLS on every table, the anniversary-lock trigger, the `couple_events` calendar, 
 column, the realtime `messages` chat (type check, policies, immutability trigger and
 publication membership), the Discuss engine (its five tables, the policies that never
 reveal a sealed answer, the canonicalised library, the three question RPCs, and that the
-app cannot write to `questions`), and that `anon` cannot reach couple data. If it raises,
+app cannot write to `questions`), the web-push device table (its RLS policies, the "no
+direct update" rule and the three RPCs), and that `anon` cannot reach couple data. If it raises,
 it names the file to rerun. `verify-games.sql` additionally checks that both duels'
 replays and their private internals are in place, and that a phone cannot settle a duel or
 score a run without playing it.
@@ -435,6 +563,11 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
   your organisation's team members, and is the cause of the `over_email_send_rate_limit`
   error. With your own sender the cap starts at 30/hour and is yours to raise under
   **Authentication → Rate Limits**.
+- **Edge Functions** (only for push notifications): deploy `send-push` from this
+  repository (`supabase functions deploy send-push --no-verify-jwt`, or paste
+  `supabase/functions/send-push/index.ts` into the dashboard), set its `VAPID_*` and
+  `PUSH_WEBHOOK_SECRET` secrets, and add the Database Webhook on `messages` (Insert). The
+  step-by-step list, with the exact commands, is under **Push notifications** above.
 - **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
   chat messages ride Postgres Changes on `messages`, Discuss rides a second couple-scoped
   channel over `question_sessions`, `couple_settings`, `answers` and `answer_comments`,
@@ -455,6 +588,9 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
 - `VITE_SUPABASE_URL` — the HTTPS project URL.
 - `VITE_SUPABASE_ANON_KEY` — the **public anon or publishable** key only, never a
   service-role/secret key.
+- `VITE_VAPID_PUBLIC_KEY` — optional, for push notifications: the **public** half of the
+  VAPID keypair. The private half is a Supabase function secret and must never be set
+  here.
 
 Set them for Production and any Preview environment you test, then **redeploy**: the values
 are inlined at build time, so an existing deployment keeps the old ones. A preview pointing
@@ -483,6 +619,7 @@ npm ci
 npm run check:env
 npm test
 npm run lint
+npm run check:functions   # type-checks the send-push Edge Function (no Deno needed)
 npm run build
 ```
 
@@ -514,27 +651,38 @@ re-migration, and `verify.sql` catching a half-applied one — plus the live tab
 browsing categories and depths, asking, answering privately, the reveal arriving over
 realtime, commenting, "Say more" into the chat and the quote linking back, the unanswered-question badge, ranking by button, the
 multi-choice, slider and text inputs, editing a sealed answer, the settings switch and an
-empty library.
+empty library, and push notifications: the platform matrix (an iOS tab told to install, a
+refused permission named as blocked, a browser without the Push API offered no switch at
+all), the public-key shape check that refuses half a keypair, the deep link a notification
+carries and its consumption, the service worker's push/tap/badge handlers (and the absence
+of a fetch handler), the manifest and icon sizes an install needs, the RPCs an account
+uses to claim, release and re-claim a device under RLS, cascade when an account or couple
+is deleted, and that `verify.sql` catches a project missing the push migration — plus the
+Edge Function's own checks (no private key in the file, a 404/410 device deleted, the
+partner rather than the author notified).
 
 A successful build does **not** verify a deployed key, email delivery, an applied live
 migration, or two-device connectivity. Complete the acceptance test below as well.
 
 ## Push and deploy
 
-Work for this Arena session stays on `arena/a6d9925b-nooki`:
+Work for this Arena session stays on `arena/6e2fb8a2-nooki`:
 
 ```sh
 git status
 git diff --check
 git add .
-git commit -m "Add the Discuss tab: sealed answers, a shared question library and the 18+ gate"
-git push origin arena/a6d9925b-nooki
+git commit -m "Add web push notifications: a per-device switch, the send-push Edge Function and a message webhook"
+git push origin arena/6e2fb8a2-nooki
 ```
 
 Open a pull request from that branch to `main`. Test the Vercel preview with its environment
 settings configured, then merge the reviewed PR to your configured production branch.
 Pushing this working branch alone does not necessarily update the production site.
-`vercel.json` builds with `npm run build`, publishes `dist`, and provides SPA routing.
+`vercel.json` builds with `npm run build`, publishes `dist`, and provides SPA routing —
+with two identity rewrites ahead of the catch-all so the service worker and the web app
+manifest are never answered with `index.html` (a worker served as HTML fails to register
+with a MIME error, and push would silently never work).
 Do not publish a build produced with automated-test configuration.
 
 ## Required deployed acceptance test (two separate devices/browsers)
@@ -623,6 +771,22 @@ Use your actual accounts; there is no automatic user creation.
       and jumping still work.
 - [ ] A third account cannot read the couple's books, bookmarks or highlights, and no
       book file is reachable without the couple's own signed URL.
+- [ ] Couple Settings shows **Notifications**; on Android/desktop the switch turns on after
+      the browser's permission prompt, and says "On this device" afterwards.
+- [ ] With both apps closed, a message from device A produces a notification on device B
+      within a few seconds, showing the sender's name and the first line of the message.
+- [ ] Tapping the notification opens the Chat tab — from cold, straight onto the chat, and
+      from an already-open Nooki, by switching tab without a reload or a second window.
+- [ ] The home-screen icon shows the unread count while the app is closed, and the count
+      clears once the chat is open on screen.
+- [ ] Turning the switch off on device B stops its notifications, and device A's own device
+      is unaffected; signing out on B also stops them even though the browser keeps the
+      permission.
+- [ ] On an iPhone in a Safari tab the card shows the Share → Add to Home Screen steps and
+      no switch; after adding it to the Home Screen and opening it from the icon, the switch
+      appears and works.
+- [ ] A third account never sees the couple's devices: it cannot read the table, claim or
+      mute another account's device.
 - [ ] After joining, anniversary edits and unilateral cancellation are rejected.
 - [ ] A third account cannot join an already complete couple.
 - [ ] Refreshing and signing out/in preserve the couple, anniversary and partner names.
@@ -640,7 +804,12 @@ the side-by-side reveal, one comment each under the answers, the **Say more** br
 into the chat (`messages.session_id` quoting the question and linking back to the
 reveal), history and an
 unanswered-question badge, and a both-partners 18+ gate), couple details, sign-out and
-mutual-breakup settings are implemented. Media hosts **Read together** (shared books:
+mutual-breakup settings are implemented. **Notifications** are standard Web Push sent by
+this repository's own `send-push` Edge Function — no notification service, SDK or account
+is involved — with a per-device switch in Couple Settings, the platform requirements
+explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
+tab, and an unread count on the installed app's icon; the chat is the only thing announced
+so far. Media hosts **Read together** (shared books:
 one EPUB or PDF in play per couple, a full-screen reader, saved places for both
 partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
 back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes

@@ -1,0 +1,26 @@
+{
+  "name": "Nooki · Our Shared Nook",
+  "short_name": "Nooki",
+  "description": "A cosy shared nook for long-distance couples: chat, questions, shared books, games and a calendar that belong to the two of you.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF6EE",
+  "theme_color": "#FAF6EE",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

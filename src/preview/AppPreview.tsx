@@ -37,7 +37,6 @@ interface Preset {
 }
 
 const NOW = new Date().toISOString();
-const DAY_MS = 86_400_000;
 /** Static sample row: the partner closed the app 42 minutes ago. */
 const PARTNER_LAST_SEEN = new Date(Date.now() - 42 * 60_000).toISOString();
 
@@ -56,6 +55,21 @@ function earlierTodayIso(minutesAgo: number): string {
   dayStart.setHours(0, 1, 0, 0);
   const candidate = new Date(Date.now() - minutesAgo * 60_000);
   return (candidate > dayStart ? candidate : dayStart).toISOString();
+}
+
+/**
+ * A timestamp on the calendar day before today, whatever the hour the preview is opened.
+ *
+ * "Yesterday" cannot be written as 24 hours ago: at 00:30 that lands two calendar days back,
+ * the transcript grows a weekday heading (and an extra divider), and the sample looked
+ * different depending on when it was opened. Anchoring to the day before keeps the preview
+ * identical at 00:05 and at 23:55.
+ */
+function yesterdayIso(hour: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
 }
 
 const sampleEvent = (
@@ -105,8 +119,8 @@ const STARTING_MESSAGES: PreviewMessage[] = [
     session_id: null,
     reply_to_id: null,
     highlight_id: null,
-    created_at: new Date(Date.now() - DAY_MS - 2 * 3_600_000).toISOString(),
-    read_at: new Date(Date.now() - DAY_MS - 3_600_000).toISOString(),
+    created_at: yesterdayIso(7),
+    read_at: yesterdayIso(8),
     edited_at: null,
     delivery: 'read',
     author: 'ana',
@@ -120,8 +134,8 @@ const STARTING_MESSAGES: PreviewMessage[] = [
     session_id: null,
     reply_to_id: null,
     highlight_id: null,
-    created_at: new Date(Date.now() - DAY_MS - 1 * 3_600_000).toISOString(),
-    read_at: new Date(Date.now() - DAY_MS).toISOString(),
+    created_at: yesterdayIso(9),
+    read_at: yesterdayIso(10),
     edited_at: null,
     delivery: 'read',
     author: 'sam',
