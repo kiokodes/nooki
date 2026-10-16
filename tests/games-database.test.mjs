@@ -86,6 +86,23 @@ test('games: saved multiplayer, daily limit, sealed picks and authoritative scor
   await db.exec(await readFile(new URL('../supabase/migrations/202610150010_snake_duel.sql',import.meta.url),'utf8'));
   await assert.rejects(db.exec(verify), /game check does not allow chess/, 'Chess must be restored after the older Snake migration');
   await db.rollback();
+  // That downgraded check is precisely what a phone hits when it starts Chess on a
+  // project left in this state: the INSERT in start_chess is rejected (23514), and
+  // through the app it surfaces as the named repair, never the raw constraint text.
+  await login('a');
+  const direct = await supabase.rpc('start_chess', { p_mode: 'classic' });
+  assert.equal(direct.error?.code, '23514', 'the downgraded check rejects the chess insert');
+  assert.match(direct.error.message, /game_matches_game_check/);
+  await assert.rejects(games.startChess('classic'), /202610150013_restore_chess_game_check\.sql/);
+  // The targeted repair restores just the check: verify passes, twice is harmless,
+  // and a chess match can finally be started and preserved by what follows.
+  const repair = await readFile(new URL('../supabase/migrations/202610150013_restore_chess_game_check.sql',import.meta.url),'utf8');
+  await db.exec(repair);
+  await db.exec(verify);
+  await db.exec(repair);
+  await login('a');
+  const chessId = await games.startChess('classic');
+  assert.equal((await match(chessId)).chess.mode, 'classic', 'Chess starts once the game check allows it again');
   await db.exec(await readFile(new URL('../supabase/migrations/202610150011_chess.sql',import.meta.url),'utf8'));
   await db.exec(verify);
   await login('a');

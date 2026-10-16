@@ -83,6 +83,7 @@ export interface GameMatch {
 }
 export interface GamesSnapshot { today: string; wins: Record<string, number>; matches: GameMatch[] }
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
+const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150013_restore_chess_game_check.sql. Run verify-games.sql before retrying.';
 
 async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args);
@@ -95,11 +96,18 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
       && ((error.code === 'P0001' && error.message === 'Invalid game settings.')
         || (error.code === '23514' && error.message.includes('game_matches_game_check')));
     if (legacySnakeStart) throw new Error(SNAKE_SETUP_ERROR);
+    // Chess installed but the game check predates it (an older Snake migration rerun
+    // replaced the constraint without 'chess'): start_chess reaches its INSERT and
+    // Postgres answers with the raw constraint violation below. Name the repair
+    // instead of showing a phone the database's own wording.
+    const legacyChessStart = name === 'start_chess'
+      && error.code === '23514' && error.message.includes('game_matches_game_check');
+    if (legacyChessStart) throw new Error(CHESS_SETUP_ERROR);
     if (['PGRST202', '42P01', '42703', '42883'].includes(error.code)) {
       throw new Error(snakeRequest || error.message.includes('snake_')
         ? SNAKE_SETUP_ERROR
         : name.includes('chess') || error.message.includes('chess_')
-          ? 'Chess needs a database update. Apply migration 202610150011_chess.sql.'
+          ? CHESS_SETUP_ERROR
           : 'Games needs a database update. Apply migrations 202610150007_games.sql, 202610150010_snake_duel.sql, then 202610150011_chess.sql.');
     }
     throw new Error(error.message);

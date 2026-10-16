@@ -78,7 +78,7 @@ BEGIN
     WHERE conrelid='public.game_matches'::regclass AND contype='c'
       AND pg_get_constraintdef(oid) LIKE '%chess%'
  ) THEN
-   RAISE EXCEPTION 'The game_matches game check does not allow chess: rerun migration 011.';
+   RAISE EXCEPTION 'The game_matches game check does not allow chess: rerun migration 011, or apply migration 202610150013_restore_chess_game_check.sql to restore just this check.';
  END IF;
  FOREACH fn IN ARRAY ARRAY['public.start_chess(text)','public.chess_move(uuid,integer,text)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Chess RPC: %',fn; END IF;

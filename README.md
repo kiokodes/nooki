@@ -793,6 +793,16 @@ signed-in phone. Run
 privileges only (no functions, tables or data, safe with saved matches, safe to
 run twice) — then rerun `verify-games.sql` and require **PASS**.
 
+If starting **Chess** fails with **"new row for relation "game_matches" violates
+check constraint "game_matches_game_check""**, Chess is installed but the game
+check on the project predates it — each Games migration replaces that constraint
+wholesale, so rerunning `010` after `011` silently removes `'chess'` from it.
+Run **`supabase/migrations/202610150013_restore_chess_game_check.sql`** (it
+restores just that constraint, touches no functions or data, and refuses to run
+if Chess was never installed — in that case apply `011` instead), then rerun
+`verify-games.sql` and require **PASS**. The app no longer shows the raw
+constraint text for this: it names the database update to apply.
+
 Do not rerun the full schema on an existing project. Rerunning `007` after `010`
 overwrites `start_game` and `games_state` with their older versions. If Chess already has
 saved matches, do **not** rerun the whole older `010` script: its game constraint excludes
