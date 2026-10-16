@@ -223,6 +223,9 @@ export const AppPreview = () => {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const timersRef = useRef<number[]>([]);
 
+  // Fallback dismissal only: the splash itself reports when its race has finished
+  // (see SplashScreen), so a phone that paints late still sees the whole run. This
+  // timer covers reduced-motion readers, whose dots never animate or end.
   useEffect(() => {
     if (!showSplash) return;
     const timer = setTimeout(() => setShowSplash(false), SPLASH_DURATION_MS);
@@ -440,7 +443,7 @@ export const AppPreview = () => {
         }}
       >
         {showSplash ? (
-          <SplashScreen />
+          <SplashScreen onAnimationComplete={() => setShowSplash(false)} />
         ) : (
           <>
             {/* The real header component, so the preview can never drift from the app. */}

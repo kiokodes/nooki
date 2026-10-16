@@ -322,10 +322,17 @@ BEGIN
     END);
 END $$;
 
+-- `authenticated` is revoked by name, not just PUBLIC and anon: a real Supabase project
+-- carries default privileges that grant EXECUTE on every newly created public function
+-- directly to anon and authenticated, so revoking only PUBLIC (and anon) leaves every
+-- signed-in phone able to call the internals below — snake_commit/snake_sweep/snake_settle
+-- included. verify-games.sql fails on exactly that. The public entry points are handed
+-- back to authenticated by the GRANT that follows; the rest stay server-side, reached
+-- only through those SECURITY DEFINER entry points (which run as their owner).
 REVOKE ALL ON FUNCTION public.snake_max_ticks(), public.snake_budget(timestamptz), public.snake_replay(jsonb,jsonb,integer,integer),
   public.snake_settle(uuid), public.snake_sweep(uuid), public.snake_start(uuid), public.snake_commit(uuid,integer,jsonb,boolean),
   public.snake_beat(uuid,integer,jsonb), public.snake_finish(uuid,integer,jsonb), public.snake_forfeit(uuid),
-  public.snake_view(jsonb,uuid,boolean,uuid,uuid) FROM PUBLIC, anon;
+  public.snake_view(jsonb,uuid,boolean,uuid,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.snake_start(uuid), public.snake_beat(uuid,integer,jsonb), public.snake_finish(uuid,integer,jsonb),
   public.snake_forfeit(uuid) TO authenticated;
 

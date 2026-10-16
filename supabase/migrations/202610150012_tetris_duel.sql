@@ -453,12 +453,15 @@ BEGIN
     END);
 END $$;
 
+-- `authenticated` is revoked by name, as in migrations 010/011: Supabase's default
+-- privileges grant EXECUTE on new public functions directly to authenticated, so a
+-- PUBLIC/anon-only revoke would leave tetris_commit/tetris_settle callable by any phone.
 REVOKE ALL ON FUNCTION public.tetris_max_ticks(), public.tetris_budget(timestamptz),
   public.tetris_replay(jsonb,jsonb,integer,integer),
   public.tetris_settle(uuid), public.tetris_sweep(uuid), public.tetris_start(uuid),
   public.tetris_commit(uuid,integer,jsonb,boolean),
   public.tetris_beat(uuid,integer,jsonb), public.tetris_finish(uuid,integer,jsonb), public.tetris_forfeit(uuid),
-  public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text) FROM PUBLIC, anon;
+  public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.tetris_start(uuid), public.tetris_beat(uuid,integer,jsonb),
   public.tetris_finish(uuid,integer,jsonb), public.tetris_forfeit(uuid) TO authenticated;
 
@@ -512,7 +515,7 @@ BEGIN
  RETURN mid;
 END $$;
 
-REVOKE ALL ON FUNCTION public.start_tetris(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.start_tetris(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.start_tetris(text) TO authenticated;
 
 COMMIT;

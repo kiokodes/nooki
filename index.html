@@ -11,9 +11,121 @@
       href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&family=Quicksand:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
+    <!--
+      Boot splash: the animated splash must be on screen from the very first paint,
+      but the real one lives inside the JavaScript bundle — and on a phone that bundle
+      can take a while to download and parse, during which the page used to sit blank
+      and the splash was effectively never seen. This copy is plain HTML/CSS, so it is
+      already racing before any JavaScript arrives. It mirrors SplashScreen (same
+      wordmark, same pink/green race, same colours from the design tokens); React
+      replaces everything inside #root on mount, at which point the real splash takes
+      over and plays its run in full. Keep the two in step when the design changes.
+    -->
+    <style>
+      .nooki-boot {
+        position: fixed;
+        inset: 0;
+        background-color: #F1EBE1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Quicksand', 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      .nooki-boot-card {
+        width: 100%;
+        max-width: 390px;
+        height: 100%;
+        max-height: 844px;
+        background-color: #FAF6EE;
+        border-radius: 36px;
+        box-shadow: 0 12px 30px rgba(78, 56, 44, 0.05);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        overflow: hidden;
+        user-select: none;
+      }
+      @media (max-width: 480px) {
+        .nooki-boot { background-color: #FAF6EE; }
+        .nooki-boot-card {
+          max-width: 100%;
+          max-height: 100%;
+          border-radius: 0;
+          box-shadow: none;
+        }
+      }
+      .nooki-boot-wordmark {
+        font-size: 2.25rem;
+        font-weight: 800;
+        color: #372E29;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        animation: nooki-boot-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .nooki-boot-track {
+        position: relative;
+        width: 100%;
+        height: 24px;
+        overflow: hidden;
+        container-type: inline-size;
+      }
+      .nooki-boot-dot {
+        position: absolute;
+        left: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        will-change: transform;
+      }
+      .nooki-boot-dot--pink {
+        top: 2px;
+        background-color: #EC4899;
+        box-shadow: 0 0 10px rgba(236, 72, 153, 0.45);
+        animation: nooki-boot-race-pink 1.35s cubic-bezier(0.22, 0.82, 0.34, 1) both;
+      }
+      .nooki-boot-dot--green {
+        top: 12px;
+        background-color: #059669;
+        box-shadow: 0 0 10px rgba(5, 150, 105, 0.4);
+        animation: nooki-boot-race-green 1.35s cubic-bezier(0.46, 0.12, 0.2, 1) 0.1s both;
+      }
+      @keyframes nooki-boot-pop {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes nooki-boot-race-pink {
+        0% { transform: translateX(-14px) scale(0.85); }
+        55% { transform: translateX(58cqw) scale(1.15); }
+        100% { transform: translateX(calc(100cqw + 14px)) scale(0.95); }
+      }
+      @keyframes nooki-boot-race-green {
+        0% { transform: translateX(-14px) scale(0.85); }
+        50% { transform: translateX(44cqw) scale(1.05); }
+        100% { transform: translateX(calc(100cqw + 14px)) scale(1.1); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .nooki-boot-wordmark,
+        .nooki-boot-dot { animation: none !important; }
+        .nooki-boot-dot { transform: none !important; }
+        .nooki-boot-dot--pink { left: calc(50% - 16px) !important; }
+        .nooki-boot-dot--green { left: calc(50% + 6px) !important; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="nooki-boot" data-boot-splash role="status" aria-label="Loading Nooki">
+        <div class="nooki-boot-card">
+          <span class="nooki-boot-wordmark">Nooki</span>
+          <div class="nooki-boot-track" aria-hidden="true">
+            <span class="nooki-boot-dot nooki-boot-dot--pink"></span>
+            <span class="nooki-boot-dot nooki-boot-dot--green"></span>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

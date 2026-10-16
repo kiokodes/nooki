@@ -1,4 +1,4 @@
--- Read-only Games preflight; run after verify.sql and migrations 007, 010 and 011.
+-- Read-only Games preflight; run after verify.sql and migrations 007, 010, 011 and 012.
 BEGIN TRANSACTION READ ONLY;
 DO $$
 DECLARE fn text;
@@ -55,8 +55,11 @@ BEGIN
    END IF;
  END LOOP;
  -- The sweep, the settle and the replay are the server's own business: a phone must not be
- -- able to settle someone else's duel or score a run without playing it.
- FOREACH fn IN ARRAY ARRAY['public.snake_commit(uuid,integer,jsonb,boolean)','public.snake_sweep(uuid)','public.snake_settle(uuid)','public.snake_view(jsonb,uuid,boolean,uuid,uuid)'] LOOP
+ -- able to settle someone else's duel or score a run without playing it. Naming
+ -- `authenticated` matters on a real Supabase project: its default privileges grant
+ -- EXECUTE on new public functions directly to that role, so a revoke that only names
+ -- PUBLIC and anon leaves these callable — which is the failure this check reports.
+ FOREACH fn IN ARRAY ARRAY['public.snake_commit(uuid,integer,jsonb,boolean)','public.snake_sweep(uuid)','public.snake_settle(uuid)','public.snake_view(jsonb,uuid,boolean,uuid,uuid)','public.snake_max_ticks()','public.snake_budget(timestamptz)','public.snake_replay(jsonb,jsonb,integer,integer)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing the Snake internals: %',fn; END IF;
    IF has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
      RAISE EXCEPTION 'The Snake internals must stay server-side: %',fn;
@@ -75,7 +78,7 @@ BEGIN
     WHERE conrelid='public.game_matches'::regclass AND contype='c'
       AND pg_get_constraintdef(oid) LIKE '%chess%'
  ) THEN
-   RAISE EXCEPTION 'The game_matches game check does not allow chess: rerun migration 011.';
+   RAISE EXCEPTION 'The game_matches game check does not allow chess: rerun migration 011, or apply migration 202610150014_restore_chess_tetris_game_check.sql to restore just this check.';
  END IF;
  FOREACH fn IN ARRAY ARRAY['public.start_chess(text)','public.chess_move(uuid,integer,text)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Chess RPC: %',fn; END IF;
@@ -109,7 +112,7 @@ BEGIN
     WHERE conrelid='public.game_matches'::regclass AND contype='c'
       AND pg_get_constraintdef(oid) LIKE '%tetris%'
  ) THEN
-   RAISE EXCEPTION 'The game_matches game check does not allow tetris: rerun migration 012.';
+   RAISE EXCEPTION 'The game_matches game check does not allow tetris: rerun migration 012, or apply migration 202610150014_restore_chess_tetris_game_check.sql to restore just this check.';
  END IF;
  IF to_regprocedure('public.tetris_replay(jsonb,jsonb,integer,integer)') IS NULL THEN
    RAISE EXCEPTION 'Missing the Tetris replay the score is derived from: apply migration 012.';
@@ -120,7 +123,7 @@ BEGIN
      RAISE EXCEPTION 'Unsafe Tetris RPC permissions: %',fn;
    END IF;
  END LOOP;
- FOREACH fn IN ARRAY ARRAY['public.tetris_commit(uuid,integer,jsonb,boolean)','public.tetris_sweep(uuid)','public.tetris_settle(uuid)','public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text)'] LOOP
+ FOREACH fn IN ARRAY ARRAY['public.tetris_commit(uuid,integer,jsonb,boolean)','public.tetris_sweep(uuid)','public.tetris_settle(uuid)','public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text)','public.tetris_max_ticks()','public.tetris_budget(timestamptz)','public.tetris_replay(jsonb,jsonb,integer,integer)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing the Tetris internals: %',fn; END IF;
    IF has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
      RAISE EXCEPTION 'The Tetris internals must stay server-side: %',fn;

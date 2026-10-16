@@ -2209,10 +2209,17 @@ BEGIN
     END);
 END $$;
 
+-- `authenticated` is revoked by name, not just PUBLIC and anon: a real Supabase project
+-- carries default privileges that grant EXECUTE on every newly created public function
+-- directly to anon and authenticated, so revoking only PUBLIC (and anon) leaves every
+-- signed-in phone able to call the internals below — snake_commit/snake_sweep/snake_settle
+-- included. verify-games.sql fails on exactly that. The public entry points are handed
+-- back to authenticated by the GRANT that follows; the rest stay server-side, reached
+-- only through those SECURITY DEFINER entry points (which run as their owner).
 REVOKE ALL ON FUNCTION public.snake_max_ticks(), public.snake_budget(timestamptz), public.snake_replay(jsonb,jsonb,integer,integer),
   public.snake_settle(uuid), public.snake_sweep(uuid), public.snake_start(uuid), public.snake_commit(uuid,integer,jsonb,boolean),
   public.snake_beat(uuid,integer,jsonb), public.snake_finish(uuid,integer,jsonb), public.snake_forfeit(uuid),
-  public.snake_view(jsonb,uuid,boolean,uuid,uuid) FROM PUBLIC, anon;
+  public.snake_view(jsonb,uuid,boolean,uuid,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.snake_start(uuid), public.snake_beat(uuid,integer,jsonb), public.snake_finish(uuid,integer,jsonb),
   public.snake_forfeit(uuid) TO authenticated;
 COMMIT;
@@ -3017,11 +3024,14 @@ BEGIN
   RETURN public.chess_view(st);
 END $$;
 
+-- `authenticated` is revoked by name, as for the Snake internals above: Supabase's default
+-- privileges grant EXECUTE on new public functions directly to authenticated, so a
+-- PUBLIC/anon-only revoke would leave the whole chess referee callable by any phone.
 REVOKE ALL ON FUNCTION public.chess_start_board(), public.chess_attacked(text[],integer,text),
   public.chess_pseudo(text[],text,integer,integer,integer), public.chess_apply(text[],integer,integer,text,integer),
   public.chess_legal(text[],text,integer,integer,integer,text), public.chess_has_move(text[],text,integer,text),
   public.chess_in_check(text[],text), public.chess_view(jsonb), public.chess_state_json(text),
-  public.start_chess(text), public.chess_move(uuid,integer,text) FROM PUBLIC, anon;
+  public.start_chess(text), public.chess_move(uuid,integer,text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.start_chess(text), public.chess_move(uuid,integer,text) TO authenticated;
 
 -- The snapshot carries the chess position (public information — there is nothing to
@@ -3504,12 +3514,15 @@ BEGIN
     END);
 END $$;
 
+-- `authenticated` is revoked by name, as for the Snake/Chess internals above: Supabase's
+-- default privileges grant EXECUTE on new public functions directly to authenticated, so
+-- a PUBLIC/anon-only revoke would leave tetris_commit/tetris_settle callable by any phone.
 REVOKE ALL ON FUNCTION public.tetris_max_ticks(), public.tetris_budget(timestamptz),
   public.tetris_replay(jsonb,jsonb,integer,integer),
   public.tetris_settle(uuid), public.tetris_sweep(uuid), public.tetris_start(uuid),
   public.tetris_commit(uuid,integer,jsonb,boolean),
   public.tetris_beat(uuid,integer,jsonb), public.tetris_finish(uuid,integer,jsonb), public.tetris_forfeit(uuid),
-  public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text) FROM PUBLIC, anon;
+  public.tetris_view(jsonb,uuid,boolean,uuid,uuid,text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.tetris_start(uuid), public.tetris_beat(uuid,integer,jsonb),
   public.tetris_finish(uuid,integer,jsonb), public.tetris_forfeit(uuid) TO authenticated;
 
@@ -3563,7 +3576,7 @@ BEGIN
  RETURN mid;
 END $$;
 
-REVOKE ALL ON FUNCTION public.start_tetris(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.start_tetris(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.start_tetris(text) TO authenticated;
 
 COMMIT;

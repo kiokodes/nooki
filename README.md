@@ -58,17 +58,23 @@ apply and verify the database migrations separately.
    `202610150003_messages.sql`, `202610150004_discuss_questions.sql`,
    `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`,
    `202610150007_games.sql` (Games), `202610150010_snake_duel.sql` (the Snake Duel in
-   Games), `202610150011_chess.sql` (Chess in Games), `202610150008_shared_books.sql` and
+   Games), `202610150011_chess.sql` (Chess in Games),
+   `202610150012_tetris_duel.sql` (the Tetris Duel in Games),
+   `202610150008_shared_books.sql` and
    `202610150009_two_book_shelf_limit.sql`
    (shared books). Apply pending migrations in this order; they preserve existing records.
+   (`202610150013_lock_down_game_internals.sql` and
+   `202610150014_restore_chess_tetris_game_check.sql` are repairs, not part of a fresh
+   install: run them only if `verify-games.sql` names them — see **Troubleshooting the
+   Duel button**.)
    Do not rerun older Games migrations over saved Chess matches (see **Troubleshooting
    the Duel button**). The second adds the shared
    calendar, the third adds the chat log, the fourth adds the Discuss question engine,
    the fifth rewrites reactions into comments and links chat messages to questions, the
    sixth adds chat replies and edits (plus their Realtime publication membership), the
    seventh adds Games, the tenth adds the Snake Duel's verified runs to Games, the
-   eleventh adds Chess's database referee to Games, and the
-   last two add the shared-books shelf.
+   eleventh adds Chess's database referee to Games, the twelfth adds the Tetris Duel's
+   verified runs to Games, and the last two add the shared-books shelf.
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
    anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat
@@ -662,8 +668,12 @@ Tetris Duel, then run **`supabase/verify-games.sql`** in addition to the usual
 `verify.sql`. New projects get all four from `schema.sql`. The migrations are additive
 and rerunnable; they do not reset existing matches or duels. Apply pending Games
 migrations in order (007 → 010 → 011 → 012); do not downgrade the shared game constraint
-by reapplying an older migration after Chess or Tetris has saved matches. The frontend
-build does not apply migrations to your live project.
+by reapplying an older migration after Chess or Tetris has saved matches. Projects that
+installed 010, 011 or 012 before those migrations revoked the game internals from
+`authenticated` by name also need
+`supabase/migrations/202610150013_lock_down_game_internals.sql` (privileges only) before
+`verify-games.sql` will pass — see Troubleshooting the Duel button. The frontend build
+does not apply migrations to your live project.
 
 - **Tic Tac Toe:** a 3×3 board, alternating turns, all eight winning lines and draws.
   The starting partner is X. Moves and results are validated by the database.
@@ -849,6 +859,27 @@ In the Supabase project used by the deployment:
    then `supabase/migrations/202610150011_chess.sql` for the Chess-enabled release, then
    `supabase/migrations/202610150012_tetris_duel.sql` for Tetris.
 3. Run `supabase/verify-games.sql` and require **PASS**, then try Duel again.
+
+If `verify-games.sql` instead fails with **"The Snake internals must stay
+server-side: public.snake_commit(uuid,integer,jsonb,boolean)"**, the project was
+installed before migrations 010, 011 and 012 named `authenticated` in their internal
+`REVOKE`s: Supabase's default privileges grant EXECUTE on every new public
+function directly to `authenticated`, so the internals stayed callable by any
+signed-in phone. Run
+**`supabase/migrations/202610150013_lock_down_game_internals.sql`** — it changes
+privileges only (no functions, tables or data, safe with saved matches, safe to
+run twice) — then rerun `verify-games.sql` and require **PASS**.
+
+If starting **Chess** fails with **"new row for relation "game_matches" violates
+check constraint "game_matches_game_check""**, Chess is installed but the game
+check on the project predates it — each Games migration replaces that constraint
+wholesale, so rerunning `010` after `011` silently removes `'chess'` from it.
+Run **`supabase/migrations/202610150014_restore_chess_tetris_game_check.sql`** (it
+restores just that constraint — to the current full list, Tetris included — touches
+no functions or data, and refuses to run if Chess was never installed — in that
+case apply `011` instead), then rerun `verify-games.sql` and require **PASS**.
+The app no longer shows the raw constraint text for this: it names the database
+update to apply.
 
 Do not rerun the full schema on an existing project. Rerunning `007` after `010`
 overwrites `start_game` and `games_state` with their older versions. If Chess already has
