@@ -99,11 +99,21 @@ else
   echo
 fi
 
-echo "── STEP 4 · Add the Database Webhook (manual, dashboard) ────────────────"
-echo "  Supabase → Database → Webhooks → Create:"
-echo "      Table: messages        Event: Insert"
-echo "      Type: Supabase Edge Function   Function: send-push   Method: POST"
-echo "      HTTP header:  Authorization: Bearer $PUSH_WEBHOOK_SECRET"
+echo "── STEP 4 · Add the Database Webhooks (manual, dashboard) ──────────────"
+echo "  Supabase → Database → Webhooks → Create ONE webhook per row below."
+echo "  All of them: Type: Supabase Edge Function · Function: send-push · Method: POST"
+echo "                HTTP header:  Authorization: Bearer $PUSH_WEBHOOK_SECRET"
+echo
+echo "   #1  Table: messages        Event: Insert"
+echo "        → partner gets a chat notification for each new message"
+echo "   #2  Table: answers         Event: Insert"
+echo "        → the OTHER partner is told it is their turn to answer (Discuss)"
+echo "        (fires only while the question session is still open, i.e. not yet both answered)"
+echo "   #3  Table: game_matches     Event: Update   (watch column: turn_id)"
+echo "        → the player whose turn just arrived is told to make their move (Games)"
+echo "        (fires only on a real turn change while the game is still live)"
+echo
+echo "  Each webhook is a separate entry pointing at the same send-push function."
 echo
 
 echo "── STEP 5 · Verify ──────────────────────────────────────────────────────"
