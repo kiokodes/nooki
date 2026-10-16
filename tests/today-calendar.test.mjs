@@ -297,6 +297,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const linksMigration = await readFile(new URL('../supabase/migrations/202610150005_discuss_comments_chat_links.sql', import.meta.url), 'utf8');
   const repliesMigration = await readFile(new URL('../supabase/migrations/202610150006_chat_replies_edits.sql', import.meta.url), 'utf8');
   const pushMigration = await readFile(new URL('../supabase/migrations/202610150015_web_push.sql', import.meta.url), 'utf8');
+  const missYouMigration = await readFile(new URL('../supabase/migrations/202610150016_miss_you.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -344,6 +345,12 @@ test('verify.sql spots a live project that is missing a migration', async () => 
 
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(pushMigration);
+    // The miss-you button is the newest release of all; the preflight asks for it last.
+    await assert.rejects(db.exec(verification), /202610150016_miss_you\.sql/,
+      'the preflight must send the owner to the miss-you migration');
+
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(missYouMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -367,6 +374,7 @@ async function server_paths() {
   const links = await read('../supabase/migrations/202610150005_discuss_comments_chat_links.sql');
   const replies = await read('../supabase/migrations/202610150006_chat_replies_edits.sql');
   const push = await read('../supabase/migrations/202610150015_web_push.sql');
+  const missYou = await read('../supabase/migrations/202610150016_miss_you.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -450,7 +458,7 @@ async function server_paths() {
   check('schema.sql on a project with no auto-grant', freshNew, true);
   await freshNew.db.close();
 
-  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push];
+  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou];
   const existingOld = await run({
     defaults: legacyDefaults,
     // Every migration twice: a live project may have run any of them before.
@@ -469,8 +477,8 @@ async function server_paths() {
   const upgraded = await run({
     defaults: legacyDefaults,
     steps: [schemaBeforeCalendar, pairing, legacyCalendar,
-            calendar, chat, discuss, links, replies, push,
-            calendar, chat, discuss, links, replies, push],
+            calendar, chat, discuss, links, replies, push, missYou,
+            calendar, chat, discuss, links, replies, push, missYou],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -514,11 +522,15 @@ async function server_paths() {
   assert(stillBlocked, 'the preflight keeps pressing until replies and edits land');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(replies);
-  // ...and then web push, the newest migration of all, which the preflight asks for last.
+  // ...and then web push and the miss-you button, which the preflight asks for last.
   await assert.rejects(missingLinks.db.exec(verify), /202610150015_web_push\.sql/,
     'the preflight keeps pressing until the push migration lands');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(push);
+  await assert.rejects(missingLinks.db.exec(verify), /202610150016_miss_you\.sql/,
+    'and then until the miss-you migration lands');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(missYou);
   await missingLinks.db.exec(verify);
   await missingLinks.db.close();
 
@@ -532,6 +544,7 @@ async function server_paths() {
   assert.match(missingPush.message, /202610150015_web_push\.sql/, 'the message names the missing push migration');
   try { await missingPush.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingPush.db.exec(push);
+  await missingPush.db.exec(missYou);
   await missingPush.db.exec(verify);
   await missingPush.db.close();
 

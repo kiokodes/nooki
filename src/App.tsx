@@ -18,6 +18,7 @@ import { GamesView } from './components/games/GamesView';
 import { DuelLeaveDialog } from './components/games/DuelLeaveDialog';
 import { useGames } from './hooks/useGames';
 import { HomeView } from './components/home/HomeView';
+import { MissYouReveal } from './components/home/MissYouReveal';
 import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
@@ -29,6 +30,7 @@ import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
+import { useMissYou } from './hooks/useMissYou';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import {
   PUSH_DEEP_LINK_TABS,
@@ -339,6 +341,18 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     onPartnerProfile: setPartner,
   });
 
+  // "I miss you": the corner button while the partner is away, and the big heart their taps
+  // become when this phone is the one coming back. It only runs on the unlocked app (past
+  // the splash, couple and partner in hand) and never while the app is hidden, so nothing
+  // is opened unseen.
+  const missYou = useMissYou({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+    partnerId: partner?.id ?? null,
+    partnerOnline,
+    active: appVisible && !loading && splashDone && Boolean(couple && partner && currentUser),
+  });
+
   const loadUserData = useCallback(async () => {
     try {
       const user = await getCurrentAuthUser();
@@ -627,6 +641,13 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             dailyStatus={games.data?.matches?.find(m => m.daily_date === games.data?.today)?.finished ? 'Completed today · next challenge at midnight UTC' : 'One shared match a day · resets at midnight UTC'}
             dailyLabel={games.data?.matches?.find(m => m.daily_date === games.data?.today)?.finished ? 'View result' : games.data?.matches?.some(m => m.daily_date === games.data?.today) ? 'Resume' : 'Play'}
             onPlayDailyGame={() => { setActiveTab('games'); void games.start('tic-tac-toe', true); }}
+            missYou={{
+              visible: missYou.available,
+              sentCount: missYou.sentCount,
+              partnerName: partner.name,
+              error: missYou.error,
+              onTap: () => { void missYou.tap(); },
+            }}
           />
         ) : activeTab === 'games' ? (
           <GamesView games={games} userId={currentUser.id} partnerName={partner.name} />
@@ -802,6 +823,17 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             );
           })}
         </nav>
+
+        {/* The big heart: the taps the partner left behind while this phone was away,
+            opened over whatever tab the app came back to. Marks them received on mount,
+            so it greets once and then it is gone. */}
+        {missYou.reveal && (
+          <MissYouReveal
+            batch={missYou.reveal}
+            senderName={partner.name}
+            onDismiss={missYou.dismissReveal}
+          />
+        )}
 
         {/* Full calendar, layered over the current tab */}
         {showCalendar && (
