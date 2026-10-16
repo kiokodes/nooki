@@ -1,11 +1,16 @@
-import React from 'react';
-import { ArrowLeft, ChevronRight, Lock } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ChevronDown, ChevronRight, Filter, Lock } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
-import { categoryDisplay, formatAnswerSummary } from '../../lib/questionFormat';
+import { DISCUSS_CATEGORIES, categoryDisplay, formatAnswerSummary } from '../../lib/questionFormat';
 import type { SessionDetail } from '../../hooks/useDiscuss';
 
 interface HistoryListProps {
   sessions: SessionDetail[];
+  /** The categories this couple's library holds: the filter menu is built from them. */
+  categories: string[];
+  /** The category the list is narrowed to, or null for every question. */
+  filter: string | null;
+  onFilterChange: (category: string | null) => void;
   /** This phone's account, so the list can show your own comment on a row. */
   userId: string;
   partnerName: string;
@@ -30,12 +35,83 @@ function stateChip(detail: SessionDetail, partnerName: string): StateChip {
   return { label: `Waiting for ${partnerName}`, color: tokens.colors.accentSageDeep, background: tokens.colors.accentSageSoft };
 }
 
+/** The canonical order first, then any category the CSV introduced on its own. */
+function byCategoryOrder(a: string, b: string): number {
+  const rank = (name: string) => {
+    const index = DISCUSS_CATEGORIES.findIndex((entry) => entry.name === name);
+    return index === -1 ? DISCUSS_CATEGORIES.length : index;
+  };
+  return rank(a) - rank(b) || a.localeCompare(b);
+}
+
 /**
  * Every question this couple has asked, newest first. A sealed session shows its state
  * and nothing else — the partner's answer is not in this list because the database never
  * sent it.
+ *
+ * The filter beside the back button narrows the list to one category of the library.
  */
-export const HistoryList: React.FC<HistoryListProps> = ({ sessions, userId, partnerName, onOpen, onBack }) => {
+export const HistoryList: React.FC<HistoryListProps> = ({
+  sessions,
+  categories,
+  filter,
+  onFilterChange,
+  userId,
+  partnerName,
+  onOpen,
+  onBack,
+}) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // The menu is a small popover: a tap elsewhere or Escape puts it away again.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: Event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node | null)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
+
+  // The library's categories, plus any category a question in the history still carries
+  // (a row may have been imported after the library counts were read).
+  const options = useMemo(() => {
+    const names = new Set<string>(categories);
+    for (const detail of sessions) {
+      const category = detail.question?.category;
+      if (category) names.add(category);
+    }
+    return [...names].sort(byCategoryOrder);
+  }, [categories, sessions]);
+
+  /** How many past questions each category holds, for the menu's counts. */
+  const counts = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const detail of sessions) {
+      const category = detail.question?.category;
+      if (!category) continue;
+      tally.set(category, (tally.get(category) ?? 0) + 1);
+    }
+    return tally;
+  }, [sessions]);
+
+  const visible = useMemo(
+    () => (filter ? sessions.filter((detail) => detail.question?.category === filter) : sessions),
+    [filter, sessions],
+  );
+
+  const active = filter ? categoryDisplay(filter) : null;
+
   return (
     <div data-discuss-history style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
@@ -61,14 +137,138 @@ export const HistoryList: React.FC<HistoryListProps> = ({ sessions, userId, part
           <ArrowLeft size={14} aria-hidden="true" />
           <span>Categories</span>
         </button>
-        <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: tokens.colors.textPrimary }}>
-          Your questions
-        </h2>
-        {/* Keeps the title centred against the back button. */}
-        <span style={{ width: '104px' }} aria-hidden="true" />
+
+        <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            type="button"
+            aria-label={active ? `Filter by category, ${active.name} chosen` : 'Filter by category'}
+            aria-haspopup="listbox"
+            aria-expanded={menuOpen}
+            data-history-filter
+            data-filter-active={active ? 'true' : 'false'}
+            onClick={() => setMenuOpen((open) => !open)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: tokens.radii.pill,
+              border: `1.5px solid ${active ? active.accent : tokens.colors.borderSoft}`,
+              backgroundColor: active ? active.accentSoft : tokens.colors.bgSurface,
+              color: active ? active.accent : tokens.colors.textSecondary,
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              fontFamily: tokens.typography.fontFamily,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Filter size={14} aria-hidden="true" />
+            <span data-history-filter-label>{active ? active.name : 'Filter'}</span>
+            <ChevronDown
+              size={13}
+              aria-hidden="true"
+              style={{ transform: menuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}
+            />
+          </button>
+
+          {menuOpen && (
+            <div
+              data-history-filter-menu
+              role="listbox"
+              aria-label="Filter by category"
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                right: 0,
+                width: '212px',
+                maxHeight: '260px',
+                overflowX: 'hidden',
+                overflowY: 'auto',
+                backgroundColor: tokens.colors.bgSurface,
+                borderRadius: tokens.radii.md,
+                boxShadow: tokens.shadows.soft,
+                border: `1px solid ${tokens.colors.borderSubtle}`,
+                zIndex: 5,
+              }}
+            >
+              <button
+                type="button"
+                role="option"
+                aria-selected={filter === null}
+                data-history-filter-option="all"
+                onClick={() => {
+                  onFilterChange(null);
+                  setMenuOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '9px',
+                  width: '100%',
+                  padding: '11px 14px',
+                  border: 'none',
+                  borderBottom: `1px solid ${tokens.colors.borderSubtle}`,
+                  backgroundColor: filter === null ? tokens.colors.bgSurfaceSubtle : 'transparent',
+                  color: tokens.colors.textPrimary,
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  fontFamily: tokens.typography.fontFamily,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: '0.95rem', width: '18px', textAlign: 'center' }} aria-hidden="true">✧</span>
+                <span style={{ flex: 1 }}>All categories</span>
+                <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted }}>{sessions.length}</span>
+              </button>
+
+              {options.map((name) => {
+                const display = categoryDisplay(name);
+                const selected = filter === name;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    data-history-filter-option={name}
+                    onClick={() => {
+                      onFilterChange(name);
+                      setMenuOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '9px',
+                      width: '100%',
+                      padding: '11px 14px',
+                      border: 'none',
+                      borderBottom: `1px solid ${tokens.colors.borderSubtle}`,
+                      backgroundColor: selected ? display.accentSoft : 'transparent',
+                      color: tokens.colors.textPrimary,
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      fontFamily: tokens.typography.fontFamily,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.95rem', width: '18px', textAlign: 'center' }} aria-hidden="true">
+                      {display.emoji}
+                    </span>
+                    <span style={{ flex: 1 }}>{display.name}</span>
+                    <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted }}>
+                      {counts.get(name) ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {!sessions.length && (
+      {!visible.length && (
         <div
           data-history-empty
           style={{
@@ -82,11 +282,13 @@ export const HistoryList: React.FC<HistoryListProps> = ({ sessions, userId, part
             lineHeight: 1.5,
           }}
         >
-          Nothing asked yet. Pick a category and ask your first question.
+          {active
+            ? `No ${active.name} questions in your history yet.`
+            : 'Nothing asked yet. Pick a category and ask your first question.'}
         </div>
       )}
 
-      {sessions.map((detail) => {
+      {visible.map((detail) => {
         const chip = stateChip(detail, partnerName);
         const display = categoryDisplay(detail.question?.category ?? '');
         const myComment = detail.comments.find((entry) => entry.user_id === userId) ?? null;

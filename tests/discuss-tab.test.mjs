@@ -301,7 +301,33 @@ test('discuss tab: browse the library, ask, answer privately, reveal together, c
     assert.equal(sundayRow?.getAttribute('data-history-state'), 'your-turn', 'the one Alice has not answered says so');
     assert(!sundayRow?.textContent.includes('Beach'), 'history leaks no answers');
 
-    await click(sundayRow);
+    // --- 6b. The filter narrows the history to one category ------------------------------
+    assert.equal(document.querySelector('[data-history-filter-label]')?.textContent, 'Filter', 'the filter starts wide open');
+    await click('[data-history-filter]');
+    await waitFor(() => document.querySelector('[data-history-filter-menu]'), 'the filter opens a menu');
+    const filterOptions = [...document.querySelectorAll('[data-history-filter-option]')]
+      .map((item) => item.getAttribute('data-history-filter-option'));
+    assert(filterOptions.includes('Fun'), 'the menu holds the library categories');
+    assert(filterOptions.includes('Home Life'), 'every category is offered, not just the asked ones');
+    await click('[data-history-filter-option="Home Life"]');
+    await waitFor(() => document.querySelectorAll('[data-history-item]').length === 1, 'the list narrows to that category');
+    assert(document.querySelector('[data-history-item]')?.textContent.includes('Rank your perfect Sunday'), 'and keeps the right question');
+    assert.equal(document.querySelector('[data-history-filter-label]')?.textContent, 'Home Life', 'the button says what is chosen');
+    assert.equal(document.querySelector('[data-history-filter]')?.getAttribute('data-filter-active'), 'true', 'the chosen filter is marked');
+
+    await click('[data-history-filter]');
+    await waitFor(() => document.querySelector('[data-history-filter-menu]'), 'the menu opens again');
+    await click('[data-history-filter-option="Money"]');
+    await waitFor(() => document.querySelector('[data-history-empty]'), 'a category with nothing asked says so');
+    assert(document.querySelector('[data-history-empty]')?.textContent.includes('Money'), 'and names the category');
+
+    await click('[data-history-filter]');
+    await waitFor(() => document.querySelector('[data-history-filter-menu]'), 'the menu opens once more');
+    await click('[data-history-filter-option="all"]');
+    await waitFor(() => document.querySelectorAll('[data-history-item]').length === 2, 'all categories brings the whole history back');
+    assert.equal(document.querySelector('[data-history-filter-label]')?.textContent, 'Filter', 'and the filter is wide open again');
+
+    await click(document.querySelector(`[data-history-item="${asked.sessionId}"]`));
     await waitFor(() => document.querySelector('[data-answer-input="ranking"]'), 'opening it should show the ranking input');
     assert.equal(document.querySelector('[data-question-text]')?.textContent, 'Rank your perfect Sunday');
     const ranks = () => [...document.querySelectorAll('[data-ranking-item]')]
