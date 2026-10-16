@@ -147,10 +147,15 @@ export function SnakeBoard({
     const timer = setInterval(() => {
       if (appliedRef.current || !onBeatRef.current) return;
       const changes = unsentRef.current;
+      // How much of the queue is going out with this report, counted *before* the call:
+      // the array is the live one and the board keeps pushing to it while the report is on
+      // the wire, so counting afterwards would quietly drop everything tapped mid-flight —
+      // and a tap the server never hears is a replay that no longer matches what was played.
+      const reported = changes.length;
       void Promise.resolve(onBeatRef.current(stateRef.current.ticks, changes))
         .then(() => {
           // Anything added while that report was in flight stays for the next one.
-          unsentRef.current = unsentRef.current.slice(changes.length);
+          unsentRef.current = unsentRef.current.slice(reported);
           setConnection('live');
         })
         .catch(() => setConnection('trouble'));

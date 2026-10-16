@@ -2,18 +2,27 @@ import { useState } from 'react';
 import { GAMES } from '../../lib/gamesService';
 import { needsMyMove, type GamesState } from '../../hooks/useGames';
 import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
+import { dealPracticePieces, tetrisModeLabel, type TetrisMode } from '../../lib/tetris';
 import { SnakeBoard } from './SnakeBoard';
 import { SnakeDuel } from './SnakeDuel';
+import { TetrisBoard } from './TetrisBoard';
+import { TetrisDuel } from './TetrisDuel';
 import { Sudoku } from './Sudoku';
 import { ChessDuel } from './ChessDuel';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import './games.css';
 
-/** A practice run in progress: its own food, dealt on this phone and never reported. */
-interface WarmUp { foods: SnakePoint[]; nonce: number }
+/** A practice run in progress: its own pieces or food, dealt on this phone and never reported. */
+interface WarmUp {
+  game: 'snake' | 'tetris';
+  foods: SnakePoint[];
+  pieces: number[];
+  nonce: number;
+}
 
 export function GamesView({ games, userId, partnerName }: { games: GamesState; userId: string; partnerName: string }) {
   const [bestOf, setBestOf] = useState(3);
+  const [mode, setMode] = useState<TetrisMode>('sprint');
   const [warmUp, setWarmUp] = useState<WarmUp | null>(null);
   const [sudokuOpen, setSudokuOpen] = useState(false);
   const [chessMode, setChessMode] = useState<ChessMode>('classic');
@@ -21,19 +30,32 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
   const openMatch = (id: string | null) => { setWarmUp(null); setSudokuOpen(false); games.select(id); };
-  const startWarmUp = () => setWarmUp({ foods: dealPracticeFoods(), nonce: Date.now() });
+  const startTetrisWarmUp = () => setWarmUp({ game: 'tetris', foods: [], pieces: dealPracticePieces(), nonce: Date.now() });
+  const startSnakeWarmUp = () => setWarmUp({ game: 'snake', foods: dealPracticeFoods(), pieces: [], nonce: Date.now() });
   // Keep failed starts beside the button that was tapped, not above an offscreen header.
   const inlineErrorGame = !m && !sudokuOpen && !warmUp ? games.errorGame : null;
-  /** The most recent snake duel, so its result stays reachable after it leaves the list. */
-  const lastDuel = games.data?.matches?.find((match) => match.game === 'snake');
+  /** The most recent duel of either kind, so its result stays reachable after it leaves the list. */
+  const lastDuel = games.data?.matches?.find((match) => match.game === 'snake' || match.game === 'tetris');
   // A warm-up stands in for whatever the Games tab was showing: the duel panel, or the
   // whole library. It is the same board either way, and it never touches the database.
   // It yields the moment the duel is decided: nobody wants to be practising through the
   // reveal of who won.
   const practice = warmUp && !m?.finished ? <>
-    <SnakeBoard key={warmUp.nonce} foods={warmUp.foods} warmUp onExit={() => setWarmUp(null)} onRestart={startWarmUp} />
+    {warmUp.game === 'tetris'
+      ? <TetrisBoard key={warmUp.nonce} pieces={warmUp.pieces} warmUp onExit={() => setWarmUp(null)} onRestart={startTetrisWarmUp} />
+      : <SnakeBoard key={warmUp.nonce} foods={warmUp.foods} warmUp onExit={() => setWarmUp(null)} onRestart={startSnakeWarmUp} />}
     <p className="game-hint">A warm-up is yours alone: it is never reported, and it never scores.</p>
   </> : null;
+  /** The name and score line for the "last duel" row, whichever game it was. */
+  const lastDuelLine = lastDuel?.finished ? {
+    name: GAMES.find(g => g.id === lastDuel.game)?.name ?? 'Duel',
+    won: lastDuel.winner_id === userId,
+    drawn: lastDuel.winner_id === null,
+    mine: lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? 0,
+    // Optional chaining all the way down: a duel's own column is an empty object until the
+    // migration that manages it is applied, and a sealed score has no `score` key at all.
+    theirs: lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? 0,
+  } : null;
 
   return <section className="games-view" aria-label="Games">
     <header><span className="games-eyebrow">A little friendly rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : 'Play together'}</h1>{m && <p>{m.daily_date ? `Daily challenge · ${m.daily_date} (UTC)` : 'Just for fun · unlimited rematches'}</p>}</header>
@@ -59,7 +81,16 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
           userId={userId}
           partnerName={partnerName}
           games={games}
-          onWarmUp={startWarmUp}
+          onWarmUp={startSnakeWarmUp}
+          onWarmUpSkip={() => setWarmUp(null)}
+        />
+      ) : m.game === 'tetris' ? (
+        <TetrisDuel
+          match={m}
+          userId={userId}
+          partnerName={partnerName}
+          games={games}
+          onWarmUp={startTetrisWarmUp}
           onWarmUpSkip={() => setWarmUp(null)}
         />
       ) : (
@@ -87,7 +118,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
       {practice}
     </> : <>
       {games.data?.matches?.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => openMatch(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}{match.daily_date ? `Daily · ${match.daily_date}` : 'With your partner'} →</small></button>)}
-      {lastDuel?.finished && <button className="game-card game-resume" onClick={() => openMatch(lastDuel.id)} data-last-duel>Last Snake Duel <small>{lastDuel.winner_id === userId ? 'You won' : lastDuel.winner_id ? `${partnerName} won` : 'A draw'} · You {lastDuel.snake?.mine?.score ?? 0} — {lastDuel.snake?.partner.score ?? 0} {partnerName} →</small></button>}
+      {lastDuelLine && <button className="game-card game-resume" onClick={() => openMatch(lastDuel?.id ?? null)} data-last-duel>Last {lastDuelLine.name} <small>{lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You {lastDuelLine.mine} — {lastDuelLine.theirs} {partnerName} →</small></button>}
       {GAMES.map(game => (
         <article className="game-card" key={game.id} data-game={game.id}>
           <div className="game-icon" aria-hidden="true">{game.icon}</div>
@@ -109,20 +140,31 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
               ))}
             </fieldset>
           )}
+          {game.id === 'tetris' && (
+            <fieldset>
+              <legend>How the duel is decided</legend>
+              {(['sprint','survival'] as TetrisMode[]).map(option => <button key={option} type="button" aria-pressed={mode === option} onClick={() => setMode(option)} data-tetris-mode-option={option}>{tetrisModeLabel(option)}</button>)}
+            </fieldset>
+          )}
           {games.error && inlineErrorGame === game.id && <GameError games={games} />}
           <div className="game-actions">
             <button
               type="button"
               disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
               aria-busy={games.pendingGame === game.id}
-              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : void games.start(game.id, false, bestOf)}
+              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : void games.start(game.id, false, bestOf)}
             >
               {games.pendingGame === game.id
-                ? game.id === 'snake' ? 'Opening duel…' : 'Opening game…'
-                : game.id === 'snake' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
+                ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : 'Opening game…'
+                : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
             </button>
             {game.id === 'snake' && (
-              <button type="button" className="snake-secondary" disabled={games.busy} onClick={startWarmUp} data-action="library-warm-up">
+              <button type="button" className="snake-secondary" disabled={games.busy} onClick={startSnakeWarmUp} data-action="library-warm-up">
+                Warm-up run (not counted)
+              </button>
+            )}
+            {game.id === 'tetris' && (
+              <button type="button" className="tetris-secondary" disabled={games.busy} onClick={startTetrisWarmUp} data-action="library-warm-up-tetris">
                 Warm-up run (not counted)
               </button>
             )}
