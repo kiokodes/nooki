@@ -186,38 +186,101 @@ html, body {
   border-radius: 9999px;
 }
 
-/* Splash screen (~1.5s): simple Nooki wordmark + pink and green dots racing across the screen.
-   The dots are raced with `transform`, never `left`. Animating `left` runs on the main
-   thread, which on a phone is busy mounting the app and restoring the session while the
-   splash is up — the frames are dropped, the animation clock is not, so by the first
-   frame a phone actually painted the race was already over (a fast desktop paints from
-   the first frame and saw it fine). A transform race runs on the compositor instead:
-   it starts from the first presented frame and keeps moving even while the main thread
-   is blocked. Distances are container-query units of the track itself (`cqw`: the track
-   is an inline-size container, so 100cqw is exactly one track width at any shell size,
-   phone or desktop card), and `both` fills hold each dot off-screen during the green
-   dot's start delay and past the finish line until the splash is dismissed. Both runs
-   end by 1.45s, inside SPLASH_DURATION_MS (1.5s), so the last `animationend` — the
-   signal the splash was genuinely seen — lands before the fallback dismissal timer. */
+/* Splash screen (~1.5s): the Nooki wordmark and the pink and green dots racing across the
+   screen.
+
+   The race is carried by two full-width "runner" boxes, one per dot, moved with percentage
+   transforms. A percentage in `translate` is a share of the runner's own width — the track's
+   width — so 100% is exactly one track with no container-query units and no measured pixels
+   involved. Both alternatives have to be avoided here:
+
+   * `left` is a layout property: it is animated on the main thread, which on a phone is busy
+     parsing the bundle, mounting the app and restoring the session while the splash is up.
+     The animation clock runs on regardless, so the race was over before the first frame the
+     phone actually painted.
+   * container-query units (`cqw`) are resolved on the main thread too, and only by browsers
+     that support container queries at all. A phone that was busy could sit through the whole
+     race with the dots unmoved — the race looked static on exactly the devices it was
+     written for — and an older browser could not resolve the distance at all.
+
+   A plain percentage transform is resolved once, off the main thread, on every browser that
+   can animate a transform. The `scale` in the same keyframes grows each dot about its own
+   centre (`transform-origin`, matching .nooki-boot-runner--* in index.html), and `both`
+   fills hold a dot off-screen during the green dot's start delay and past the finish line
+   until the splash is dismissed. Both runs end by 1.45s, inside SPLASH_DURATION_MS (1.5s),
+   so the last `animationend` — the signal the splash was genuinely seen — lands before the
+   fallback dismissal timer. */
 .nooki-splash-wordmark {
   animation: nooki-wordmark-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .nooki-splash-track {
-  container-type: inline-size;
+  position: relative;
+  width: 100%;
+  height: 24px;
+  overflow: hidden;
+}
+
+.nooki-splash-runner {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  /* The dot sits at the runner's left edge, 10px wide, so its centre is 5px in. */
+  transform-origin: 5px 50%;
+  will-change: transform;
+  animation-duration: 1.35s;
+  animation-fill-mode: both;
+  /* How far into the race we already are, as a negative delay ("head start").
+
+     The boot splash in index.html starts this same race before the bundle exists and records
+     when it began (see src/lib/bootRace.ts). SplashScreen passes that on, so the two
+     surfaces are one continuous run instead of two races played back to back — which is what
+     made a phone launch look like it stuttered and arrive a second late. */
+  animation-delay: var(--nooki-race-delay, 0ms);
+}
+
+.nooki-splash-runner--pink {
+  top: 2px;
+  animation-name: nooki-splash-race-pink;
+  animation-timing-function: cubic-bezier(0.22, 0.82, 0.34, 1);
+}
+
+.nooki-splash-runner--green {
+  top: 12px;
+  animation-name: nooki-splash-race-green;
+  animation-timing-function: cubic-bezier(0.46, 0.12, 0.2, 1);
+  /* The green dot starts a beat later, and keeps that beat after any head start. */
+  animation-delay: calc(var(--nooki-race-delay, 0ms) + 0.1s);
 }
 
 .nooki-splash-dot {
+  position: absolute;
   left: 0;
-  will-change: transform;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
 .nooki-splash-dot--pink {
-  animation: nooki-dot-race-pink 1.35s cubic-bezier(0.22, 0.82, 0.34, 1) both;
+  background-color: var(--primary-pink-deep);
+  box-shadow: 0 0 10px rgba(236, 72, 153, 0.45);
 }
 
 .nooki-splash-dot--green {
-  animation: nooki-dot-race-green 1.35s cubic-bezier(0.46, 0.12, 0.2, 1) 0.1s both;
+  background-color: var(--primary-green-deep);
+  box-shadow: 0 0 10px rgba(5, 150, 105, 0.4);
+}
+
+/* Only ever seen when the session load outlasts the race: a quiet line instead of a frozen
+   wordmark. It is timed off the same head start, so it appears 2.2s after the race began
+   whichever surface is on screen. A fade, not motion, so reduced motion is left alone. */
+.nooki-splash-waiting {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  opacity: 0;
+  animation: nooki-splash-waiting 0.4s ease calc(2.2s + var(--nooki-race-delay, 0ms)) both;
 }
 
 @keyframes nooki-wordmark-pop {
@@ -231,70 +294,36 @@ html, body {
   }
 }
 
-@keyframes nooki-dot-race-pink {
+@keyframes nooki-splash-race-pink {
   0% {
-    transform: translateX(-14px) scale(0.85);
+    transform: translateX(calc(0% - 14px)) scale(0.85);
   }
   55% {
-    transform: translateX(58cqw) scale(1.15);
+    transform: translateX(calc(58% + 0px)) scale(1.15);
   }
   100% {
-    transform: translateX(calc(100cqw + 14px)) scale(0.95);
+    transform: translateX(calc(100% + 14px)) scale(0.95);
   }
 }
 
-@keyframes nooki-dot-race-green {
+@keyframes nooki-splash-race-green {
   0% {
-    transform: translateX(-14px) scale(0.85);
+    transform: translateX(calc(0% - 14px)) scale(0.85);
   }
   50% {
-    transform: translateX(44cqw) scale(1.05);
+    transform: translateX(calc(44% + 0px)) scale(1.05);
   }
   100% {
-    transform: translateX(calc(100cqw + 14px)) scale(1.1);
+    transform: translateX(calc(100% + 14px)) scale(1.1);
   }
 }
 
-/* Browsers without container-query units (pre-2023 mobile browsers) cannot resolve the
-   cqw distances above and would sit the dots at the start line: fall back there to the
-   original percentage-of-track `left` race so the splash still plays, just less smoothly. */
-@supports not (width: 1cqw) {
-  .nooki-splash-dot--pink {
-    animation-name: nooki-dot-race-pink-left;
+@keyframes nooki-splash-waiting {
+  from {
+    opacity: 0;
   }
-
-  .nooki-splash-dot--green {
-    animation-name: nooki-dot-race-green-left;
-  }
-}
-
-@keyframes nooki-dot-race-pink-left {
-  0% {
-    left: -4%;
-    transform: scale(0.85);
-  }
-  55% {
-    left: 58%;
-    transform: scale(1.15);
-  }
-  100% {
-    left: 104%;
-    transform: scale(0.95);
-  }
-}
-
-@keyframes nooki-dot-race-green-left {
-  0% {
-    left: -4%;
-    transform: scale(0.85);
-  }
-  50% {
-    left: 44%;
-    transform: scale(1.05);
-  }
-  100% {
-    left: 104%;
-    transform: scale(1.1);
+  to {
+    opacity: 1;
   }
 }
 
@@ -302,23 +331,24 @@ html, body {
   [data-modal='calendar'],
   .nooki-modal-sheet,
   .nooki-splash-wordmark,
-  .nooki-splash-dot {
+  .nooki-splash-runner {
     animation: none !important;
   }
 
   /* No race for reduced-motion readers (a phone OS "reduce motion" / "remove
-     animations" setting is exactly where this used to make the splash look broken):
-     the splash still appears and holds for its full duration, with both dots parked
-     visibly side by side under the wordmark instead of stranded off the track's edge. */
-  .nooki-splash-dot {
+     animations" setting is exactly where this would otherwise make the splash look
+     broken): the splash still appears and holds for its full duration, with both dots
+     parked visibly side by side under the wordmark instead of stranded off the track's
+     edge. The runners are full-width, so parking one is what parks its dot. */
+  .nooki-splash-runner {
     transform: none !important;
   }
 
-  .nooki-splash-dot--pink {
+  .nooki-splash-runner--pink {
     left: calc(50% - 16px) !important;
   }
 
-  .nooki-splash-dot--green {
+  .nooki-splash-runner--green {
     left: calc(50% + 6px) !important;
   }
 }

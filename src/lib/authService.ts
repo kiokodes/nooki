@@ -152,19 +152,37 @@ export async function deleteCoupleEvent(eventId: string): Promise<void> {
   if (error) throw new Error(describeDatabaseError(error));
 }
 
-export async function fetchCouple(coupleId: string): Promise<{ couple: Couple; partner: Profile | null } | null> {
+/**
+ * The couple and the partner on the other side of it.
+ *
+ * This sits on the app's launch path — it is the last thing between the splash and the
+ * couple's own tab — so it is deliberately two round trips, asked for together, where it
+ * used to be three asked for one after another: the caller's own id is passed in whenever it
+ * is already known (`viewerId`), which removes an otherwise redundant session/auth check, and
+ * the two rows are independent, so they are fetched in parallel. A phone on a slow connection
+ * feels every one of those hops.
+ *
+ * The pairing poll calls this every couple of seconds while waiting for the partner to
+ * arrive, and it benefits for the same reason.
+ */
+export async function fetchCouple(
+  coupleId: string,
+  viewerId?: string,
+): Promise<{ couple: Couple; partner: Profile | null } | null> {
   const client = requireSupabase();
-  const { data: couple, error: coupleError } = await client
-    .from('couples').select('*').eq('id', coupleId).maybeSingle();
-  if (coupleError) throw new Error(coupleError.message);
-  if (!couple) return null;
+  // Only looked up when the caller could not say: a couple cannot be read from a session
+  // that has gone, and the message should say what to do about it.
+  const viewer = viewerId ?? (await getCurrentAuthUser())?.id;
+  if (!viewer) throw new Error('Please sign in again to load your shared nook.');
 
-  const user = await getCurrentAuthUser();
-  if (!user) throw new Error('Please sign in again to load your shared nook.');
-  const { data: partner, error: partnerError } = await client.from('profiles')
-    .select('*').eq('couple_id', coupleId).neq('id', user.id).maybeSingle();
-  if (partnerError) throw new Error(partnerError.message);
-  return { couple: couple as Couple, partner: partner as Profile | null };
+  const [coupleResult, partnerResult] = await Promise.all([
+    client.from('couples').select('*').eq('id', coupleId).maybeSingle(),
+    client.from('profiles').select('*').eq('couple_id', coupleId).neq('id', viewer).maybeSingle(),
+  ]);
+  if (coupleResult.error) throw new Error(coupleResult.error.message);
+  if (partnerResult.error) throw new Error(partnerResult.error.message);
+  if (!coupleResult.data) return null;
+  return { couple: coupleResult.data as Couple, partner: partnerResult.data as Profile | null };
 }
 
 function validateAnniversary(date: string): void {
