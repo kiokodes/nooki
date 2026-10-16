@@ -17,6 +17,8 @@ import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScr
 import { HomeView } from '../components/home/HomeView';
 import { ChatView } from '../components/chat/ChatView';
 import { CalendarModal } from '../components/calendar/CalendarModal';
+import { DangerSettingsModal } from '../components/common/DangerSettingsModal';
+import type { PushNotificationsState } from '../hooks/usePushNotifications';
 import type { ChatEntry, Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
 
 /**
@@ -235,6 +237,12 @@ export const AppPreview = () => {
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
   const [partnerTyping, setPartnerTyping] = useState(false);
+  // Couple Settings is the real sheet over sample state. It is the longest surface in the
+  // app — sign-out, the 18+ gate, the notification card and the danger zone — so being able
+  // to open it here is how the panel's scrolling gets looked at on a small screen.
+  const [showSettings, setShowSettings] = useState(false);
+  const [adultEnabled, setAdultEnabled] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
   const timersRef = useRef<number[]>([]);
 
   // Fallback dismissal only: the splash itself reports when its race has finished
@@ -360,6 +368,21 @@ export const AppPreview = () => {
     )));
   }, []);
 
+  // This page has no service worker, no permission prompt and no database, so the
+  // notification card is shown in the state a capable browser would report, with a switch
+  // that flips locally. The danger-zone buttons still call the real services, which say
+  // plainly that this page has no backend behind it.
+  const previewPush: PushNotificationsState = {
+    support: 'ready',
+    enabled: pushEnabled,
+    busy: false,
+    error: null,
+    configurationError: null,
+    enable: async () => { setPushEnabled(true); },
+    disable: async () => { setPushEnabled(false); },
+    clearError: () => {},
+  };
+
   const controlStyle = (active: boolean): CSSProperties => ({
     padding: '5px 12px',
     borderRadius: tokens.radii.pill,
@@ -437,6 +460,9 @@ export const AppPreview = () => {
         <button type="button" style={controlStyle(showSplash)} onClick={() => setShowSplash(true)}>
           Replay splash
         </button>
+        <button type="button" style={controlStyle(showSettings)} onClick={() => setShowSettings(true)}>
+          Couple Settings
+        </button>
       </div>
 
       <main
@@ -466,7 +492,7 @@ export const AppPreview = () => {
               partner={partner}
               couple={couple}
               partnerOnline={partnerOnline}
-              onOpenSettings={() => {}}
+              onOpenSettings={() => setShowSettings(true)}
             />
 
             {tab === 'games' ? (
@@ -555,6 +581,22 @@ export const AppPreview = () => {
                   setEvents((current) => current.filter((event) => event.id !== eventId));
                 }}
                 onClose={() => setShowCalendar(false)}
+              />
+            )}
+
+            {showSettings && (
+              <DangerSettingsModal
+                userId={profile.id}
+                couple={couple}
+                partner={partner}
+                adultQuestionsEnabled={adultEnabled}
+                partnerAdultQuestionsEnabled={false}
+                adultQuestionsSaving={false}
+                onToggleAdultQuestions={async (enabled) => { setAdultEnabled(enabled); }}
+                pushNotifications={previewPush}
+                onClose={() => setShowSettings(false)}
+                onCoupleEnded={() => setShowSettings(false)}
+                onSignOut={() => setShowSettings(false)}
               />
             )}
 

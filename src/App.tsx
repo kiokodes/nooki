@@ -13,6 +13,7 @@ import { OnboardingView } from './components/auth/OnboardingView';
 import { PairingView } from './components/auth/PairingView';
 import { CoupleHeader } from './components/common/CoupleHeader';
 import { SplashScreen, SPLASH_DURATION_MS } from './components/common/SplashScreen';
+import { bootRaceElapsedMs } from './lib/bootRace';
 import { GamesView } from './components/games/GamesView';
 import { DuelLeaveDialog } from './components/games/DuelLeaveDialog';
 import { useGames } from './hooks/useGames';
@@ -149,6 +150,12 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // Auth & Pairing State
   const [loading, setLoading] = useState(true);
   const [splashDone, setSplashDone] = useState(false);
+  // How much of the splash race the boot splash in index.html already showed before this
+  // bundle ran, read once at the first render (see lib/bootRace.ts). The splash carries that
+  // same run on instead of replaying it, and the fallback dismissal below only waits out the
+  // remainder — on a phone the boot splash covers the slow part of a launch, so replaying the
+  // race there used to add a whole extra run to every start.
+  const [bootRaceElapsed] = useState(bootRaceElapsedMs);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -350,7 +357,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
       setProfile(userProfile);
 
       if (userProfile?.couple_id) {
-        const coupleInfo = await fetchCouple(userProfile.couple_id);
+        // The user id is already in hand, so the fetch does not have to ask for it again.
+        const coupleInfo = await fetchCouple(userProfile.couple_id, user.id);
         if (coupleInfo) {
           setCouple(coupleInfo.couple);
           setPartner(coupleInfo.partner);
@@ -378,14 +386,17 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // be gone before it was ever seen. Waiting for two animation frames guarantees at
   // least one presented splash frame before the countdown begins — and a splash opened
   // in a background tab simply waits there until it is brought to the front and seen.
-  // The frame scheduling mirrors SnakeBoard: jsdom has no requestAnimationFrame.
+  // The countdown is what is left of the race after the boot splash's head start, so a
+  // launch is never two races long. The frame scheduling mirrors SnakeBoard: jsdom has
+  // no requestAnimationFrame.
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let firstFrame = 0;
     let secondFrame = 0;
+    const remaining = Math.max(0, SPLASH_DURATION_MS - bootRaceElapsed);
     const startCountdown = () => {
-      if (!cancelled) timer = setTimeout(() => setSplashDone(true), SPLASH_DURATION_MS);
+      if (!cancelled) timer = setTimeout(() => setSplashDone(true), remaining);
     };
     if (typeof requestAnimationFrame === 'function') {
       firstFrame = requestAnimationFrame(() => {
@@ -402,7 +413,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
         cancelAnimationFrame(secondFrame);
       }
     };
-  }, []);
+  }, [bootRaceElapsed]);
 
   useEffect(() => {
     const onVisibilityChange = () => setAppVisible(document.visibilityState !== 'hidden');
@@ -453,7 +464,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     let cancelled = false;
     const interval = setInterval(async () => {
       try {
-        const info = await fetchCouple(couple.id);
+        const info = await fetchCouple(couple.id, currentUser.id);
         if (!cancelled && info && info.partner) {
           setPartner(info.partner);
           setCouple(info.couple);
@@ -494,11 +505,12 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // 1. Splash screen (~1.5s: simple Nooki wordmark + racing green & pink dots).
   // It leaves when the race has actually finished on screen (or the painted-frame
   // fallback timer above fires), never merely because wall-clock time passed unseen.
+  // The run started in index.html's boot splash, so it is handed the head start.
   if (loading || !splashDone) {
     return (
       <div className="nooki-viewport" style={viewportStyle}>
         <main className="nooki-shell" style={shellStyle}>
-          <SplashScreen onAnimationComplete={() => setSplashDone(true)} />
+          <SplashScreen elapsedMs={bootRaceElapsed} onAnimationComplete={() => setSplashDone(true)} />
         </main>
       </div>
     );

@@ -151,6 +151,44 @@ The global header sits above every tab and carries the couple's live status:
 
 The header owns its own one-second tick, so only the header re-renders as time passes.
 
+## Launch, the splash and the first paint
+
+Opening the installed app is the one part of Nooki a couple does every session, so it is
+deliberately the cheapest:
+
+- **The boot splash paints before any JavaScript.** `index.html` carries a plain HTML/CSS
+  copy of the splash (wordmark + the pink and green race) inside `#root`, so a phone shows
+  Nooki from the first frame instead of a blank page while the bundle downloads and parses.
+  React replaces it on mount; a test keeps the two copies in step.
+- **The race is played once, not twice.** The boot splash starts the race — on a slow phone
+  it covers the whole download — and records when it began on `window.__nookiBootRace`
+  (`src/lib/bootRace.ts`). `App` reads that once before the first render, hands it to
+  `SplashScreen` as `elapsedMs`, and the splash continues the same run from that point (a
+  negative `animation-delay`) instead of restarting it; the fallback dismissal timer waits
+  out only what is left. Before this, every phone launch showed the race twice and the app
+  arrived up to a full race late.
+- **The race runs on the compositor.** Each dot rides a full-width runner moved with
+  *percentage transforms*: a percentage of the runner is a percentage of the track, so the
+  distance needs no container-query units and no measured pixels. `cqw` (and animating
+  `left` before it) is resolved on the main thread, which is parsing the bundle and mounting
+  the app while the race is on screen — the dots could sit through the whole run unmoved, and
+  a browser without container queries could not resolve the distance at all. A percentage
+  transform is resolved once, off the main thread, everywhere.
+- **The first paint waits on nothing third-party.** The Google Fonts stylesheet is loaded
+  off the critical path (`media="print"` + `onload`, with a `<noscript>` copy), so the gap
+  between the Home Screen icon and the splash is not a round trip to another host. Fonts
+  swap in when they arrive; every surface names system fallbacks.
+- **Restoring a session is two hops, not three.** `fetchCouple` takes the caller's own id
+  when it is already known and fetches the couple and the partner row together, in parallel,
+  instead of looking the id up again between them — the last thing between the splash and the
+  couple's tab, and the thing the pairing screen repeats every couple of seconds.
+- **A slow load says so.** If the session load outlasts the race, a quiet "Waking up your
+  nook…" fades in under the track rather than leaving a frozen wordmark on screen.
+
+Reduced motion (an OS "reduce motion" setting — common on phones, rare on a dev desktop) is
+honoured: the splash still appears, with both dots parked visibly under the wordmark and no
+race, and the fallback timer dismisses it as usual.
+
 ## Today card, daily game card and the full calendar
 
 The Home tab shows:
@@ -287,7 +325,9 @@ needs no Supabase project, and lets you flip the partner between online and away
 anniversary examples, and open the real calendar modal with sample events where
 add/edit/delete work in memory. The Chat tab is the real component over an in-memory
 transcript, so you can send a message, watch one check turn into two, make Ana type, make
-her reply, and see the unread badge. The Games tab is the real snake board over a
+her reply, and see the unread badge. Couple Settings opens here too — the real sheet,
+over sample state — which is where its scrolling gets looked at, since it is the longest
+surface in the app. The Games tab is the real snake board over a
 simulated duel: deal a run, steer it with the arrow keys, the WASD keys, a swipe or the
 D-pad, watch the leave-and-forfeit question, and see the reveal against a sample partner
 score; a toggle above the board switches to the Tetris Duel, where you can play five
@@ -656,7 +696,12 @@ re-migration, and `verify.sql` catching a half-applied one — plus the live tab
 browsing categories and depths, asking, answering privately, the reveal arriving over
 realtime, commenting, "Say more" into the chat and the quote linking back, the unanswered-question badge, ranking by button, the
 multi-choice, slider and text inputs, editing a sealed answer, the settings switch and an
-empty library, and push notifications: the platform matrix (an iOS tab told to install, a
+empty library, the settings sheet's own scaffolding (capped by the frame, one scrolling
+body under a pinned header, and the backdrop around it never scrolling instead), the
+launch path (the boot splash's race handed to the React splash as a head start rather
+than replayed, the fonts fetched without blocking the first paint, and the couple plus
+partner fetched as two trips in flight at once instead of three in a row), and
+push notifications: the platform matrix (an iOS tab told to install, a
 refused permission named as blocked, a browser without the Push API offered no switch at
 all), the public-key shape check that refuses half a keypair, the deep link a notification
 carries and its consumption, the service worker's push/tap/badge handlers (and the absence
@@ -671,14 +716,14 @@ migration, or two-device connectivity. Complete the acceptance test below as wel
 
 ## Push and deploy
 
-Work for this Arena session stays on `arena/6e2fb8a2-nooki`:
+Work for this Arena session stays on `arena/049bd1b6-nooki`:
 
 ```sh
 git status
 git diff --check
 git add .
 git commit -m "Add web push notifications: a per-device switch, the send-push Edge Function and a message webhook"
-git push origin arena/6e2fb8a2-nooki
+git push origin arena/049bd1b6-nooki
 ```
 
 Open a pull request from that branch to `main`. Test the Vercel preview with its environment
@@ -809,7 +854,10 @@ the side-by-side reveal, one comment each under the answers, the **Say more** br
 into the chat (`messages.session_id` quoting the question and linking back to the
 reveal), history and an
 unanswered-question badge, and a both-partners 18+ gate), couple details, sign-out and
-mutual-breakup settings are implemented. **Notifications** are standard Web Push sent by
+mutual-breakup settings are implemented. **Couple Settings** (the header's gear) is a
+sheet pinned inside the phone frame: the title and the X stay put and the sections scroll
+under them, so a new setting lengthens the list instead of pushing the danger zone off
+the bottom of the screen. **Notifications** are standard Web Push sent by
 this repository's own `send-push` Edge Function — no notification service, SDK or account
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat

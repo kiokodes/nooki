@@ -18,13 +18,29 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <!-- Friendly rounded typography: Nunito / Quicksand -->
+    <!--
+      Friendly rounded typography: Nunito / Quicksand, loaded *without* holding up the first
+      paint. A stylesheet in the head is render-blocking, so on a phone it sat between the
+      Home Screen icon and the splash: the OS launch screen, then a blank beat while Google
+      answered, and only then the Nooki wordmark. `media="print"` takes the request off the
+      critical path (the preconnects still warm the connection) and the fonts swap in when
+      they arrive — the splash and the app both name system fallbacks, and `display=swap`
+      keeps text visible throughout.
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&family=Quicksand:wght@500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&family=Quicksand:wght@500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
     <!--
       Boot splash: the animated splash must be on screen from the very first paint,
       but the real one lives inside the JavaScript bundle — and on a phone that bundle
@@ -83,48 +99,91 @@
         width: 100%;
         height: 24px;
         overflow: hidden;
-        container-type: inline-size;
+      }
+      /* The race is carried by two full-width "runner" boxes, one per dot, animated with
+         percentage transforms. A percentage in `translate` is a share of the runner's own
+         width — which is the track's width — so 100% is exactly one track, with no
+         container-query units and no measured pixels involved. That matters here: the phone
+         is parsing the bundle while this race runs, container units are resolved on the main
+         thread (the dots could sit through the whole race unmoved, and a browser without
+         container queries could not resolve the distance at all), whereas a percentage
+         transform is resolved once, off the main thread, on every browser that can animate a
+         transform. The `scale` in the keyframes grows the dot about its own centre
+         (`transform-origin`), exactly as before. Keep this in step with `.nooki-splash-*` in
+         src/index.css. */
+      .nooki-boot-runner {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 10px;
+        transform-origin: 5px 50%;
+        will-change: transform;
+        animation-duration: 1.35s;
+        animation-fill-mode: both;
+      }
+      .nooki-boot-runner--pink {
+        top: 2px;
+        animation-name: nooki-boot-race-pink;
+        animation-timing-function: cubic-bezier(0.22, 0.82, 0.34, 1);
+      }
+      .nooki-boot-runner--green {
+        top: 12px;
+        animation-name: nooki-boot-race-green;
+        animation-timing-function: cubic-bezier(0.46, 0.12, 0.2, 1);
+        animation-delay: 0.1s;
       }
       .nooki-boot-dot {
         position: absolute;
         left: 0;
+        top: 0;
         width: 10px;
         height: 10px;
         border-radius: 50%;
-        will-change: transform;
       }
       .nooki-boot-dot--pink {
-        top: 2px;
         background-color: #EC4899;
         box-shadow: 0 0 10px rgba(236, 72, 153, 0.45);
-        animation: nooki-boot-race-pink 1.35s cubic-bezier(0.22, 0.82, 0.34, 1) both;
       }
       .nooki-boot-dot--green {
-        top: 12px;
         background-color: #059669;
         box-shadow: 0 0 10px rgba(5, 150, 105, 0.4);
-        animation: nooki-boot-race-green 1.35s cubic-bezier(0.46, 0.12, 0.2, 1) 0.1s both;
+      }
+      /* Only ever seen if the bundle is still on its way once the race is over: a quiet line
+         instead of a frozen frame. */
+      .nooki-boot-waiting {
+        font-size: 0.78rem;
+        color: #A89E96;
+        opacity: 0;
+        animation: nooki-boot-waiting 0.4s ease 2.2s both;
       }
       @keyframes nooki-boot-pop {
         from { opacity: 0; transform: scale(0.95); }
         to { opacity: 1; transform: scale(1); }
       }
       @keyframes nooki-boot-race-pink {
-        0% { transform: translateX(-14px) scale(0.85); }
-        55% { transform: translateX(58cqw) scale(1.15); }
-        100% { transform: translateX(calc(100cqw + 14px)) scale(0.95); }
+        0% { transform: translateX(calc(0% - 14px)) scale(0.85); }
+        55% { transform: translateX(calc(58% + 0px)) scale(1.15); }
+        100% { transform: translateX(calc(100% + 14px)) scale(0.95); }
       }
       @keyframes nooki-boot-race-green {
-        0% { transform: translateX(-14px) scale(0.85); }
-        50% { transform: translateX(44cqw) scale(1.05); }
-        100% { transform: translateX(calc(100cqw + 14px)) scale(1.1); }
+        0% { transform: translateX(calc(0% - 14px)) scale(0.85); }
+        50% { transform: translateX(calc(44% + 0px)) scale(1.05); }
+        100% { transform: translateX(calc(100% + 14px)) scale(1.1); }
       }
+      @keyframes nooki-boot-waiting {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      /* No race for reduced-motion readers (a phone OS "reduce motion" / "remove animations"
+         setting is exactly where a race reads as broken): the splash still appears, with both
+         dots parked visibly under the wordmark. The waiting line is a fade, not motion, so it
+         is left alone. */
       @media (prefers-reduced-motion: reduce) {
         .nooki-boot-wordmark,
-        .nooki-boot-dot { animation: none !important; }
-        .nooki-boot-dot { transform: none !important; }
-        .nooki-boot-dot--pink { left: calc(50% - 16px) !important; }
-        .nooki-boot-dot--green { left: calc(50% + 6px) !important; }
+        .nooki-boot-runner { animation: none !important; }
+        .nooki-boot-runner { transform: none !important; }
+        .nooki-boot-runner--pink { left: calc(50% - 16px) !important; }
+        .nooki-boot-runner--green { left: calc(50% + 6px) !important; }
       }
     </style>
   </head>
@@ -134,12 +193,29 @@
         <div class="nooki-boot-card">
           <span class="nooki-boot-wordmark">Nooki</span>
           <div class="nooki-boot-track" aria-hidden="true">
-            <span class="nooki-boot-dot nooki-boot-dot--pink"></span>
-            <span class="nooki-boot-dot nooki-boot-dot--green"></span>
+            <span class="nooki-boot-runner nooki-boot-runner--pink">
+              <span class="nooki-boot-dot nooki-boot-dot--pink"></span>
+            </span>
+            <span class="nooki-boot-runner nooki-boot-runner--green">
+              <span class="nooki-boot-dot nooki-boot-dot--green"></span>
+            </span>
           </div>
+          <span class="nooki-boot-waiting">Waking up your nook…</span>
         </div>
       </div>
     </div>
+    <script>
+      // The race above started with this page, before the bundle arrived. Recording when it
+      // began lets the React splash carry the same run on instead of playing a second one;
+      // see src/lib/bootRace.ts (the marker name is repeated there and guarded by a test).
+      try {
+        window.__nookiBootRace = {
+          startedAt: typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now(),
+        };
+      } catch (error) {
+        // No marker: the React splash plays the whole race, exactly as it did before.
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
