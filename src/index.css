@@ -150,6 +150,23 @@ html, body {
 }
 
 /* Calendar modal: a soft backdrop fade and a gentle sheet rise from the bottom. */
+/* The place pickers' one-second "Loading places…" spinner (LocationFields). It is the only
+   spinner in the app: everything else waits behind a word rather than a moving part. */
+@keyframes nooki-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.nooki-spin {
+  animation: nooki-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-spin {
+    animation: none;
+  }
+}
+
 @keyframes nooki-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }

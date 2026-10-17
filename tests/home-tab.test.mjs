@@ -96,9 +96,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
 
     // Two accounts paired through the same RPCs the app uses.
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Pacific/Auckland');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Pacific/Auckland' });
     const { couple } = await auth.createCouple(bob.id, '2020-02-14');
     // Bob closed the app two hours ago; the Home tab must read that back from the database.
     const bobLastSeen = new Date(Date.now() - 2 * HOUR_MS).toISOString();

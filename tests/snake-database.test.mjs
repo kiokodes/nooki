@@ -29,10 +29,10 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
     const { createSnakeState, stepSnake, queueSnakeDirection, replaySnake, snakeFood, snakeDirectionDelta, isOppositeDirection, SNAKE_COLS, SNAKE_ROWS, SNAKE_FOOD_COUNT, SNAKE_RUN_TICKS } = snake;
 
     const a = (await auth.signUpWithEmail('a@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(a.id, 'A', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(a.id, { name: 'A', location: null, timezone: 'Africa/Lagos' });
     const { couple } = await auth.createCouple(a.id, '2020-01-01');
     const b = (await auth.signUpWithEmail('b@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(b.id, 'B', 'Pacific/Auckland');
+    await auth.saveOnboardingProfile(b.id, { name: 'B', location: null, timezone: 'Pacific/Auckland' });
     await auth.joinCoupleWithCode(b.id, couple.invite_code);
     const login = (who) => auth.signInWithEmail(`${who}@test.com`, 'password');
     const match = async (id) => (await games.fetchGames()).matches.find((m) => m.id === id);
@@ -213,7 +213,7 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
 
     // --- Other couples cannot touch it, and the table is never exposed -----------------
     const outsider = (await auth.signUpWithEmail('c@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(outsider.id, 'C', 'UTC');
+    await auth.saveOnboardingProfile(outsider.id, { name: 'C', location: null, timezone: 'UTC' });
     await assert.rejects(games.fetchGames(), /Pair/);
     await assert.rejects(games.startSnakeRun(fourth), /Pair/);
     await assert.rejects(games.beatSnakeRun(fourth, 1, []), /Pair/);

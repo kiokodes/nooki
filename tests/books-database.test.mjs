@@ -40,14 +40,14 @@ test('shared books: two-book shelf limit, one active book, progress, highlights,
 
     // --- Alice and Bob share a shelf; Carol is a third account ----------------------
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Pacific/Auckland');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Pacific/Auckland' });
     const { couple } = await auth.createCouple(bob.id, '2020-02-14');
     await auth.signInWithEmail('alice@example.com', 'password');
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);
     const carol = (await auth.signUpWithEmail('carol@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(carol.id, 'Carol', 'UTC');
+    await auth.saveOnboardingProfile(carol.id, { name: 'Carol', location: null, timezone: 'UTC' });
 
     // --- Upload: the row first, the file second --------------------------------------
     await auth.signInWithEmail('alice@example.com', 'password');

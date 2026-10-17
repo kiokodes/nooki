@@ -30,10 +30,10 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
     const { createTetrisState, stepTetris, queueTetrisAction, replayTetris, TETRIS_RUN_TICKS, TETRIS_PIECE_COUNT } = core;
 
     const a = (await auth.signUpWithEmail('a@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(a.id, 'A', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(a.id, { name: 'A', location: null, timezone: 'Africa/Lagos' });
     const { couple } = await auth.createCouple(a.id, '2020-01-01');
     const b = (await auth.signUpWithEmail('b@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(b.id, 'B', 'Pacific/Auckland');
+    await auth.saveOnboardingProfile(b.id, { name: 'B', location: null, timezone: 'Pacific/Auckland' });
     await auth.joinCoupleWithCode(b.id, couple.invite_code);
     const login = (who) => auth.signInWithEmail(`${who}@test.com`, 'password');
     const match = async (id) => (await games.fetchGames()).matches.find((m) => m.id === id);
@@ -261,7 +261,7 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
 
     // --- Other couples cannot touch it, and the table is never exposed -----------------
     const outsider = (await auth.signUpWithEmail('c@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(outsider.id, 'C', 'UTC');
+    await auth.saveOnboardingProfile(outsider.id, { name: 'C', location: null, timezone: 'UTC' });
     await assert.rejects(games.fetchGames(), /Pair/);
     await assert.rejects(games.startTetrisRun(fourth), /Pair/);
     await assert.rejects(games.beatTetrisRun(fourth, 1, []), /Pair/);

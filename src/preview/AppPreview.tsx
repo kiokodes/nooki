@@ -249,6 +249,9 @@ export const AppPreview = () => {
   const [missYouReveal, setMissYouReveal] = useState<MissYouBatch | null>(null);
   const [adultEnabled, setAdultEnabled] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
+  // "Update location" edits this phone's place, so the sheet can be looked at after a
+  // change: null means the preset's Lagos is still what is on screen.
+  const [savedProfile, setSavedProfile] = useState<Profile | null>(null);
   const timersRef = useRef<number[]>([]);
 
   // Fallback dismissal only: the splash itself reports when its race has finished
@@ -277,19 +280,36 @@ export const AppPreview = () => {
     breakup_requested_at: null,
   };
   // Partner 1 owns this phone; partner 2 is the person at the other end of the distance.
-  const profile: Profile = {
+  const presetProfile: Profile = {
     id: 'preview-sam',
     couple_id: couple.id,
     name: 'Sam',
     timezone: 'Africa/Lagos',
+    // The place each of them is: what settles the clock, and what the marketplace will
+    // open on (Ana's city, because the gift would be going to her).
+    country_code: 'NG',
+    country_name: 'Nigeria',
+    state_code: 'LA',
+    state_name: 'Lagos',
+    city_name: 'Lagos',
+    city_key: 'ng/la/lagos',
+    location_updated_at: NOW,
     last_seen_at: NOW,
     created_at: NOW,
   };
+  const profile = savedProfile ?? presetProfile;
   const partner: Profile = {
     id: 'preview-ana',
     couple_id: couple.id,
     name: 'Ana',
     timezone: 'America/Los_Angeles',
+    country_code: 'US',
+    country_name: 'United States',
+    state_code: 'CA',
+    state_name: 'California',
+    city_name: 'Los Angeles',
+    city_key: 'us/ca/los-angeles',
+    location_updated_at: NOW,
     last_seen_at: PARTNER_LAST_SEEN,
     created_at: NOW,
   };
@@ -625,7 +645,9 @@ export const AppPreview = () => {
               <DangerSettingsModal
                 userId={profile.id}
                 couple={couple}
+                profile={profile}
                 partner={partner}
+                onLocationSaved={setSavedProfile}
                 adultQuestionsEnabled={adultEnabled}
                 partnerAdultQuestionsEnabled={false}
                 adultQuestionsSaving={false}

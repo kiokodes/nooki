@@ -1,18 +1,39 @@
 import React, { useState } from 'react';
-import { Sparkles, Globe, User, ArrowRight } from 'lucide-react';
+import { Sparkles, User, ArrowRight } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { saveOnboardingProfile } from '../../lib/authService';
-import { getDetectedTimezone, getTimezones } from '../../lib/timezones';
+import { LocationFields } from '../common/LocationFields';
+import type { GeoSource } from '../../lib/geo/placeData';
+import { emptyLocationDraft, validateLocationInput } from '../../lib/geo/location';
+import type { LocationDraft } from '../../lib/geo/location';
+import { getDetectedTimezone } from '../../lib/timezones';
 
 interface OnboardingProps {
   userId: string;
   onComplete: () => void;
+  /** Where the place data comes from; tests hand in a small world instead of the network. */
+  geo?: GeoSource;
 }
 
-export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }) => {
+/**
+ * The first form: a name, and where this person is.
+ *
+ * It used to ask for a timezone, which is the same question with the wrong shape. A
+ * timezone is what Nooki actually needs — but nobody knows theirs, and a country is not
+ * enough to guess it (the United States spans 29 zones), so the old picker offered 400
+ * options and hoped. Asking for the place instead answers both things Nooki is for: the
+ * clock in the header, derived rather than guessed, and the city a gift would be sent to
+ * when the marketplace arrives.
+ *
+ * The place is required. The one exception is a browser that cannot fetch the place data at
+ * all, where `LocationFields` becomes the timezone picker it replaced and signup saves a
+ * zone and no location — a person is never stuck at the door because a JSON file did not
+ * arrive.
+ */
+export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete, geo }) => {
   const [name, setName] = useState('');
-  const [timezone, setTimezone] = useState(getDetectedTimezone);
-  const [timezones] = useState(() => getTimezones(timezone));
+  const [location, setLocation] = useState<LocationDraft>(() => emptyLocationDraft(getDetectedTimezone()));
+  const [placesAvailable, setPlacesAvailable] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +46,13 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
 
     setLoading(true);
     try {
-      await saveOnboardingProfile(userId, name.trim(), timezone || 'UTC');
+      await saveOnboardingProfile(userId, {
+        name: name.trim(),
+        // No country index means no country code, and a place without one cannot be keyed —
+        // so the zone alone is saved and the city can be added later in Couple Settings.
+        location: placesAvailable ? validateLocationInput(location) : null,
+        timezone: location.timezone,
+      });
       onComplete();
     } catch (err: any) {
       setError(err?.message || 'Failed to save profile.');
@@ -85,12 +112,13 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
             Tell us about you
           </h2>
           <p style={{ fontSize: '0.85rem', color: tokens.colors.textSecondary, margin: 0 }}>
-            Set up your identity before pairing with your partner
+            Your name, and the city you are in
           </p>
         </div>
 
         {error && (
           <div
+            role="alert"
             style={{
               width: '100%',
               backgroundColor: '#FEF2F2',
@@ -110,6 +138,7 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
         >
           <div>
             <label
+              htmlFor="first-name"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -124,6 +153,7 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
               <span>First Name</span>
             </label>
             <input
+              id="first-name"
               type="text"
               required
               value={name}
@@ -143,51 +173,15 @@ export const OnboardingView: React.FC<OnboardingProps> = ({ userId, onComplete }
             />
           </div>
 
-          <div>
-            <label
-              htmlFor="timezone"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                color: tokens.colors.textSecondary,
-                marginBottom: '6px',
-              }}
-            >
-              <Globe size={14} />
-              <span>Timezone</span>
-            </label>
-            <select
-              id="timezone"
-              name="timezone"
-              aria-describedby="timezone-help"
-              required
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: tokens.radii.pill,
-                border: `1.5px solid ${tokens.colors.borderSubtle}`,
-                backgroundColor: tokens.colors.bgSurfaceSubtle,
-                fontSize: '0.88rem',
-                fontFamily: tokens.typography.fontFamily,
-                color: tokens.colors.textPrimary,
-                outline: 'none',
-              }}
-            >
-              {timezones.map((zone) => (
-                <option key={zone} value={zone}>
-                  {zone.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-            <span id="timezone-help" style={{ fontSize: '0.72rem', color: tokens.colors.textMuted, marginTop: '4px', display: 'block' }}>
-              Auto-detected for you. Choose a different timezone if needed. Used to calculate hours apart with your partner.
-            </span>
-          </div>
+          {/* Country → state → city, and the timezone that place implies. */}
+          <LocationFields
+            value={location}
+            onChange={setLocation}
+            onUnavailable={() => setPlacesAvailable(false)}
+            geo={geo}
+            idPrefix="onboarding"
+            disabled={loading}
+          />
 
           <button
             type="submit"

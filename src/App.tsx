@@ -878,7 +878,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
           <DangerSettingsModal
             userId={currentUser.id}
             couple={couple}
+            profile={profile}
             partner={partner}
+            onLocationSaved={setProfile}
             adultQuestionsEnabled={discuss.myAdultEnabled}
             partnerAdultQuestionsEnabled={discuss.partnerAdultEnabled}
             adultQuestionsSaving={discuss.adultSaving}

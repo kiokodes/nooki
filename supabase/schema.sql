@@ -14,18 +14,81 @@ CREATE TABLE IF NOT EXISTS public.couples (
 );
 
 -- 2. Create profiles table
+-- 2a. The marketplace key rule first: a generated column can only call a function that
+-- already exists. Both are the same rule the migration adds to an existing project
+-- (202610170001_partner_locations.sql) and the same one src/lib/geo/location.ts keeps.
+CREATE OR REPLACE FUNCTION public.place_key_part(value TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT coalesce(
+    nullif(
+      regexp_replace(
+        regexp_replace(
+          regexp_replace(lower(btrim(coalesce(value, ''))), '[''’]', '', 'g'),
+          '[^a-z0-9]+', '-', 'g'),
+        '^-+|-+$', '', 'g'),
+      ''),
+    '-');
+$$;
+
+CREATE OR REPLACE FUNCTION public.profile_city_key(p_country_code TEXT, p_state_code TEXT, p_city_name TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT CASE
+    WHEN p_country_code IS NULL OR p_city_name IS NULL THEN NULL
+    ELSE public.place_key_part(p_country_code) || '/'
+         || public.place_key_part(p_state_code) || '/'
+         || public.place_key_part(p_city_name)
+  END;
+$$;
+
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   couple_id UUID REFERENCES public.couples(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   timezone TEXT NOT NULL DEFAULT 'UTC',
+  -- Where this person is. Optional and whole-or-nothing (see the check below): an account
+  -- made before the location pickers has none of it and keeps working on `timezone` alone.
+  -- The country and state are the codes the place dataset publishes ('NG', 'RI'), so the
+  -- marketplace can match on them; the names are kept for display and survive a dataset
+  -- that later re-spells a place.
+  country_code TEXT,
+  country_name TEXT,
+  state_code TEXT,
+  state_name TEXT,
+  city_name TEXT,
+  -- Generated: 'ng/ri/port-harcourt'. Never written by the app, so it cannot drift from
+  -- the place it came from — a partner who moves gets a new key in the same update.
+  city_key TEXT GENERATED ALWAYS AS (public.profile_city_key(country_code, state_code, city_name)) STORED,
+  location_updated_at TIMESTAMPTZ,
   last_seen_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  -- Half a place is worse than none: it cannot be matched to a city, and a NULL country
+  -- code would make every such key start '-' and collide with all the others.
+  CONSTRAINT profiles_location_complete CHECK (
+    (country_code IS NULL AND country_name IS NULL
+       AND state_code IS NULL AND state_name IS NULL
+       AND city_name IS NULL AND location_updated_at IS NULL)
+    OR (btrim(coalesce(country_code, '')) <> ''
+        AND btrim(coalesce(country_name, '')) <> ''
+        AND btrim(coalesce(city_name, '')) <> '')
+  )
 );
 
 -- Index for speedy queries
 CREATE INDEX IF NOT EXISTS idx_profiles_couple_id ON public.profiles(couple_id);
 CREATE INDEX IF NOT EXISTS idx_couples_invite_code ON public.couples(invite_code);
+-- The marketplace's first query is "who sells in my partner's city": a scan of keys
+-- against one key. Partial, because a profile with no place saved is not in it.
+CREATE INDEX IF NOT EXISTS idx_profiles_city_key
+  ON public.profiles(city_key)
+  WHERE city_key IS NOT NULL;
 
 -- 3. Enable RLS
 ALTER TABLE public.couples ENABLE ROW LEVEL SECURITY;

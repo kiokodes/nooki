@@ -3,13 +3,21 @@ import { AlertTriangle, LogOut, HeartCrack, Lock } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { requestOrConfirmBreakup, cancelBreakup } from '../../lib/authService';
 import { PushNotificationsCard } from './PushNotificationsCard';
+import { LocationSettingsCard } from './LocationSettingsCard';
 import type { PushNotificationsState } from '../../hooks/usePushNotifications';
+import type { GeoSource } from '../../lib/geo/placeData';
 import type { Couple, Profile } from '../../types/database';
 
 interface DangerSettingsModalProps {
   userId: string;
   couple: Couple;
+  /** This phone's person: the location card edits their place, and only theirs. */
+  profile: Profile;
   partner: Profile | null;
+  /** Called with the saved profile so the app can refresh the header's clock at once. */
+  onLocationSaved: (profile: Profile) => void;
+  /** Where the place pickers read from; tests inject a small world instead of the network. */
+  geo?: GeoSource;
   /** This partner's own 18+ consent. The category opens only when both are true. */
   adultQuestionsEnabled: boolean;
   partnerAdultQuestionsEnabled: boolean;
@@ -25,7 +33,10 @@ interface DangerSettingsModalProps {
 export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
   userId,
   couple,
+  profile,
   partner,
+  onLocationSaved,
+  geo,
   adultQuestionsEnabled,
   partnerAdultQuestionsEnabled,
   adultQuestionsSaving,
@@ -215,6 +226,15 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
               <span>Sign Out</span>
             </button>
           </div>
+
+          {/* Where the two of them are: each partner edits their own place, which moves
+              the clock in the other's header and the city the marketplace will open on. */}
+          <LocationSettingsCard
+            profile={profile}
+            partner={partner}
+            onSaved={onLocationSaved}
+            geo={geo}
+          />
 
           {/* 18+ questions: hidden from the library until both partners switch it on. */}
           <div

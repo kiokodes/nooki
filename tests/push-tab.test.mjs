@@ -232,7 +232,9 @@ test('push settings card: one screen per platform, and a switch only where it ca
       root.render(React.createElement(DangerSettingsModal, {
         userId: 'user-a',
         couple: { id: 'couple-1', invite_code: 'ABC123', anniversary_date: '2020-01-01', created_at: '2020-01-01T00:00:00Z', breakup_requested_by: null, breakup_requested_at: null },
-        partner: { id: 'user-b', couple_id: 'couple-1', name: 'Ben', timezone: 'Europe/London', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
+        profile: { id: 'user-a', couple_id: 'couple-1', name: 'Ana', timezone: 'Africa/Lagos', country_code: 'NG', country_name: 'Nigeria', state_code: 'RI', state_name: 'Rivers', city_name: 'Port Harcourt', city_key: 'ng/ri/port-harcourt', location_updated_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
+        onLocationSaved: () => {},
+        partner: { id: 'user-b', couple_id: 'couple-1', name: 'Ben', timezone: 'Europe/London', country_code: 'GB', country_name: 'United Kingdom', state_code: 'ENG', state_name: 'England', city_name: 'London', city_key: 'gb/eng/london', location_updated_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
         adultQuestionsEnabled: false,
         partnerAdultQuestionsEnabled: false,
         adultQuestionsSaving: false,

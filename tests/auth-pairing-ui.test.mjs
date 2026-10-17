@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 import { installTestBackend } from './helpers/testBackend.mjs';
+import { geoWorld } from './helpers/geoWorld.mjs';
 
 // DOM interaction checks without a browser download or a live backend.
-test('auth, timezone selection, and navigating pending pairing', async () => {
+test('auth, place selection, and navigating pending pairing', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'FormData', 'localStorage']) {
     globalThis[key] = dom.window[key];
@@ -62,7 +63,9 @@ test('auth, timezone selection, and navigating pending pairing', async () => {
     await click(document.querySelector('[aria-label="Show password"]'));
     assert.equal(password.type, 'text');
 
-    const { getDetectedTimezone, getTimezones } = await server.ssrLoadModule('/src/lib/timezones.ts');
+    // The full timezone list is still there for the case where no place can be keyed (and
+    // for the override picker), even though signup no longer opens with it.
+    const { getTimezones } = await server.ssrLoadModule('/src/lib/timezones.ts');
     const zones = getTimezones('US/Eastern');
     assert(zones.includes('UTC') && zones.includes('US/Eastern') && zones.includes('Africa/Lagos'));
     assert(zones.length > 400);
@@ -76,15 +79,29 @@ test('auth, timezone selection, and navigating pending pairing', async () => {
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
     const { OnboardingView } = await server.ssrLoadModule('/src/components/auth/OnboardingView.tsx');
     let completed = false;
-    await act(() => root.render(React.createElement(OnboardingView, { userId: alice.id, onComplete: () => { completed = true; } })));
-    const select = document.getElementById('timezone');
-    assert.equal(select.tagName, 'SELECT');
-    assert.equal(select.value, getDetectedTimezone());
-    await fill(document.querySelector('input'), 'Alice');
-    await act(() => { select.value = 'Africa/Lagos'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+    await act(async () => root.render(React.createElement(OnboardingView, {
+      userId: alice.id, onComplete: () => { completed = true; }, geo: geoWorld(),
+    })));
+    // Signup asks where she is, and the timezone follows from it (see location-picker.test.mjs).
+    const setSelectValue = Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set;
+    await fill(document.getElementById('first-name'), 'Alice');
+    await act(async () => {
+      const country = document.querySelector('[data-location-country]');
+      setSelectValue.call(country, 'NG');
+      country.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      const state = document.querySelector('[data-location-state]');
+      setSelectValue.call(state, 'RI');
+      state.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await fill(document.querySelector('[data-location-city]'), 'Port Harcourt');
+    assert.equal(document.querySelector('[data-location-timezone]').value, 'Africa/Lagos');
     await submit();
     assert.equal(completed, true);
-    assert.equal((await auth.fetchProfile(alice.id)).timezone, 'Africa/Lagos');
+    const aliceProfile = await auth.fetchProfile(alice.id);
+    assert.equal(aliceProfile.timezone, 'Africa/Lagos');
+    assert.equal(aliceProfile.city_key, 'ng/ri/port-harcourt');
 
     const { PairingView } = await server.ssrLoadModule('/src/components/auth/PairingView.tsx');
     let currentCouple = null;
@@ -120,7 +137,7 @@ test('auth, timezone selection, and navigating pending pairing', async () => {
     assert(button('Create') && button("Enter Partner's Code"));
 
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Europe/London');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Europe/London' });
     await assert.rejects(auth.joinCoupleWithCode(bob.id, cancelledCode), /Invalid or cancelled code/);
     const bobCouple = (await auth.createCouple(bob.id, '2022-04-01')).couple;
     await auth.signInWithEmail('alice@example.com', 'password');
@@ -132,7 +149,7 @@ test('auth, timezone selection, and navigating pending pairing', async () => {
     await assert.rejects(auth.updatePendingAnniversary('2023-01-01'), /anniversary is locked/);
     await assert.rejects(auth.leavePendingCouple(), /partner has already joined/);
     const createdAt = (await auth.fetchProfile(alice.id)).created_at;
-    await auth.saveOnboardingProfile(alice.id, 'Alice Updated', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice Updated', location: null, timezone: 'Africa/Lagos' });
     const updated = await auth.fetchProfile(alice.id);
     assert.equal(updated.couple_id, bobCouple.id);
     assert.equal(updated.created_at, createdAt);
@@ -141,7 +158,7 @@ test('auth, timezone selection, and navigating pending pairing', async () => {
     await assert.rejects(auth.fetchProfile(alice.id), /Database unavailable/);
     supabase.from = originalFrom;
     const third = (await auth.signUpWithEmail('third@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(third.id, 'Third', 'UTC');
+    await auth.saveOnboardingProfile(third.id, { name: 'Third', location: null, timezone: 'UTC' });
     await assert.rejects(auth.joinCoupleWithCode(third.id, bobCouple.invite_code), /2 partners/);
 
     // Simulate Supabase's confirmation-required signup without a network request.

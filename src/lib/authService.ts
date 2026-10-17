@@ -1,5 +1,8 @@
 import { requireSupabase } from './supabaseClient';
 import { parseIsoDate } from './coupleTime';
+import { locationColumns } from './geo/location';
+import type { LocationInput } from './geo/location';
+import { isKnownTimezone } from './timezones';
 import { REPEAT_FREQUENCIES } from '../types/database';
 import type { Profile, Couple, CoupleEvent, RepeatFrequency } from '../types/database';
 
@@ -54,13 +57,66 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
   return data as Profile | null;
 }
 
-export async function saveOnboardingProfile(userId: string, name: string, timezone: string): Promise<Profile> {
+/** What onboarding collects: a name, and where this person is. */
+export interface OnboardingProfileInput {
+  name: string;
+  /**
+   * The place they chose, which carries the timezone with it. Null only when the place
+   * dataset could not be fetched at all — signup then falls back to the browser's own
+   * timezone and no half a location is saved (see `timezone`).
+   */
+  location: LocationInput | null;
+  /** The zone to store when `location` is null; ignored otherwise. */
+  timezone?: string;
+}
+
+function timezoneColumns(input: OnboardingProfileInput): Record<string, string | null> {
+  if (input.location) return locationColumns(input.location);
+  const timezone = (input.timezone || 'UTC').trim();
+  if (!isKnownTimezone(timezone)) throw new Error('Please choose a timezone your browser recognises.');
+  return { timezone };
+}
+
+export async function saveOnboardingProfile(userId: string, input: OnboardingProfileInput): Promise<Profile> {
   // Never overwrite existing membership or creation timestamps on a profile retry.
   const { data, error } = await requireSupabase().from('profiles')
-    .upsert({ id: userId, name: name.trim(), timezone, last_seen_at: new Date().toISOString() })
+    .upsert({
+      id: userId,
+      name: input.name.trim(),
+      ...timezoneColumns(input),
+      last_seen_at: new Date().toISOString(),
+    })
     .select('*').single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(describeDatabaseError(error));
   if (!data) throw new Error('Your profile could not be saved. Please try again.');
+  return data as Profile;
+}
+
+/**
+ * "Update location" in Couple Settings: this person moved, or is somewhere else for a
+ * while, and both the clock in their partner's header and the city the marketplace opens
+ * on follow from it.
+ *
+ * It is one update to their own profile — allowed by the existing "Users can update own
+ * profile" policy, so no new grant and no RPC. The place is validated first
+ * (`validateLocationInput`, inside `locationColumns`) because the database would reject a
+ * half a location with a constraint name rather than a sentence. `city_key` is not sent:
+ * the database generates it from these same columns.
+ */
+export async function updateMyLocation(userId: string, location: LocationInput): Promise<Profile> {
+  const { data, error } = await requireSupabase().from('profiles')
+    .update(locationColumns(location))
+    .eq('id', userId)
+    .select('*').single();
+  if (error) {
+    // No row came back: either the profile is gone or RLS hid it, which is a session
+    // problem, and worth saying in words rather than in PostgREST's.
+    if (error.code === 'PGRST116') {
+      throw new Error('Your location could not be saved. Please sign in again and try once more.');
+    }
+    throw new Error(describeDatabaseError(error));
+  }
+  if (!data) throw new Error('Your location could not be saved. Please try again.');
   return data as Profile;
 }
 
@@ -75,16 +131,20 @@ export async function touchLastSeen(userId: string): Promise<void> {
 }
 
 /**
- * A missing table or function means a migration has not been applied yet; that is an owner
- * problem, not something the person using the app can fix. PostgREST reports an absent RPC
- * as 42883 ("could not find the function"), which is how a project without the Discuss
- * migration answers `question_categories`, `pick_question` and `ask_question`.
+ * A missing table, column or function means a migration has not been applied yet; that is
+ * an owner problem, not something the person using the app can fix. PostgREST reports an
+ * absent RPC as 42883 ("could not find the function"), which is how a project without the
+ * Discuss migration answers `question_categories`, `pick_question` and `ask_question`, and
+ * an absent column as 42703 — which is how a project without the location migration
+ * answers a save that writes `country_code`.
  */
 export function describeDatabaseError(error: { message: string; code?: string }): string {
   const missingTable = error.code === '42P01'
     || /relation .*(couple_events|messages|questions|question_sessions|answers|answer_comments|couple_settings|push_subscriptions|miss_you_taps).* does not exist/i.test(error.message);
   const missingFunction = error.code === '42883' || /could not find the function/i.test(error.message);
-  if (missingTable || missingFunction) {
+  const missingColumn = error.code === '42703'
+    || /column .*(country_code|country_name|state_code|state_name|city_name|city_key|location_updated_at).* does not exist/i.test(error.message);
+  if (missingTable || missingFunction || missingColumn) {
     return 'The database needs an update. Please ask the app owner to apply the Supabase migrations.';
   }
   return error.message;

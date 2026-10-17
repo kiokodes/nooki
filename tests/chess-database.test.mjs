@@ -22,10 +22,10 @@ test('chess database: authoritative moves, turns, checkmate and situational wins
     const auth = await server.ssrLoadModule('/src/lib/authService.ts');
     const games = await server.ssrLoadModule('/src/lib/gamesService.ts');
     const a = (await auth.signUpWithEmail('a@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(a.id, 'A', 'UTC');
+    await auth.saveOnboardingProfile(a.id, { name: 'A', location: null, timezone: 'UTC' });
     const { couple } = await auth.createCouple(a.id, '2020-01-01');
     const b = (await auth.signUpWithEmail('b@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(b.id, 'B', 'UTC');
+    await auth.saveOnboardingProfile(b.id, { name: 'B', location: null, timezone: 'UTC' });
     await auth.joinCoupleWithCode(b.id, couple.invite_code);
     const login = (who) => auth.signInWithEmail(`${who}@test.com`, 'password');
     const match = async (id) => (await games.fetchGames()).matches.find((m) => m.id === id);
@@ -104,7 +104,7 @@ test('chess database: authoritative moves, turns, checkmate and situational wins
 
     // Outsiders see nothing and can start nothing.
     const outsider = (await auth.signUpWithEmail('c@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(outsider.id, 'C', 'UTC');
+    await auth.saveOnboardingProfile(outsider.id, { name: 'C', location: null, timezone: 'UTC' });
     await assert.rejects(games.startChess('classic'), /Pair/);
     await assert.rejects(games.fetchGames(), /Pair/);
 
@@ -131,10 +131,10 @@ test('chess database: the SQL mirror castles, takes en passant and promotes like
     const auth = await server.ssrLoadModule('/src/lib/authService.ts');
     const games = await server.ssrLoadModule('/src/lib/gamesService.ts');
     const a = (await auth.signUpWithEmail('a@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(a.id, 'A', 'UTC');
+    await auth.saveOnboardingProfile(a.id, { name: 'A', location: null, timezone: 'UTC' });
     const { couple } = await auth.createCouple(a.id, '2020-01-01');
     const b = (await auth.signUpWithEmail('b@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(b.id, 'B', 'UTC');
+    await auth.saveOnboardingProfile(b.id, { name: 'B', location: null, timezone: 'UTC' });
     await auth.joinCoupleWithCode(b.id, couple.invite_code);
     const login = (who) => auth.signInWithEmail(`${who}@test.com`, 'password');
     const match = async (id) => (await games.fetchGames()).matches.find((m) => m.id === id);

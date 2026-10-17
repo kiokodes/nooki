@@ -99,11 +99,11 @@ test('miss you: taps are counted per sender and per day, and receiving is the re
     const migration = await readFile(new URL('../supabase/migrations/202610150016_miss_you.sql', import.meta.url), 'utf8');
 
     const ana = (await auth.signUpWithEmail('ana@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(ana.id, 'Ana', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(ana.id, { name: 'Ana', location: null, timezone: 'Africa/Lagos' });
     const ben = (await auth.signUpWithEmail('ben@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(ben.id, 'Ben', 'Europe/London');
+    await auth.saveOnboardingProfile(ben.id, { name: 'Ben', location: null, timezone: 'Europe/London' });
     const cara = (await auth.signUpWithEmail('cara@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(cara.id, 'Cara', 'UTC');
+    await auth.saveOnboardingProfile(cara.id, { name: 'Cara', location: null, timezone: 'UTC' });
     await auth.signInWithEmail('ana@test.com', 'password');
     const { couple } = await auth.createCouple(ana.id, '2020-02-14');
     await auth.signInWithEmail('ben@test.com', 'password');
@@ -259,9 +259,9 @@ test('miss you: the button in the nook, and the heart it becomes on the other ph
 
     // Alice and Bob, paired through the same RPCs the app uses; Bob closed his app.
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Pacific/Auckland');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Pacific/Auckland' });
     await auth.signInWithEmail('bob@example.com', 'password');
     const { couple } = await auth.createCouple(bob.id, '2020-02-14');
     await auth.signInWithEmail('alice@example.com', 'password');

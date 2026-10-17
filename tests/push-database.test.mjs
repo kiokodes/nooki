@@ -31,11 +31,11 @@ test('push subscriptions: devices belong to one account, move with the profile, 
     const deviceAnon = 'https://web.push.apple.com/QG9vay1kZXZpY2UtdW5wYWlyZWQ';
 
     const a = (await auth.signUpWithEmail('ana@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(a.id, 'Ana', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(a.id, { name: 'Ana', location: null, timezone: 'Africa/Lagos' });
     const b = (await auth.signUpWithEmail('ben@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(b.id, 'Ben', 'Europe/London');
+    await auth.saveOnboardingProfile(b.id, { name: 'Ben', location: null, timezone: 'Europe/London' });
     const c = (await auth.signUpWithEmail('cara@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(c.id, 'Cara', 'UTC');
+    await auth.saveOnboardingProfile(c.id, { name: 'Cara', location: null, timezone: 'UTC' });
     const login = (who, password = 'password') => auth.signInWithEmail(who, password);
     const register = (endpoint, p256dh = 'BPKEY-p256dh-aaaa', authKey = 'authkey-bbbb') => supabase.rpc('register_push_subscription', {
       p_endpoint: endpoint, p_p256dh: p256dh, p_auth: authKey,

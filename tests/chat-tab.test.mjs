@@ -76,9 +76,9 @@ test('messages: couple-scoped RLS, read receipts, immutability and safe re-migra
 
     // Alice and Bob share a couple. Alice writes first.
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Pacific/Auckland');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Pacific/Auckland' });
     const { couple } = await auth.createCouple(bob.id, '2020-02-14');
     await auth.signInWithEmail('alice@example.com', 'password');
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);
@@ -154,14 +154,14 @@ test('messages: couple-scoped RLS, read receipts, immutability and safe re-migra
 
     // Unpaired accounts and other couples see nothing, and cannot write into this chat.
     const stranger = (await auth.signUpWithEmail('third@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(stranger.id, 'Third', 'UTC');
+    await auth.saveOnboardingProfile(stranger.id, { name: 'Third', location: null, timezone: 'UTC' });
     assert.deepEqual(await chat.fetchMessages(couple.id), [], 'an unpaired account reads nothing');
     await assert.rejects(chat.sendMessage(couple.id, stranger.id, 'Sneaky'), /row-level security|violates/i);
 
     const carol = (await auth.signUpWithEmail('carol@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(carol.id, 'Carol', 'UTC');
+    await auth.saveOnboardingProfile(carol.id, { name: 'Carol', location: null, timezone: 'UTC' });
     const dave = (await auth.signUpWithEmail('dave@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(dave.id, 'Dave', 'UTC');
+    await auth.saveOnboardingProfile(dave.id, { name: 'Dave', location: null, timezone: 'UTC' });
     const otherCouple = (await auth.createCouple(dave.id, '2021-01-01')).couple;
     await auth.signInWithEmail('carol@example.com', 'password');
     await auth.joinCoupleWithCode(carol.id, otherCouple.invite_code);
@@ -314,9 +314,9 @@ test('chat tab: live bubbles, receipts, typing, unread badge and day grouping', 
     const chatTime = await server.ssrLoadModule('/src/lib/chatTime.ts');
 
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Pacific/Auckland');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Pacific/Auckland' });
     const { couple } = await auth.createCouple(bob.id, '2020-02-14');
     await auth.signInWithEmail('alice@example.com', 'password');
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);

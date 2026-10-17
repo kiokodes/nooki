@@ -37,7 +37,9 @@ test('couple settings: the sheet is capped by the frame and only its body scroll
       root.render(React.createElement(DangerSettingsModal, {
         userId: 'user-a',
         couple: { id: 'couple-1', invite_code: 'ABC123', anniversary_date: '2020-01-01', created_at: '2020-01-01T00:00:00Z', breakup_requested_by: null, breakup_requested_at: null },
-        partner: { id: 'user-b', couple_id: 'couple-1', name: 'Ben', timezone: 'Europe/London', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
+        profile: { id: 'user-a', couple_id: 'couple-1', name: 'Ana', timezone: 'Africa/Lagos', country_code: 'NG', country_name: 'Nigeria', state_code: 'RI', state_name: 'Rivers', city_name: 'Port Harcourt', city_key: 'ng/ri/port-harcourt', location_updated_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
+        partner: { id: 'user-b', couple_id: 'couple-1', name: 'Ben', timezone: 'Europe/London', country_code: 'GB', country_name: 'United Kingdom', state_code: 'ENG', state_name: 'England', city_name: 'London', city_key: 'gb/eng/london', location_updated_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
+        onLocationSaved: () => {},
         adultQuestionsEnabled: false,
         partnerAdultQuestionsEnabled: false,
         adultQuestionsSaving: false,
@@ -93,6 +95,7 @@ test('couple settings: the sheet is capped by the frame and only its body scroll
     assert.equal(scroll.style.gap, '16px', 'sections keep their spacing once stacked in here');
 
     const sectionSelectors = [
+      '[data-location-card]',
       '[data-adult-settings]',
       '[data-push-card]',
       '[data-adult-status]',
@@ -103,7 +106,11 @@ test('couple settings: the sheet is capped by the frame and only its body scroll
       assert(scroll.contains(section), `${selector} is inside the scrolling body, not beside it`);
     }
     const sections = [...scroll.children].filter((child) => child.tagName === 'DIV');
-    assert(sections.length >= 4, 'all four sections (sign out, 18+, notifications, danger zone) are in the one scrolling body');
+    assert(sections.length >= 5, 'all five sections (sign out, location, 18+, notifications, danger zone) are in the one scrolling body');
+    // The location card is the newest section and the reason this test exists: the panel
+    // only ever gets longer, so what keeps the breakup button reachable is the cap.
+    assert.match(scroll.textContent, /Where you both are/);
+    assert.match(scroll.textContent, /Port Harcourt, Rivers, Nigeria/);
     assert.match(scroll.textContent, /Danger Zone: End Couple/, 'including the section that used to fall off the bottom');
 
     // --- Closing still works from the pinned header --------------------------------------
