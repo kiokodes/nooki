@@ -6,8 +6,6 @@ import type { PushNotificationsState } from '../../hooks/usePushNotifications';
 interface PushNotificationsCardProps {
   /** This device's push state: what the browser can do, and whether it is on. */
   state: PushNotificationsState;
-  /** Used in the copy, so the switch says what it will actually announce. */
-  partnerName: string;
 }
 
 /**
@@ -26,7 +24,7 @@ interface PushNotificationsCardProps {
  * - `unsupported`    — no service worker (an old browser, or a private window). Nooki
  *                      still works; it just cannot reach a locked phone.
  */
-export const PushNotificationsCard: React.FC<PushNotificationsCardProps> = ({ state, partnerName }) => {
+export const PushNotificationsCard: React.FC<PushNotificationsCardProps> = ({ state }) => {
   const { support, enabled, busy, error, configurationError } = state;
   const on = enabled && support === 'ready';
 
@@ -96,21 +94,12 @@ export const PushNotificationsCard: React.FC<PushNotificationsCardProps> = ({ st
           deploy the <strong>send-push</strong> function — everything else in the app works without it.
         </p>
       ) : support === 'ready' ? (
-        <>
-          <p style={{ fontSize: '0.76rem', color: tokens.colors.textSecondary, margin: 0, lineHeight: 1.5 }}>
-            A quiet alert on this phone when <strong>{partnerName}</strong> messages you — even while Nooki
-            is closed. It shows the message, so keep that in mind if your lock screen is visible to others.
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: on ? tokens.colors.primaryGreenDeep : tokens.colors.textSecondary }}>
-              {busy ? 'Just a moment…' : on ? 'On this device' : 'Off on this device'}
-            </span>
-            {switchButton}
-          </div>
-          <span style={{ fontSize: '0.7rem', color: tokens.colors.textMuted }}>
-            Each device is separate: turning this off here leaves your partner's phone untouched.
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <span style={{ fontSize: '0.76rem', fontWeight: 700, color: on ? tokens.colors.primaryGreenDeep : tokens.colors.textSecondary }}>
+            {busy ? 'Just a moment…' : on ? 'On this device' : 'Off on this device'}
           </span>
-        </>
+          {switchButton}
+        </div>
       ) : support === 'needs-install' ? (
         <>
           <p style={{ fontSize: '0.76rem', color: tokens.colors.textSecondary, margin: 0, lineHeight: 1.5 }}>

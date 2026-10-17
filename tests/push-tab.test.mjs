@@ -167,7 +167,7 @@ test('push settings card: one screen per platform, and a switch only where it ca
     const { PushNotificationsCard } = await server.ssrLoadModule('/src/components/common/PushNotificationsCard.tsx');
     const render = async (overrides) => {
       await act(async () => {
-        root.render(React.createElement(PushNotificationsCard, { state: state(overrides), partnerName: 'Ben' }));
+        root.render(React.createElement(PushNotificationsCard, { state: state(overrides) }));
       });
       const card = document.querySelector('[data-push-card]');
       assert(card, 'the card renders');
@@ -178,8 +178,7 @@ test('push settings card: one screen per platform, and a switch only where it ca
     let card = await render();
     assert.equal(card.getAttribute('data-push-support'), 'ready');
     assert.equal(card.getAttribute('data-push-enabled'), 'false');
-    assert.match(card.textContent, /Ben/, 'the copy says who the alerts are from');
-    assert.match(card.textContent, /even while Nooki\s+is closed/i, 'and that they arrive with the app closed');
+    assert.match(card.textContent, /Off on this device/, 'the card says where the switch stands');
     const toggle = card.querySelector('[role="switch"]');
     assert(toggle, 'there is a switch');
     assert.equal(toggle.getAttribute('aria-checked'), 'false');
@@ -190,7 +189,7 @@ test('push settings card: one screen per platform, and a switch only where it ca
     card = await render({ enabled: true });
     assert.equal(card.getAttribute('data-push-enabled'), 'true');
     assert.equal(card.querySelector('[role="switch"]').getAttribute('aria-checked'), 'true');
-    assert.match(card.textContent, /Each device is separate/, 'turning it off does not touch the partner');
+    assert.match(card.textContent, /On this device/, 'and the card says so');
     await act(async () => {
       card.querySelector('[role="switch"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });

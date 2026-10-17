@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { MapPin, PencilLine, Store, X } from 'lucide-react';
+import { MapPin, PencilLine, X } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { updateMyLocation } from '../../lib/authService';
 import { LocationFields } from './LocationFields';
 import type { GeoSource } from '../../lib/geo/placeData';
 import { describePlace, draftFromProfile, validateLocationInput } from '../../lib/geo/location';
 import type { LocationDraft } from '../../lib/geo/location';
-import { resolveMarketCities } from '../../lib/geo/marketplace';
 import type { Profile } from '../../types/database';
 
 interface LocationSettingsCardProps {
@@ -29,10 +28,9 @@ interface LocationSettingsCardProps {
  * sending each other things. So the place is a setting and not a signup detail — each
  * partner edits their own, and the other's clock and marketplace city follow at once.
  *
- * It is also where the marketplace scaffolding becomes visible: the line under the two
- * places says which city a gift would open on (`resolveMarketCities`), which is the
- * partner's, and what is missing when they have not added theirs yet. Nothing is for sale
- * here yet; this is the seam it will plug into.
+ * The card is two lines and a button: where you are, where they are, and the way to
+ * change yours. Nothing is for sale here yet, and the marketplace seam
+ * (`resolveMarketCities`) plugs in later.
  */
 export const LocationSettingsCard: React.FC<LocationSettingsCardProps> = ({
   profile,
@@ -46,7 +44,6 @@ export const LocationSettingsCard: React.FC<LocationSettingsCardProps> = ({
   const [saved, setSaved] = useState(false);
 
   const partnerName = partner?.name?.trim() || 'Your partner';
-  const market = resolveMarketCities(profile, partner);
   const yours = describePlace({
     cityName: profile.city_name,
     stateName: profile.state_name,
@@ -101,12 +98,6 @@ export const LocationSettingsCard: React.FC<LocationSettingsCardProps> = ({
         </span>
       </div>
 
-      <p style={{ fontSize: '0.76rem', color: tokens.colors.textSecondary, margin: 0, lineHeight: 1.5 }}>
-        Your city keeps {partnerName}’s clock right — a country the size of the United States
-        spans 29 timezones, so the place settles it rather than a guess. Moved, or away for a
-        while? Update it and their header changes with you.
-      </p>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <span
           data-location-yours
@@ -143,26 +134,6 @@ export const LocationSettingsCard: React.FC<LocationSettingsCardProps> = ({
           <span style={{ minWidth: 0 }}>{partnerName}: {theirs || 'not added yet'}</span>
         </span>
       </div>
-
-      {/* The marketplace scaffolding, in one line: which city a gift would open on. */}
-      <span
-        data-location-market
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '6px',
-          fontSize: '0.72rem',
-          lineHeight: 1.45,
-          color: market.ready ? tokens.colors.textSecondary : tokens.colors.textMuted,
-        }}
-      >
-        <Store size={13} style={{ flexShrink: 0, marginTop: '1px' }} aria-hidden="true" />
-        <span>
-          {market.ready
-            ? `The marketplace, when it arrives, opens on ${market.defaultCity?.name} — ${partnerName}’s city — and you can switch to ${market.cities.length > 1 ? 'the others you have saved' : 'another city'} for the weeks they are away.`
-            : market.notice}
-        </span>
-      </span>
 
       {draft ? (
         <div data-location-form style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '2px' }}>

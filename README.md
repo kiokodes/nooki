@@ -256,8 +256,8 @@ message every other unmigrated surface uses.
 `resolveMarketCities(profile, partner)` in `src/lib/geo/marketplace.ts`. It returns the
 city the marketplace opens on (the partner's, because the gift is going to them), the
 other cities on offer (yours, when it is somewhere else), and the sentence to show when
-the partner has not added theirs yet. It is tested on its own, and it is visible in
-Couple Settings, where the card says which city a gift would open on.
+the partner has not added theirs yet. It is tested on its own. Couple Settings keeps
+quiet about it: the card says where each of you is, and nothing more.
 
 **Is not:** there are no vendor tables, no listings, no Market tab, nothing for sale and
 nothing to query. When that work starts it takes `defaultCity.key` as the scope of its
@@ -929,8 +929,8 @@ place refused, a partner reading but never rewriting, a stranger seeing nothing,
 signup deriving `Africa/Lagos` from Nigeria and `America/Chicago` from Gary, Indiana,
 keeping a zone picked by hand, typing a state where the data has none, degrading to typed
 fields when one country's file is missing and to the old timezone picker when the index is
-— and Couple Settings showing both places, saying which city a gift would open on, and
-saving one partner's move without touching the rest of their profile.
+— and Couple Settings showing both places, and saving one partner's move without touching
+the rest of their profile.
 
 A successful build does **not** verify a deployed key, email delivery, an applied live
 migration, or two-device connectivity. Complete the acceptance test below as well.
