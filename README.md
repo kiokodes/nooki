@@ -442,9 +442,10 @@ left, live, with no refresh anywhere. It is built from:
   left in white, each with its timestamp inside the bubble. The transcript is split into
   days: `Today`, `Yesterday`, then `Mon 12 October` (with the year once it is a different
   one). Paragraph breaks are preserved exactly as typed.
-- **Sending** — the composer is a growing multi-line box. **Enter starts a new
-  paragraph**; only the send button sends, so a long message can be written properly on a
-  phone. A sent message appears instantly, then its real row replaces it.
+- **Sending** — the composer is a growing multi-line box. **Enter sends the message**
+  the way it does in every messenger on a laptop; **Shift+Enter starts a new paragraph**,
+  and the send button sends too. A sent message appears instantly, then its real row
+  replaces it.
 - **Replies** — swipe a message toward the centre of the chat (left on yours, right on
   theirs) or long-press (right-click) it and tap **Reply**: the composer shows
   *"Replying to Bob"* with their words until it is sent or dismissed. The bubble then
@@ -877,9 +878,10 @@ migration, and the full UI flow of browsing, adding, editing, deleting and closi
 leaving the Home tab), and the chat: day separators and bubble times, `messages` under RLS
 (reads and writes sealed per couple, the type check, read receipts, the immutability of a
 sent message, cascade on breakup and safe re-migration), and the live tab itself — send
-with the button, Enter only making paragraphs, an incoming message appearing without a
-reload, one check turning into two when the partner reads it, the typing indicator, the
-unread badge counting and clearing, day grouping, auto-scroll, retry after a failed send,
+with the button and with Enter (Shift+Enter making the paragraph), an incoming message
+appearing without a reload, one check turning into two when the partner reads it, the
+typing indicator, the unread badge counting and clearing, day grouping, auto-scroll,
+retry after a failed send,
 and the phone/video buttons saying "coming soon"), and discuss: the question vocabulary
 normalised identically in SQL and TypeScript for every accepted spelling, a CSV-shaped
 import repaired or refused row by row, one shared library with per-couple sessions,
@@ -985,7 +987,8 @@ Use your actual accounts; there is no automatic user creation.
       buttons show a "coming soon" toast.
 - [ ] A message typed on device A appears on device B without a reload, on the correct side
       (your own on the right in pink, the partner's on the left in white).
-- [ ] Enter starts a new paragraph instead of sending; the send button sends.
+- [ ] Enter sends the message; Shift+Enter starts a new paragraph, and the send button
+      sends too.
 - [ ] The "typing…" indicator and three-dot bubble appear on the other device while typing,
       and disappear shortly after it stops.
 - [ ] One check appears once the message is stored, and two checks once the other device has

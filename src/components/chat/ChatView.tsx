@@ -595,6 +595,9 @@ const Bubble: React.FC<{
  * editing your own words lives in the long-press menu. There is no delete and there
  * are no reactions: the log is permanent, in two voices.
  *
+ * The composer sends on Enter, the way a laptop keyboard does it, and breaks the
+ * line on Shift+Enter. The send button sends either way.
+ *
  * The partner's name, presence and the two call buttons live in the conversation bar at
  * the top of the tab. The call buttons are deliberately inert for now.
  */
@@ -717,10 +720,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     return entry.sender_id ? partnerName : '';
   }, [currentUserId, partnerName]);
 
-  const handleSubmit = useCallback(async (event: React.FormEvent) => {
-    event.preventDefault();
+  // Sending the draft, whatever asked for it: the send button, or Enter on a
+  // laptop keyboard. Shift+Enter stays a paragraph break.
+  const sendDraft = useCallback(async () => {
     const content = draft;
-    // Enter starts a new paragraph, so the send button is the only way to send.
     if (!content.trim()) return;
 
     if (editing) {
@@ -744,6 +747,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setReplyTarget(null);
     inputRef.current?.focus();
   }, [draft, editing, onSend, onEditMessage, onStopTyping, onClearQuestionContext, questionContext, replyTarget]);
+
+  const handleSubmit = useCallback((event: React.FormEvent) => {
+    event.preventDefault();
+    void sendDraft();
+  }, [sendDraft]);
 
   const groups = groupMessagesByDay(messages, now);
   const statusColor = partnerTyping
@@ -1217,7 +1225,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       )}
 
-      {/* Composer. Enter inserts a paragraph break; only the send button sends. */}
+      {/* Composer. Enter sends the message; Shift+Enter starts a new paragraph. */}
       <form
         data-chat-composer
         onSubmit={handleSubmit}
@@ -1233,6 +1241,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <textarea
           data-chat-input
           aria-label="Message"
+          title="Enter sends · Shift+Enter starts a new paragraph"
           placeholder={questionContext ? 'Say more…' : `Message ${partnerName}…`}
           rows={1}
           value={draft}
@@ -1244,6 +1253,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             else onStopTyping();
           }}
           onKeyDown={(event) => {
+            // Enter sends, the way every messenger on a laptop does it. Shift+Enter
+            // is the paragraph break. While an IME is composing (a Japanese or
+            // Chinese keyboard picking a character) Enter belongs to the IME.
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void sendDraft();
+              return;
+            }
             if (event.key === 'Escape' && (editing || replyTarget)) {
               event.preventDefault();
               if (editing) cancelEdit();
