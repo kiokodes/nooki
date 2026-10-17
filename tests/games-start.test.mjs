@@ -25,10 +25,10 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     const { useGames } = await server.ssrLoadModule('/src/hooks/useGames.ts');
     const { GamesView } = await server.ssrLoadModule('/src/components/games/GamesView.tsx');
     const alice = (await auth.signUpWithEmail('alice@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const { couple } = await auth.createCouple(alice.id, '2020-01-01');
     const bob = (await auth.signUpWithEmail('bob@test.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'UTC');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'UTC' });
     await auth.joinCoupleWithCode(bob.id, couple.invite_code);
 
     const original = await readFile(new URL('../supabase/migrations/202610150007_games.sql', import.meta.url), 'utf8');

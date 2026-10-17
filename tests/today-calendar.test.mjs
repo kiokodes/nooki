@@ -158,9 +158,9 @@ test('couple_events: CRUD, RLS isolation, cascade and safe re-migration', async 
 
     // Two couples, plus an unpaired account in between.
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Europe/London');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Europe/London' });
     const { couple } = await auth.createCouple(bob.id, '2020-02-14');
     await auth.signInWithEmail('alice@example.com', 'password');
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);
@@ -213,7 +213,7 @@ test('couple_events: CRUD, RLS isolation, cascade and safe re-migration', async 
     // A third account that is not in this couple can neither read nor change anything.
     await auth.signInWithEmail('alice@example.com', 'password');
     const intruder = (await auth.signUpWithEmail('third@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(intruder.id, 'Third', 'UTC');
+    await auth.saveOnboardingProfile(intruder.id, { name: 'Third', location: null, timezone: 'UTC' });
     assert.deepEqual(await auth.fetchCoupleEvents(couple.id), [], 'an unpaired account sees no events');
     await assert.rejects(auth.createCoupleEvent(couple.id, intruder.id, { title: 'Sneaky', date: '2026-01-01', repeatsYearly: false }),
       /row-level security|violates/i);
@@ -587,9 +587,9 @@ test('today card and calendar modal: browse, add, edit, delete without leaving H
     const cal = await server.ssrLoadModule('/src/lib/calendar.ts');
 
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(alice.id, 'Alice', 'Africa/Lagos');
+    await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
-    await auth.saveOnboardingProfile(bob.id, 'Bob', 'Europe/London');
+    await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'Europe/London' });
     const { couple } = await auth.createCouple(bob.id, '2020-02-14');
     await auth.signInWithEmail('alice@example.com', 'password');
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);

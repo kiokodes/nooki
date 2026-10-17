@@ -16,10 +16,10 @@ test('games: saved multiplayer, daily limit, sealed picks and authoritative scor
   const auth = await server.ssrLoadModule('/src/lib/authService.ts');
   const games = await server.ssrLoadModule('/src/lib/gamesService.ts');
   const a = (await auth.signUpWithEmail('a@test.com','password')).user;
-  await auth.saveOnboardingProfile(a.id,'A','UTC');
+  await auth.saveOnboardingProfile(a.id, { name: 'A', location: null, timezone: 'UTC' });
   const { couple } = await auth.createCouple(a.id,'2020-01-01');
   const b = (await auth.signUpWithEmail('b@test.com','password')).user;
-  await auth.saveOnboardingProfile(b.id,'B','UTC');
+  await auth.saveOnboardingProfile(b.id, { name: 'B', location: null, timezone: 'UTC' });
   await auth.joinCoupleWithCode(b.id,couple.invite_code);
   const login = who => auth.signInWithEmail(`${who}@test.com`,'password');
   const match = async id => (await games.fetchGames()).matches.find(m=>m.id===id);
@@ -74,7 +74,7 @@ test('games: saved multiplayer, daily limit, sealed picks and authoritative scor
   await login('b');
   assert.notEqual(await games.startGame('tic-tac-toe',true,3),daily,'new UTC day allows new match');
   const outsider = (await auth.signUpWithEmail('c@test.com','password')).user;
-  await auth.saveOnboardingProfile(outsider.id,'C','UTC');
+  await auth.saveOnboardingProfile(outsider.id, { name: 'C', location: null, timezone: 'UTC' });
   await assert.rejects(games.fetchGames(), /Pair/);
   await assert.rejects(games.playGame({id,round:1},'0'), /not found/);
   await assert.rejects(games.startGame('tic-tac-toe',false,3), /Pair/);

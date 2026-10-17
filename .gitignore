@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+
+# Generated place dataset for the location pickers (npm run build:geo). Rebuilt by
+# predev/prebuild from country-state-city + tz-lookup, so it is never committed.
+public/geo/
 playwright-report
 test-results
 *.local
