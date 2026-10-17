@@ -105,7 +105,7 @@ test('couple settings: the sheet is capped by the frame and only its body scroll
       assert(section, `${selector} is rendered`);
       assert(scroll.contains(section), `${selector} is inside the scrolling body, not beside it`);
     }
-    const sections = [...scroll.children].filter((child) => child.tagName === 'DIV');
+    const sections = [...scroll.children];
     assert(sections.length >= 5, 'all five sections (sign out, location, 18+, notifications, danger zone) are in the one scrolling body');
     // The location card is the newest section and the reason this test exists: the panel
     // only ever gets longer, so what keeps the breakup button reachable is the cap.
@@ -138,4 +138,79 @@ test('couple settings: the scrolling body keeps its drag inside the sheet', () =
   assert.match(rule[1], /scrollbar-width:\s*thin/, 'the bar is a hint, not a stripe down the panel');
   assert.match(css, /\.nooki-settings-scroll::-webkit-scrollbar\s*\{/, 'the WebKit scrollbar is styled too');
   assert.match(css, /\.nooki-settings-scroll::-webkit-scrollbar-thumb\s*\{[^}]*background-color:/, 'including its thumb');
+});
+
+test('couple settings: the sheet says what things are, not how they work', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://nooki.test/' });
+  for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'FormData', 'localStorage']) {
+    globalThis[key] = dom.window[key];
+  }
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const { default: React, act } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://test-project.supabase.co'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('sb_publishable_test_only'),
+  } });
+  const root = createRoot(document.getElementById('root'));
+  const { supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts');
+  try {
+    const { DangerSettingsModal } = await server.ssrLoadModule('/src/components/common/DangerSettingsModal.tsx');
+    await act(async () => {
+      root.render(React.createElement(DangerSettingsModal, {
+        userId: 'user-a',
+        couple: { id: 'couple-1', invite_code: 'ABC123', anniversary_date: '2020-01-01', created_at: '2020-01-01T00:00:00Z', breakup_requested_by: null, breakup_requested_at: null },
+        profile: { id: 'user-a', couple_id: 'couple-1', name: 'Ana', timezone: 'Africa/Lagos', country_code: 'NG', country_name: 'Nigeria', state_code: 'RI', state_name: 'Rivers', city_name: 'Port Harcourt', city_key: 'ng/ri/port-harcourt', location_updated_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
+        partner: { id: 'user-b', couple_id: 'couple-1', name: 'Ben', timezone: 'Europe/London', country_code: 'GB', country_name: 'United Kingdom', state_code: 'ENG', state_name: 'England', city_name: 'London', city_key: 'gb/eng/london', location_updated_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z', created_at: '2020-01-01T00:00:00Z' },
+        onLocationSaved: () => {},
+        adultQuestionsEnabled: false,
+        partnerAdultQuestionsEnabled: false,
+        adultQuestionsSaving: false,
+        onToggleAdultQuestions: async () => {},
+        pushNotifications: {
+          support: 'ready',
+          enabled: false,
+          busy: false,
+          error: null,
+          configurationError: null,
+          enable: async () => {},
+          disable: async () => {},
+          clearError: () => {},
+        },
+        onClose: () => {},
+        onCoupleEnded: () => {},
+        onSignOut: () => {},
+      }));
+    });
+
+    const sheet = document.querySelector('[data-settings-scroll]').textContent;
+
+    // Sign out: the arrow and the words, nothing more.
+    const signOut = [...document.querySelectorAll('button')].find((node) => node.textContent.includes('Sign Out'));
+    assert(signOut, 'the sign-out button is there');
+    assert.equal(signOut.querySelector('svg') !== null, true, 'with the arrow on it');
+    assert.equal(signOut.textContent.trim(), 'Sign Out', 'and the two words, and nothing else');
+    assert.doesNotMatch(sheet, /Stay logged in on return/, 'no explanation of what signing out does');
+
+    // The place card says where the two of them are, not why it matters.
+    assert.match(sheet, /Where you both are/);
+    assert.match(sheet, /You: Port Harcourt, Rivers, Nigeria/);
+    assert.doesNotMatch(sheet, /keeps .* clock right/, 'the timezone lesson is gone');
+    assert.doesNotMatch(sheet, /marketplace/i, 'and so is the marketplace commentary');
+
+    // The 18+ gate and the danger zone speak for themselves too.
+    assert.doesNotMatch(sheet, /stays out of your question library/, 'the 18+ card keeps its explanation out');
+    assert.doesNotMatch(sheet, /both partners must agree/, 'and so does the danger zone');
+    assert.match(sheet, /Request to End Couple/, 'the button still says what it does');
+
+    // Notifications: a switch and where it stands, with the platform guidance kept.
+    assert.match(sheet, /Notifications/);
+    assert.match(sheet, /Off on this device/);
+    assert.doesNotMatch(sheet, /A quiet alert on this phone/, 'the marketing paragraph is gone');
+  } finally {
+    await act(() => root.unmount());
+    await supabase.auth.dispose();
+    await server.close();
+    dom.window.close();
+  }
 });

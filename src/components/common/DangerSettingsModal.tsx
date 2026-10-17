@@ -185,47 +185,28 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
           }}
         >
 
-          {/* Regular Account Actions */}
-          <div
+          {/* Sign out: the arrow and the two words are enough. */}
+          <button
+            onClick={onSignOut}
             style={{
+              width: '100%',
               padding: '12px 14px',
               borderRadius: tokens.radii.md,
               backgroundColor: tokens.colors.bgSurfaceSubtle,
               border: `1px solid ${tokens.colors.borderSubtle}`,
+              color: tokens.colors.textSecondary,
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              fontFamily: tokens.typography.fontFamily,
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              gap: '6px',
             }}
           >
-            <div>
-              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: tokens.colors.textPrimary, display: 'block' }}>
-                Sign Out
-              </span>
-              <span style={{ fontSize: '0.72rem', color: tokens.colors.textMuted }}>
-                Stay logged in on return or switch accounts
-              </span>
-            </div>
-
-            <button
-              onClick={onSignOut}
-              style={{
-                padding: '6px 14px',
-                borderRadius: tokens.radii.pill,
-                backgroundColor: tokens.colors.bgSurface,
-                border: `1px solid ${tokens.colors.borderSubtle}`,
-                color: tokens.colors.textSecondary,
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <LogOut size={13} />
-              <span>Sign Out</span>
-            </button>
-          </div>
+            <LogOut size={13} />
+            <span>Sign Out</span>
+          </button>
 
           {/* Where the two of them are: each partner edits their own place, which moves
               the clock in the other's header and the city the marketplace will open on. */}
@@ -255,11 +236,6 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
                 Intimacy questions (18+)
               </span>
             </div>
-
-            <p style={{ fontSize: '0.76rem', color: tokens.colors.textSecondary, margin: 0, lineHeight: 1.5 }}>
-              The Intimacy category stays out of your question library until <strong>both of you</strong> turn
-              it on. Either of you turning it off hides those questions again, for both phones.
-            </p>
 
             <div
               data-adult-status
@@ -345,7 +321,7 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
           </div>
 
           {/* Notifications: this device only, and only where the browser can actually do it. */}
-          <PushNotificationsCard state={pushNotifications} partnerName={partnerName} />
+          <PushNotificationsCard state={pushNotifications} />
 
           {/* Danger Zone: End Couple (Mutual Agreement Required) */}
           <div
@@ -365,10 +341,6 @@ export const DangerSettingsModal: React.FC<DangerSettingsModalProps> = ({
                 Danger Zone: End Couple
               </span>
             </div>
-
-            <p style={{ fontSize: '0.76rem', color: '#7F1D1D', margin: 0, lineHeight: 1.5 }}>
-              To end this couple, <strong>both partners must agree</strong>. Once confirmed by both, both of you are unlinked and free to invite or join another couple.
-            </p>
 
             {partnerRequestedBreakup && (
               <div

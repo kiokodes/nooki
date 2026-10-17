@@ -243,10 +243,10 @@ test('locations: Couple Settings shows both places and updates only your own', a
     })));
     await render(mine);
 
-    // Both places are on the card, and so is what the marketplace will do with them.
+    // Both places are on the card, and nothing else: the card says where, not why.
     assert.equal(field('yours').textContent, 'You: Port Harcourt, Rivers, Nigeria');
     assert.equal(field('partner').textContent, 'Ben: London, England, United Kingdom');
-    assert.match(field('market').textContent, /opens on London, England, United Kingdom — Ben’s city/);
+    assert.equal(field('market'), null, 'the card carries no marketplace commentary');
     assert.equal(document.querySelector('[data-location-form]'), null, 'the form is closed until it is asked for');
 
     // Ada moves back home to Lagos: one tap, three fields, and her partner's clock follows.
@@ -270,7 +270,6 @@ test('locations: Couple Settings shows both places and updates only your own', a
     assert.equal(inDatabase.name, 'Ada', 'updating a place never rewrites the rest of the profile');
     assert.equal(field('yours').textContent, 'You: Lagos, Nigeria');
     assert.equal(document.querySelector('[role="status"]').textContent, 'Saved');
-    assert.match(field('market').textContent, /opens on London/, 'the marketplace city is the partner’s, not yours');
 
     // A partner who has not added theirs: the card says whose turn it is.
     await act(async () => root.render(React.createElement(LocationSettingsCard, {
@@ -280,7 +279,7 @@ test('locations: Couple Settings shows both places and updates only your own', a
       onSaved: () => {},
     })));
     assert.equal(field('partner').textContent, 'Ben: not added yet');
-    assert.match(field('market').textContent, /Ben has not added their city yet/);
+    assert.equal(field('market'), null, 'and no explanation of what is still missing');
 
     // Cancelling leaves what is saved alone.
     await act(async () => root.render(React.createElement(LocationSettingsCard, {

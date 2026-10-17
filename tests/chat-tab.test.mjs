@@ -412,7 +412,7 @@ test('chat tab: live bubbles, receipts, typing, unread badge and day grouping', 
     assert(body().includes('Say hi to Bob'), 'the empty state invites the first message');
     assert.equal(button('Send message').disabled, true, 'there is nothing to send yet');
 
-    // --- Typing says so, and Enter starts a new paragraph -------------------------------
+    // --- Typing says so, and Enter sends -------------------------------------------------
     const setTextareaValue = Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set;
     const fill = async (value) => act(() => {
       setTextareaValue.call(field('Message'), value);
@@ -424,29 +424,45 @@ test('chat tab: live bubbles, receipts, typing, unread badge and day grouping', 
     assert.equal(typingPings[0].payload.user_id, alice.id);
     assert.equal(typingPings[0].payload.typing, true);
 
-    // Enter is for paragraphs: it must never send.
+    // Shift+Enter is the paragraph break: it must never send.
+    await act(async () => {
+      field('Message').dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+        key: 'Enter',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    assert.equal(field('Message').value, 'Hi Bob', 'Shift+Enter left the draft alone');
+    assert.equal((await chat.fetchMessages(couple.id)).length, 0, 'Shift+Enter did not send anything');
+    assert.equal(document.querySelectorAll('[data-mine="true"]').length, 0, 'and no bubble appeared');
+
+    // Enter sends, the way it does on a laptop keyboard.
     await act(async () => {
       field('Message').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     });
-    assert.equal(field('Message').value, 'Hi Bob', 'Enter left the draft alone');
-    assert.equal((await chat.fetchMessages(couple.id)).length, 0, 'Enter did not send anything');
-    assert.equal(document.querySelectorAll('[data-mine="true"]').length, 0, 'and no bubble appeared');
-
-    // --- Sending with the send button ---------------------------------------------------
-    await fill('Hi Bob\nHow was your day?');
-    await act(async () => { button('Send message').click(); });
-    await waitFor(() => document.querySelectorAll('[data-mine="true"]').length === 1, 'the message should appear at once');
+    await waitFor(() => document.querySelectorAll('[data-mine="true"]').length === 1, 'Enter sent the message');
     const sentBubble = () => document.querySelector('[data-mine="true"]');
     assert.equal(sentBubble().dataset.messageType, 'text');
-    assert.equal(sentBubble().textContent.includes('How was your day?'), true, 'the bubble shows the message');
+    assert.equal(sentBubble().textContent.includes('Hi Bob'), true, 'the bubble shows the message');
     assert.match(sentBubble().style.backgroundColor, /249,\s*168,\s*212/, "your bubble is Nooki's pink");
     assert.equal(field('Message').value, '', 'the composer empties after sending');
     assert.equal(button('Send message').disabled, true, 'and the send button goes quiet again');
     await waitFor(() => sentBubble().querySelector('[data-receipt="sent"]'), 'a delivered message gets one check');
 
+    // --- Sending with the send button ---------------------------------------------------
+    await fill('Hi Bob\nHow was your day?');
+    await act(async () => { button('Send message').click(); });
+    await waitFor(() => document.querySelectorAll('[data-mine="true"]').length === 2, 'the message should appear at once');
+    assert.equal(document.querySelectorAll('[data-mine="true"]')[1].textContent.includes('How was your day?'), true,
+      'the bubble shows the message');
+    assert.equal(field('Message').value, '', 'the composer empties after sending');
+    assert.equal(button('Send message').disabled, true, 'and the send button goes quiet again');
+
     const stored = await chat.fetchMessages(couple.id);
-    assert.equal(stored.length, 1, 'the message reached the database');
-    assert.equal(stored[0].content, 'Hi Bob\nHow was your day?', 'paragraph breaks are kept');
+    assert.equal(stored.length, 2, 'both messages reached the database');
+    assert.equal(stored[0].content, 'Hi Bob', 'the one sent with Enter arrived as typed');
+    assert.equal(stored[1].content, 'Hi Bob\nHow was your day?', 'paragraph breaks are kept');
     assert.equal(stored[0].read_at, null, 'nobody has read it yet');
 
     // --- Bob replies: instant delivery, day separators and the unread badge -------------
@@ -590,7 +606,8 @@ test('chat tab: live bubbles, receipts, typing, unread badge and day grouping', 
     );
 
     // --- The action menu: long press (or right click), Reply for all, Edit for yours ------
-    const ownRow = () => document.querySelector(`[data-message-row="${stored[0].id}"]`);
+    // The second of your own messages — the one with the paragraph break in it.
+    const ownRow = () => document.querySelector(`[data-message-row="${stored[1].id}"]`);
     await act(() => {
       bobRow().dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
@@ -617,7 +634,7 @@ test('chat tab: live bubbles, receipts, typing, unread badge and day grouping', 
     await fill('Hi Bob\nHow was your day? ❤️');
     await act(async () => { button('Save edit').click(); });
     await waitFor(async () => {
-      const row = (await chat.fetchMessages(couple.id)).find((item) => item.id === stored[0].id);
+      const row = (await chat.fetchMessages(couple.id)).find((item) => item.id === stored[1].id);
       return row?.content === 'Hi Bob\nHow was your day? ❤️' && row.edited_at;
     }, 'the edit was stored with its stamp');
     assert.equal(document.querySelector('[data-edit-context]'), null, 'saving closes the edit bar');
