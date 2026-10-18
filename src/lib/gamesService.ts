@@ -31,6 +31,7 @@ export const GAMES = [
     icon: '🧱',
     description: 'Five minutes each, same pieces. Highest score, or last one stacking.',
   },
+  { id: 'connect-four', name: 'Connect Four', icon: '🔴', description: 'Take turns whenever you have a moment. First to connect four wins.' },
 ] as const;
 export type GameId = typeof GAMES[number]['id'];
 
@@ -125,6 +126,8 @@ export interface GameMatch {
   tetris?: TetrisDuel | null;
   /** Present on chess matches only: the position the database has validated. */
   chess?: ChessSnapshot | null;
+  /** Connect Four's server-validated 6×7 board, row-major from the top. */
+  board?: string[];
 }
 export interface GamesSnapshot { wins: Record<string, number>; matches: GameMatch[] }
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
@@ -179,6 +182,8 @@ export async function fetchGames(): Promise<GamesSnapshot> {
 /** Start or resume an open Rock Paper Scissors match or Snake Duel. */
 export const startGame = (game: GameId, bestOf = 3) => rpc<string>('start_game', { p_game: game, p_best_of: bestOf });
 export const playGame = (match: GameMatch, move: string) => rpc<void>('play_game', { p_id: match.id, p_round: match.round, p_move: move });
+export const startConnectFour = () => rpc<string>('start_connect_four');
+export const playConnectFour = (match: GameMatch, column: number) => rpc<void>('connect_four_move', { p_id: match.id, p_round: match.round, p_column: column });
 
 /* ---------------------------------------------------------------------------
    Snake duel. The run lives in the database, not in the phone: the food is

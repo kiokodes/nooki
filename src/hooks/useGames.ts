@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   beatSnakeRun, beatTetrisRun, fetchGames, finishSnakeRun, finishTetrisRun, forfeitSnakeRun,
-  forfeitTetrisRun, playChess, playGame, startChess, startGame, startSnakeRun, startTetris, startTetrisRun,
+  forfeitTetrisRun, playChess, playConnectFour, playGame, startChess, startConnectFour, startGame, startSnakeRun, startTetris, startTetrisRun,
   type GameId, type GameMatch, type GamesSnapshot, type SnakeRun, type TetrisRun,
 } from '../lib/gamesService';
 import type { ChessMode } from '../lib/chess';
@@ -21,6 +21,7 @@ export function needsMyMove(match: GameMatch, userId: string | null): boolean {
   if (match.game === 'chess') return match.turn_id === userId;
   if (match.game === 'snake') return !match.snake?.mine || match.snake.mine.status === 'running';
   if (match.game === 'tetris') return !match.tetris?.mine || match.tetris.mine.status === 'running';
+  if (match.game === 'connect-four') return match.turn_id === userId;
   return !match.my_pick;
 }
 
@@ -135,6 +136,8 @@ export function useGames(coupleId: string | null, userId: string | null) {
       if (current.current === scope) setSelected({ scope, id });
     }, game),
     play: (match: GameMatch, move: string) => run(async () => { await playGame(match, move); }, match.game),
+    startConnectFour: () => run(async () => { const id = await startConnectFour(); if (current.current === scope) setSelected({ scope, id }); }, 'connect-four'),
+    playConnectFour: (match: GameMatch, column: number) => run(async () => { await playConnectFour(match, column); }, 'connect-four'),
     /** Open (or resume) a Tetris duel in the chosen mode: sprint or survival. */
     startTetrisDuel: (mode: TetrisMode) => run(async () => {
       const id = await startTetris(mode);

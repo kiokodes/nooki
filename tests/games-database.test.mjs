@@ -55,7 +55,7 @@ test('games: only always-available multiplayer matches remain, with sealed RPS p
     WHERE table_schema = 'public' AND table_name = 'game_matches'`);
   const columnNames = gamesColumns.rows.map(row => row.column_name);
   assert.equal(columnNames.includes('daily_date'), false, 'the daily-game date is removed');
-  assert.equal(columnNames.includes('board'), false, 'the Tic Tac Toe board is removed');
+  assert.equal(columnNames.includes('board'), true, 'the consolidated schema includes Connect Four’s board');
   const oldStart = await db.query(`SELECT to_regprocedure('public.start_game(text,boolean,integer)') AS procedure`);
   assert.equal(oldStart.rows[0].procedure, null, 'the daily-flag RPC no longer exists');
   await assert.rejects(games.startGame('tic-tac-toe',3), /Invalid game settings/);
@@ -68,6 +68,7 @@ test('games: only always-available multiplayer matches remain, with sealed RPS p
 
   const retirement = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql',import.meta.url),'utf8');
   await db.exec(retirement);
+  await db.exec(await readFile(new URL('../supabase/migrations/202610180005_connect_four.sql',import.meta.url),'utf8'));
   const verify = await readFile(new URL('../supabase/verify-games.sql',import.meta.url),'utf8');
   await db.exec(verify);
   const perms = await db.query("SELECT has_table_privilege('authenticated','public.game_matches','SELECT') allowed");

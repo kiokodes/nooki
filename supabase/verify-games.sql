@@ -134,6 +134,21 @@ BEGIN
      RAISE EXCEPTION 'The Tetris internals must stay server-side: %',fn;
    END IF;
  END LOOP;
+ -- Connect Four: moves and winning lines are calculated under the match row lock.
+ IF NOT EXISTS (
+   SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='game_matches' AND column_name='board'
+ ) THEN RAISE EXCEPTION 'Apply supabase/migrations/202610180005_connect_four.sql before deploying Connect Four.'; END IF;
+ IF NOT EXISTS (
+   SELECT 1 FROM pg_constraint WHERE conrelid='public.game_matches'::regclass AND contype='c'
+     AND pg_get_constraintdef(oid) LIKE '%connect-four%'
+ ) THEN RAISE EXCEPTION 'The game_matches game check does not allow Connect Four: apply migration 202610180005_connect_four.sql.'; END IF;
+ FOREACH fn IN ARRAY ARRAY['public.start_connect_four()','public.connect_four_move(uuid,integer,integer)'] LOOP
+   IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Connect Four RPC: %',fn; END IF;
+   IF NOT has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
+     RAISE EXCEPTION 'Unsafe Connect Four RPC permissions: %',fn;
+   END IF;
+ END LOOP;
 END $$;
-SELECT 'PASS: always-available Games RPCs, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
+SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;

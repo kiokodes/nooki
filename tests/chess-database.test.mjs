@@ -111,6 +111,7 @@ test('chess database: authoritative moves, turns, checkmate and situational wins
     // The Games retirement migration is rerunnable and preserves supported finished matches.
     const migration = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql', import.meta.url), 'utf8');
     await db.exec(migration);
+    await db.exec(await readFile(new URL('../supabase/migrations/202610180005_connect_four.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8'));
     await login('a');
     assert.equal((await match(hunt)).winner_id, a.id, 'rerunning the retirement migration preserves supported matches');

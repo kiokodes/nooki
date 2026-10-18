@@ -9,6 +9,7 @@ import { TetrisBoard } from './TetrisBoard';
 import { TetrisDuel } from './TetrisDuel';
 import { Sudoku } from './Sudoku';
 import { ChessDuel } from './ChessDuel';
+import { ConnectFour } from './ConnectFour';
 import { LastDuelRow, OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import './games.css';
@@ -84,7 +85,9 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
     {!games.data && !games.error && <p role="status">Loading your games…</p>}
     {m ? <>
       <button className="game-back" onClick={() => openMatch(null)}>← All games</button>
-      {practice ?? (m.game === 'chess' ? (
+      {practice ?? (m.game === 'connect-four' ? (
+        <ConnectFour match={m} userId={userId} partnerName={partnerName} busy={games.busy} onMove={(column) => void games.playConnectFour(m, column)} onExit={() => openMatch(null)} />
+      ) : m.game === 'chess' ? (
         <ChessDuel
           partnerName={partnerName}
           onExit={() => openMatch(null)}
@@ -173,7 +176,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
               type="button"
               disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
               aria-busy={games.pendingGame === game.id}
-              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : void games.start(game.id, bestOf)}
+              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : game.id === 'connect-four' ? void games.startConnectFour() : void games.start(game.id, bestOf)}
             >
               {games.pendingGame === game.id
                 ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : 'Opening game…'
