@@ -22,7 +22,7 @@ export const DISCUSS_CATEGORIES = [
   { name: 'Deep', emoji: '🌙', blurb: 'The big feelings', accent: tokens.colors.accentLavenderDeep, accentSoft: tokens.colors.accentLavenderSoft },
   { name: 'Family', emoji: '🏡', blurb: 'Both sides of the tree', accent: tokens.colors.primaryGreenDeep, accentSoft: tokens.colors.primaryGreenSoft },
   { name: 'Future', emoji: '🧭', blurb: 'Where this is going', accent: tokens.colors.accentSageDeep, accentSoft: tokens.colors.accentSageSoft },
-  { name: 'Money', emoji: '🪙', blurb: 'Budgets and big buys', accent: tokens.colors.primaryPinkDeep, accentSoft: tokens.colors.primaryPinkSoft },
+  { name: 'Money', emoji: '✨', blurb: 'Budgets and big buys', accent: tokens.colors.primaryPinkDeep, accentSoft: tokens.colors.primaryPinkSoft },
   { name: 'Home Life', emoji: '🛋️', blurb: 'Chores, routines, nesting', accent: tokens.colors.accentSageDeep, accentSoft: tokens.colors.accentSageSoft },
   { name: 'Intimacy', emoji: '🔞', blurb: '18+ · needs you both', accent: tokens.colors.primaryPinkDeep, accentSoft: tokens.colors.primaryPinkSoft, adult: true },
   { name: 'Silly', emoji: '🤪', blurb: 'Gloriously pointless', accent: tokens.colors.accentLavenderDeep, accentSoft: tokens.colors.accentLavenderSoft },

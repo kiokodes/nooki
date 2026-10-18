@@ -194,7 +194,7 @@ test('HomeView: the nook holds the couple picture frame, with the caption and mi
     assert.equal(nookCaption?.style.right, '12px', 'caption sits at the right of the nook');
     assert.equal(
       scenePlaceholder.getAttribute('aria-label'),
-      'Our little nook — our favourite picture in its frame',
+      'Our little nook — our favourite picture together',
       'the nook region has an accessible shared-space label',
     );
 

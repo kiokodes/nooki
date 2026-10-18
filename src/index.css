@@ -553,27 +553,9 @@ html, body {
 
 
 /* =========================================================================
-   Nook Photo Frame: the couple's own picture, standing in the nook
-   A gift-wrapped frame (see NookPhotoFrame.tsx) with a restrained 6-second
-   sway anchored at its feet — a standing frame, not a bouncing widget — and
-   a soft fade over the window while a new picture is being framed.
+   Nook photo: a full-size picture with a thin border and two partner hearts.
+   Keep it still so the edges stay aligned with the available space.
    ========================================================================= */
-
-.nooki-photo-frame-stand {
-  transform-origin: 50% 100%;
-  animation: nooki-photo-frame-sway 6s ease-in-out infinite;
-  will-change: transform;
-}
-
-@keyframes nooki-photo-frame-sway {
-  0%,
-  100% {
-    transform: rotate(-0.35deg);
-  }
-  50% {
-    transform: rotate(0.35deg) translateY(-0.5px);
-  }
-}
 
 /* The one focus ring the nook's centrepiece ever shows: keyboard only. */
 .nooki-photo-frame-button:focus {
@@ -604,10 +586,6 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nooki-photo-frame-stand {
-    animation: none !important;
-    transform: none !important;
-  }
   .nooki-photo-frame-busy .nooki-photo-frame-window {
     animation: none !important;
     filter: saturate(0.6);
