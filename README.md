@@ -307,6 +307,11 @@ The global header sits above every tab and carries the couple's live status:
 
 The header owns its own one-second tick, so only the header re-renders as time passes.
 
+Below every tab, the bottom navigation runs **Chat · Together · Home · Discuss · Games**,
+left to right, with Home as the raised centre button. `TABS` in `src/App.tsx` and
+`PUSH_DEEP_LINK_TABS` in `src/lib/pushService.ts` list that same order, so a tapped
+notification and the bar on screen always agree about where a tab sits.
+
 ## Launch, the splash and the first paint
 
 Opening the installed app is the one part of Nooki a couple does every session, so it is
