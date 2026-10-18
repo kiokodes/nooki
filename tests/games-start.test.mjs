@@ -33,6 +33,7 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
 
     const retirement = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql', import.meta.url), 'utf8');
     const verify = await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8');
+    const connectFourMigration = await readFile(new URL('../supabase/migrations/202610180006_connect_four.sql', import.meta.url), 'utf8');
     // Mimic a pre-Snake generic entry point with the current, no-daily API shape. The
     // library can still read Games, but the button gets the named migration repair.
     await db.exec(`
@@ -84,6 +85,7 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     // always-available start endpoint; retry must redo the failed start, not merely refresh
     // the already-readable list of games.
     await db.exec(retirement);
+    await db.exec(connectFourMigration);
     await db.exec(verify);
     await auth.signInWithEmail('alice@test.com', 'password');
     await click('Try again');
@@ -116,6 +118,7 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     await assert.rejects(db.exec(verify), /games_state is missing the Snake snapshot or expiry sweep/);
     await db.rollback();
     await db.exec(retirement);
+    await db.exec(connectFourMigration);
     await db.exec(verify);
   } finally {
     await act(async () => root.unmount());

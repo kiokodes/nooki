@@ -1,0 +1,14 @@
+.connect-four { max-width: 560px; margin-inline: auto; }
+.connect-four-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.connect-four-top h2 { margin:.15rem 0; }
+.connect-four-score { text-align:center; font-size:.85rem; }
+.cf-red { color:#de596b; } .cf-yellow { color:#e5b638; }
+.connect-four-board { width:min(100%, 490px); margin:18px auto; padding:9px; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; background:#7554a1; border-radius:18px; box-shadow:0 8px 22px #392d4730; }
+.connect-four-column { min-width:0; border:0; padding:0; background:transparent; display:flex; flex-direction:column; gap:5px; cursor:pointer; }
+.connect-four-column:disabled { cursor:default; }
+.connect-four-cell { aspect-ratio:1; border-radius:50%; background:#f8f4fa; box-shadow:inset 0 2px 4px #0002; }
+.connect-four-cell.is-red { background:#ed6a79; box-shadow:inset 0 -3px 0 #bd485b; }
+.connect-four-cell.is-yellow { background:#f2c650; box-shadow:inset 0 -3px 0 #d5a832; }
+.connect-four-column:not(:disabled):hover .connect-four-cell:first-child { outline:2px solid #f2c650; }
+.connect-four-column:focus-visible { outline:2px solid #352343; outline-offset:2px; border-radius:7px; }
+@media(max-width:420px) { .connect-four-board { gap:3px; padding:6px; border-radius:12px; } .connect-four-column { gap:3px; } }

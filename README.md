@@ -75,7 +75,8 @@ apply and verify the database migrations separately.
    undated question pool each couple draws a random unseen question from daily), then
    `202610180003_couple_photo.sql` (the couple picture frame standing in the Home nook),
    then `202610180002_remove_daily_games_and_tic_tac_toe.sql` (removes the retired daily
-   Games feature, Tic Tac Toe and their match history).
+   Games feature, Tic Tac Toe and their match history), then
+   `202610180006_connect_four.sql` (adds Connect Four with database-refereed turns).
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -864,7 +865,8 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
+`202610180006_connect_four.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
 migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
@@ -1244,9 +1246,10 @@ partners are paired; ending a completed couple requires both partners' agreement
 Games are always available: there is no daily Games challenge. Apply
 **`supabase/migrations/202610150007_games.sql`**, then
 **`202610150010_snake_duel.sql`**, **`202610150011_chess.sql`**,
-**`202610150012_tetris_duel.sql`**, and finally
-**`202610180002_remove_daily_games_and_tic_tac_toe.sql`** to an existing project before
-running **`supabase/verify-games.sql`**. New projects receive the same final shape from
+**`202610150012_tetris_duel.sql`**, then
+**`202610180002_remove_daily_games_and_tic_tac_toe.sql`** and
+**`202610180006_connect_four.sql`** to an existing project before running
+**`supabase/verify-games.sql`**. New projects receive the same final shape from
 `schema.sql`. The retirement migration deletes historical daily-game and Tic Tac Toe rows,
 removes their date/board columns, and replaces the daily-flag Games RPC.
 
@@ -1259,6 +1262,8 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
 - **Sudoku:** a solo, race or shared grid in easy, medium and hard difficulties.
 - **Tetris Duel:** each partner plays the same server-dealt pieces in a five-minute sprint
   or survival duel. The database replays taps to settle the result.
+- **Connect Four:** turns are async and resume across devices. The server checks whose turn it
+  is, drops each checker into the selected column, and decides wins and draws under a row lock.
 - An unfinished match resumes when either partner opens the same game; the live matches
   stand in the Games tab's swipeable **Ongoing games** card — one card's height however
   many are open. Finished duels stay available through the **Last duel** row beneath it,
