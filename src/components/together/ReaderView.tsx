@@ -15,7 +15,7 @@ import type { Highlight, ReadingProgress, SharedBook } from '../../types/databas
 import type { EngineSelection } from './EpubReader';
 
 // The engines (epub.js, pdf.js) are the bulk of the reader's weight. They load on
-// demand, the first time a book actually opens — never on the way to the Media tab.
+// demand, the first time a book actually opens — never on the way to the Together tab.
 const EpubReader = lazy(() => import('./EpubReader'));
 const PdfReader = lazy(() => import('./PdfReader'));
 

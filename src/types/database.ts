@@ -267,7 +267,7 @@ export interface DailyDecisionSnapshot {
 }
 
 /* ---------------------------------------------------------------------------
-   Shared books: the Media tab's "Read together" shelf. One book in play per
+   Shared books: the Together tab's "Read together" shelf. One book in play per
    couple, both partners' places saved in it, and the passages they highlight.
    See supabase/migrations/202610150008_shared_books.sql.
    --------------------------------------------------------------------------- */
@@ -355,6 +355,40 @@ export interface MissYouTap {
   delivered_count: number;
   /** When the partner last opened them; NULL while nothing has been received yet. */
   delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ---------------------------------------------------------------------------
+   Together tab: Visits - planned visits with countdown.
+   See supabase/migrations/202610180003_together_visits_and_someday_list.sql.
+   --------------------------------------------------------------------------- */
+
+export interface Visit {
+  id: string;
+  couple_id: string;
+  start_date: string;
+  end_date: string | null;
+  location: string | null;
+  timezone: string;
+  is_tentative: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ---------------------------------------------------------------------------
+   Together tab: Someday list - shared list of things to experience together.
+   See supabase/migrations/202610180003_together_visits_and_someday_list.sql.
+   --------------------------------------------------------------------------- */
+
+export interface SomedayItem {
+  id: string;
+  couple_id: string;
+  text: string;
+  completed: boolean;
+  completed_at: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -31,7 +31,7 @@ export const NOOKI_SERVICE_WORKER_SCOPE = '/';
 export const PUSH_DEEP_LINK_PARAM = 'nooki';
 
 /** The tabs a notification may open. Anything else is ignored, not followed. */
-export const PUSH_DEEP_LINK_TABS = ['chat', 'media', 'home', 'discuss', 'games'] as const;
+export const PUSH_DEEP_LINK_TABS = ['discuss', 'games', 'home', 'together', 'chat'] as const;
 export type PushDeepLinkTab = (typeof PUSH_DEEP_LINK_TABS)[number];
 
 /** What this browser can do, before permission enters the picture. */

@@ -76,7 +76,7 @@ interface LoadedBooks {
 }
 
 /**
- * The couple's shelf, owned by the app rather than by the Media tab: a book that
+ * The couple's shelf, owned by the app rather than by the Together tab: a book that
  * finishes, a partner's new highlight or a moved bookmark updates the card — and
  * the unread state of the reader — without anyone refreshing.
  */
