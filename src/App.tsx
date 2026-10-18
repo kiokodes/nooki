@@ -24,18 +24,21 @@ import { MissYouReveal } from './components/home/MissYouReveal';
 import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
-import { MediaView } from './components/media/MediaView';
-import { ReaderView, type ShareHighlightInput } from './components/media/ReaderView';
+import { TogetherView } from './components/together/TogetherView';
+import { ReaderView, type ShareHighlightInput } from './components/together/ReaderView';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
+import { useVisits, type Visit } from './hooks/useVisits';
+import { useSomedayList, type SomedayItem } from './hooks/useSomedayList';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
 import { useCouplePhoto } from './hooks/useCouplePhoto';
 import { useDailyDecision } from './hooks/useDailyDecision';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { VisitPlanningModal } from './components/together/VisitPlanningModal';
 import {
   PUSH_DEEP_LINK_TABS,
   isPushOpenTabMessage,
@@ -51,7 +54,7 @@ import {
 } from './lib/authService';
 import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
 
-type TabKey = 'chat' | 'media' | 'home' | 'discuss' | 'games';
+type TabKey = 'discuss' | 'games' | 'home' | 'together' | 'chat';
 
 interface TabConfig {
   key: TabKey;
@@ -64,31 +67,6 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  {
-    key: 'chat',
-    label: 'Chat',
-    icon: MessageCircle,
-    comingSoonSubtitle: 'Heartbeat nooks & whisper messages',
-    accentColor: tokens.colors.primaryPinkDeep,
-    accentSoft: tokens.colors.primaryPinkSoft,
-  },
-  {
-    key: 'media',
-    label: 'Media',
-    icon: ImageIcon,
-    comingSoonSubtitle: 'Synced music, shared books & scrapbooks',
-    accentColor: tokens.colors.primaryGreenDeep,
-    accentSoft: tokens.colors.primaryGreenSoft,
-  },
-  {
-    key: 'home',
-    label: 'Home',
-    icon: HomeIcon,
-    isCenter: true,
-    comingSoonSubtitle: 'Our shared couple space & daily questions',
-    accentColor: tokens.colors.primaryPinkDeep,
-    accentSoft: tokens.colors.primaryPinkSoft,
-  },
   {
     key: 'discuss',
     label: 'Discuss',
@@ -104,6 +82,31 @@ const TABS: TabConfig[] = [
     comingSoonSubtitle: 'Mini-games & chibi room decoration drops',
     accentColor: tokens.colors.accentLavenderDeep,
     accentSoft: tokens.colors.accentLavenderSoft,
+  },
+  {
+    key: 'home',
+    label: 'Home',
+    icon: HomeIcon,
+    isCenter: true,
+    comingSoonSubtitle: 'Our shared couple space & daily questions',
+    accentColor: tokens.colors.primaryPinkDeep,
+    accentSoft: tokens.colors.primaryPinkSoft,
+  },
+  {
+    key: 'together',
+    label: 'Together',
+    icon: ImageIcon,
+    comingSoonSubtitle: 'Shared books, visits & someday list',
+    accentColor: tokens.colors.primaryGreenDeep,
+    accentSoft: tokens.colors.primaryGreenSoft,
+  },
+  {
+    key: 'chat',
+    label: 'Chat',
+    icon: MessageCircle,
+    comingSoonSubtitle: 'Heartbeat nooks & whisper messages',
+    accentColor: tokens.colors.primaryPinkDeep,
+    accentSoft: tokens.colors.primaryPinkSoft,
   },
 ];
 
@@ -152,6 +155,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const [showDailyDecision, setShowDailyDecision] = useState(false);
   // The calendar is a modal over whatever tab is open, never a page of its own.
   const [showCalendar, setShowCalendar] = useState(false);
+  // Visit planning modal for the Together tab
+  const [showVisitPlanning, setShowVisitPlanning] = useState(false);
   // A message is only "read" while the Chat tab is on screen *and* the app is awake.
   const [appVisible, setAppVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
 
@@ -221,7 +226,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     userId: currentUser?.id ?? null,
   });
 
-  // The Media tab's "Read together" shelf: one book in play, both partners' places in
+  // The Together tab's "Read together" shelf: one book in play, both partners' places in
   // it, and the highlights that reach the chat. App-level for the same reason as the
   // chat — a partner's highlight lands while this phone is somewhere else.
   const books = useBooks({
@@ -229,6 +234,12 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     userId: currentUser?.id ?? null,
     partnerId: partner?.id ?? null,
   });
+
+  // Visits for the Together tab: next visit countdown and planning
+  const visits = useVisits(couple?.id ?? null, currentUser?.id ?? null);
+
+  // Someday list for the Together tab: shared list of things to experience together
+  const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
 
   // This device's notification switch, and the deep link a tapped notification carries.
   // App-level like the chat: the home-screen badge is cleared from here, and a
@@ -647,11 +658,12 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Home tab: Today card, today's shared decision and the reserved animated scene area.
-            Chat tab: the couple's live conversation.
-            Discuss tab: the question engine over the imported library.
-            Media tab: the "Read together" shelf (shared books), with the full-screen
-            reader opening over whatever tab is active. Games is its own tab. */}
+        {/* Discuss tab: the question engine over the imported library.
+            Games tab: mini-games and chibi room decoration.
+            Home tab: Today card, today's shared decision and the reserved animated scene area.
+            Together tab: shared books, visits & someday list, with the full-screen
+            reader opening over whatever tab is active.
+            Chat tab: the couple's live conversation. */}
         {isDiscuss ? (
           <DiscussView
             discuss={discuss}
@@ -662,6 +674,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             focusSession={focusSession}
             onSayMore={handleSayMore}
           />
+        ) : activeTab === 'games' ? (
+          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} />
         ) : isHome ? (
           <HomeView
             everyday={<EverydayStatusCards coupleId={couple.id} userId={currentUser.id} partnerId={partner.id} partnerName={partner.name} onMessage={() => { setChatContextStored(null); setActiveTab('chat'); }} />}
@@ -686,15 +700,23 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
               onTap: () => { void missYou.tap(); },
             }}
           />
-        ) : activeTab === 'games' ? (
-          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} />
-        ) : activeTab === 'media' ? (
-          <MediaView
+        ) : activeTab === 'together' ? (
+          <TogetherView
             state={books}
             userId={currentUser.id}
             userName={profile.name}
             partnerName={partner.name}
             onOpenReader={(bookId) => openReader(bookId)}
+            visit={visits.visit}
+            onPlanVisit={() => setShowVisitPlanning(true)}
+            onViewVisitPlans={() => {
+              // For now, just open the planning modal to edit
+              setShowVisitPlanning(true);
+            }}
+            somedayItems={somedayList.items}
+            onAddSomedayItem={somedayList.addItem}
+            onToggleSomedayItem={somedayList.toggleItem}
+            onDeleteSomedayItem={somedayList.deleteItem}
           />
         ) : (
           <ChatView
@@ -927,6 +949,36 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             />
           );
         })()}
+
+        {/* Visit Planning Modal for Together tab */}
+        {showVisitPlanning && couple && (
+          <VisitPlanningModal
+            isOpen={showVisitPlanning}
+            onClose={() => setShowVisitPlanning(false)}
+            onSave={async (startDate, endDate, location, timezone, isTentative) => {
+              try {
+                if (visits.visit) {
+                  // Update existing visit
+                  await visits.updateVisit(visits.visit.id, {
+                    start_date: startDate,
+                    end_date,
+                    location,
+                    timezone,
+                    is_tentative: isTentative,
+                  });
+                } else {
+                  // Create new visit
+                  await visits.planVisit(startDate, endDate, location, timezone, isTentative);
+                }
+              } catch (err) {
+                // Error is handled in the modal
+              }
+            }}
+            existingVisit={visits.visit}
+            userTimezone={profile?.timezone || 'UTC'}
+            partnerName={partner.name}
+          />
+        )}
 
         {/* Danger Zone Settings Modal (Sign Out & Mutual Breakup Option) */}
         {showSettings && couple && (
