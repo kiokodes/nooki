@@ -576,8 +576,6 @@ export const AppPreview = () => {
                 eventsLoading={false}
                 eventsError={null}
                 onOpenCalendar={() => setShowCalendar(true)}
-                userName={profile.name}
-                partnerName={partner.name}
                 partnerOnline={partnerOnline}
                 missYou={{
                   visible: !partnerOnline,

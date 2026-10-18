@@ -11,15 +11,13 @@ import type { TetrisInput, TetrisMode } from '../lib/tetris';
 /**
  * True while this phone still owes a move in a match: the Games tab badge.
  *
- * Tic-tac-toe hands the turn back and forth, so it is this phone's move when the
- * turn points at it. Rock-paper-scissors waits for a locked-in pick from each
- * side, so it is this phone's move until it has locked its own pick in.
- * A duel — snake or Tetris — waits for one run from each partner: it is this phone's
- * move until it has played its run, and while that run is still live.
+ * Rock-paper-scissors waits for a locked-in pick from each side, so it is this
+ * phone's move until it has locked its own pick in. Chess hands the turn back and
+ * forth. A duel — Snake or Tetris — waits for one run from each partner: it is this
+ * phone's move until it has played its run, and while that run is still live.
  */
 export function needsMyMove(match: GameMatch, userId: string | null): boolean {
   if (!userId || match.finished) return false;
-  if (match.game === 'tic-tac-toe') return match.turn_id === userId;
   if (match.game === 'chess') return match.turn_id === userId;
   if (match.game === 'snake') return !match.snake?.mine || match.snake.mine.status === 'running';
   if (match.game === 'tetris') return !match.tetris?.mine || match.tetris.mine.status === 'running';
@@ -132,8 +130,8 @@ export function useGames(coupleId: string | null, userId: string | null) {
     // Retrying a failed start must actually start/resume the game, not just read Games.
     retry: () => activeFailure ? run(activeFailure.action, activeFailure.game) : refresh(),
     select: (id: string | null) => { setFailure(null); setSelected(id ? { scope, id } : null); },
-    start: (game: GameId, daily = false, bestOf = 3) => run(async () => {
-      const id = await startGame(game, daily, bestOf);
+    start: (game: GameId, bestOf = 3) => run(async () => {
+      const id = await startGame(game, bestOf);
       if (current.current === scope) setSelected({ scope, id });
     }, game),
     play: (match: GameMatch, move: string) => run(async () => { await playGame(match, move); }, match.game),

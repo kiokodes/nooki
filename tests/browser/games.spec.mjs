@@ -25,7 +25,7 @@ async function mockGames(page, options = {}) {
         return route.fulfill({ status: 400, json: { code: 'P0001', message: 'Invalid game settings.' }, headers });
       }
       if (!state.snapshot.matches.length) state.snapshot.matches.push({
-        id: 'duel-1', game: 'snake', daily_date: null, player_x: 'test-user', player_o: 'test-partner',
+        id: 'duel-1', game: 'snake', player_x: 'test-user', player_o: 'test-partner',
         board: Array(9).fill(''), turn_id: 'test-user', best_of: 3, round: 1,
         score_x: 0, score_o: 0, my_pick: null, partner_locked: false,
         finished: false, winner_id: null, rounds: [],

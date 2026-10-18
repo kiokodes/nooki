@@ -132,9 +132,10 @@ function str(value: unknown): string | null {
 /** A friendly label for a game, so the notification says "Snake", not "snake". */
 function gameLabel(game: unknown): string {
   switch (str(game)) {
-    case 'tic-tac-toe': return 'Tic-Tac-Toe';
     case 'rock-paper-scissors': return 'Rock Paper Scissors';
     case 'snake': return 'Snake';
+    case 'chess': return 'Chess';
+    case 'tetris': return 'Tetris';
     default: return 'the game';
   }
 }

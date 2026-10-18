@@ -31,10 +31,11 @@ test('games layout: card copy is spaced away from the button below it', () => {
   // Headings inside a match card (round numbers, the reveal) also need space.
   assert.match(rule('.game-card h3'), /margin[^;]*\b1\dpx\b/, 'card headings get their own spacing');
 
-  // The board is a grid of square cells and is centred between the copy.
-  assert.match(rule('.ttt-board'), /display:\s*grid/, 'the board is a grid');
-  assert.match(rule('.ttt-board'), /max-width:\s*320px/, 'the board has a maximum width');
-  assert.match(rule('.ttt-board button'), /aspect-ratio:\s*1/, 'board cells stay square');
+  // Rock Paper Scissors choices share the available row evenly and keep the large
+  // gesture icons comfortably separated from their labels.
+  assert.match(rule('.rps-picks'), /display:\s*flex/, 'the picks share one row');
+  assert.match(rule('.rps-picks button'), /flex:\s*1/, 'each pick receives equal space');
+  assert.match(rule('.rps-picks span'), /font-size:\s*2rem/, 'pick icons stay legible');
 });
 
 test('games layout: the error message is a block so the retry button cannot sit on it', async () => {

@@ -1,10 +1,10 @@
 /**
  * The Games tab badge, end to end, in the real App component against a real Postgres.
  *
- * A match that is waiting on this phone — your turn in tic-tac-toe, or your pick in
- * rock-paper-scissors — announces itself on the tab, the way unread messages do on
- * Chat. The partner's half is played by signing in as Bob and calling the same
- * services, so the badge only appears if the turn really is this phone's.
+ * A Rock Paper Scissors match that is waiting for this phone's sealed pick announces
+ * itself on the tab, the way unread messages do on Chat. The partner's half is played
+ * by signing in as Bob and calling the same services, so the badge only appears if the
+ * match is genuinely waiting on this account.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -71,49 +71,22 @@ test('games tab: a match waiting on this phone badges the tab and clears once it
       await act(async () => { element.click(); });
     };
 
-    // Bob starts a game of tic-tac-toe, so the first move is his.
-    const ttt = await asBob(() => games.startGame('tic-tac-toe', false, 3));
+    // Bob starts Rock Paper Scissors, so Alice has a pending secret pick.
+    const rps = await asBob(() => games.startGame('rock-paper-scissors', 3));
 
     const { default: App } = await server.ssrLoadModule('/src/App.tsx');
     await act(async () => { root.render(React.createElement(App)); });
     await waitFor(() => document.body.textContent.includes('Together for'), 'the unlocked app should render');
     await waitFor(() => gamesTab(), 'the navigation should render');
-    assert.equal(badge(), null, "the partner's turn does not badge this phone");
-
-    // --- Bob moves, so the board is now waiting on Alice ------------------------------
-    await asBob(async () => {
-      const match = (await games.fetchGames()).matches.find((m) => m.id === ttt);
-      await games.playGame(match, '0');
-    });
-    await waitFor(() => badge()?.textContent.trim() === '1', 'your turn badges the Games tab');
+    await waitFor(() => badge()?.textContent.trim() === '1', 'a match waiting for your pick badges the tab');
     assert.equal(gamesTab()?.getAttribute('aria-label'), 'Games, 1 game waiting for you', 'the tab says what is waiting');
 
     // --- The Games tab itself points at the match that needs you ----------------------
     await click('[data-nav-tab="games"]');
     await waitFor(() => document.querySelector('.game-resume'), 'the games list should show the match');
     assert(document.querySelector('.game-resume')?.textContent.includes('Your turn'), 'the match says it is waiting on you');
-
-    // --- Alice plays, so the turn goes back to Bob and the badge clears --------------
     await act(async () => { document.querySelector('.game-resume').click(); });
-    await waitFor(() => document.querySelector('.ttt-board button'), 'the board should open');
-    await act(async () => {
-      const square = document.querySelector('[aria-label="Row 1, column 2: empty"]');
-      assert(square, 'an empty square should be on the board');
-      square.click();
-    });
-    await waitFor(() => badge() === null, 'the badge clears once you have played');
-
-    // --- Rock-paper-scissors: it is your pick until you lock one in ------------------
-    const rps = await asBob(() => games.startGame('rock-paper-scissors', false, 3));
-    await waitFor(() => badge()?.textContent.trim() === '1', 'a match waiting for your pick badges the tab');
-    await act(async () => { document.querySelector('.game-back').click(); });
-    await waitFor(() => document.querySelector('.game-resume'), 'the games list should show both matches');
-    await act(async () => {
-      const card = [...document.querySelectorAll('.game-resume')].find((item) => item.textContent.includes('Rock Paper Scissors'));
-      assert(card, 'the rock-paper-scissors match should be in the list');
-      card.click();
-    });
-    await waitFor(() => document.querySelector('.rps-picks'), 'the rock-paper-scissors card should open');
+    await waitFor(() => document.querySelector('.rps-picks'), 'the match should open');
     await act(async () => {
       const pick = [...document.querySelectorAll('.rps-picks button')].find((b) => b.textContent.includes('rock'));
       pick.click();

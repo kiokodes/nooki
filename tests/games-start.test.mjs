@@ -31,12 +31,18 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     await auth.saveOnboardingProfile(bob.id, { name: 'Bob', location: null, timezone: 'UTC' });
     await auth.joinCoupleWithCode(bob.id, couple.invite_code);
 
-    const original = await readFile(new URL('../supabase/migrations/202610150007_games.sql', import.meta.url), 'utf8');
-    const snake = await readFile(new URL('../supabase/migrations/202610150010_snake_duel.sql', import.meta.url), 'utf8');
-    const chess = await readFile(new URL('../supabase/migrations/202610150011_chess.sql', import.meta.url), 'utf8');
+    const retirement = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql', import.meta.url), 'utf8');
     const verify = await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8');
-    // This really is the old start_game, not a stub inventing an error message.
-    await db.exec(original);
+    // Mimic a pre-Snake generic entry point with the current, no-daily API shape. The
+    // library can still read Games, but the button gets the named migration repair.
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION public.start_game(p_game text, p_best_of integer DEFAULT 3)
+      RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+      BEGIN
+        IF p_game <> 'rock-paper-scissors' THEN RAISE EXCEPTION 'Invalid game settings.'; END IF;
+        RAISE EXCEPTION 'Not used by this test.';
+      END $$;
+    `);
     await auth.signInWithEmail('alice@test.com', 'password');
 
     const rpc = supabase.rpc;
@@ -74,10 +80,10 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     assert.match(alert().textContent, /202610150010_snake_duel.sql/, 'successful polling cannot erase the start error');
     assert.equal(requests.filter(name => name === 'start_game').length, 1);
 
-    // The owner applies Snake and then Chess to keep the latest Games schema. Retry must redo the
-    // failed start, not merely refresh the already-readable list of games.
-    await db.exec(snake);
-    await db.exec(chess);
+    // The owner applies the current Games retirement migration. It restores the supported
+    // always-available start endpoint; retry must redo the failed start, not merely refresh
+    // the already-readable list of games.
+    await db.exec(retirement);
     await db.exec(verify);
     await auth.signInWithEmail('alice@test.com', 'password');
     await click('Try again');
@@ -100,12 +106,16 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
 
     // Also reject a stale games_state even if start_game already accepts Snake.
     await act(async () => root.render(null));
-    const oldState = original.match(/CREATE OR REPLACE FUNCTION public\.games_state\(\)[\s\S]*?END \$\$;/)[0];
-    await db.exec(oldState);
-    await assert.rejects(db.exec(verify), /games_state is the pre-Snake version/);
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION public.games_state() RETURNS jsonb
+      LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+      BEGIN
+        RETURN jsonb_build_object('wins', '{}'::jsonb, 'matches', '[]'::jsonb);
+      END $$;
+    `);
+    await assert.rejects(db.exec(verify), /games_state is missing the Snake snapshot or expiry sweep/);
     await db.rollback();
-    await db.exec(snake);
-    await db.exec(chess);
+    await db.exec(retirement);
     await db.exec(verify);
   } finally {
     await act(async () => root.unmount());
