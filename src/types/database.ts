@@ -215,13 +215,15 @@ export interface CoupleSettings {
 }
 
 /* ---------------------------------------------------------------------------
-   Daily decisions: one manually scheduled three-choice question, two private
-   partner selections, and a shared decision only after the selections match.
+   Daily decisions: an undated three-choice question pool. The database
+   randomly assigns each couple one question a day that they have never been
+   given before; two private partner selections become a shared decision only
+   after the selections match.
    --------------------------------------------------------------------------- */
 
 export interface DailyDecisionQuestion {
-  /** UTC date this prompt is scheduled for, and its stable identity. */
-  decision_date: string;
+  /** The pool row's stable identity; a couple is never assigned it twice. */
+  id: number;
   question: string;
   /** Exactly three answer labels, in the order the owner uploaded them. */
   options: [string, string, string];
@@ -239,6 +241,12 @@ export interface DailyDecisionSnapshot {
   both_answered: boolean;
   /** A shared decision is final only when both selections are identical. */
   agreed: boolean;
+  /** The pool had questions, and this couple has now been given every one. */
+  exhausted: boolean;
+  /** Pool questions this couple has not been assigned yet, today's excluded. */
+  remaining: number;
+  /** How many questions the owner has uploaded to the pool in total. */
+  total: number;
 }
 
 /* ---------------------------------------------------------------------------

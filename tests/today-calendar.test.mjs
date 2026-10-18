@@ -299,6 +299,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const pushMigration = await readFile(new URL('../supabase/migrations/202610150015_web_push.sql', import.meta.url), 'utf8');
   const missYouMigration = await readFile(new URL('../supabase/migrations/202610150016_miss_you.sql', import.meta.url), 'utf8');
   const dailyDecisionMigration = await readFile(new URL('../supabase/migrations/202610170002_daily_decisions.sql', import.meta.url), 'utf8');
+  const dailyDecisionPoolMigration = await readFile(new URL('../supabase/migrations/202610180001_daily_decision_pool.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -352,10 +353,14 @@ test('verify.sql spots a live project that is missing a migration', async () => 
 
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(missYouMigration);
-    await assert.rejects(db.exec(verification), /202610170002_daily_decisions\.sql/,
+    await assert.rejects(db.exec(verification), /202610180001_daily_decision_pool\.sql/,
       'the preflight must send the owner to the Daily Decisions migration');
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(dailyDecisionMigration);
+    await assert.rejects(db.exec(verification), /202610180001_daily_decision_pool\.sql/,
+      'the dated Daily Decisions install still needs the pool upgrade');
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(dailyDecisionPoolMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -382,6 +387,7 @@ async function server_paths() {
   const missYou = await read('../supabase/migrations/202610150016_miss_you.sql');
   const locations = await read('../supabase/migrations/202610170001_partner_locations.sql');
   const dailyDecisions = await read('../supabase/migrations/202610170002_daily_decisions.sql');
+  const dailyDecisionPool = await read('../supabase/migrations/202610180001_daily_decision_pool.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -465,7 +471,7 @@ async function server_paths() {
   check('schema.sql on a project with no auto-grant', freshNew, true);
   await freshNew.db.close();
 
-  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions];
+  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool];
   const existingOld = await run({
     defaults: legacyDefaults,
     // Every migration twice: a live project may have run any of them before.
@@ -484,8 +490,8 @@ async function server_paths() {
   const upgraded = await run({
     defaults: legacyDefaults,
     steps: [schemaBeforeCalendar, pairing, legacyCalendar,
-            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions,
-            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions],
+            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool,
+            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -538,11 +544,15 @@ async function server_paths() {
     'and then until the miss-you migration lands');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(missYou);
-  await assert.rejects(missingLinks.db.exec(verify), /202610170002_daily_decisions\.sql/,
+  await assert.rejects(missingLinks.db.exec(verify), /202610180001_daily_decision_pool\.sql/,
     'and then until the Daily Decisions migration is applied');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(locations);
   await missingLinks.db.exec(dailyDecisions);
+  await assert.rejects(missingLinks.db.exec(verify), /202610180001_daily_decision_pool\.sql/,
+    'and then until the pool upgrade is applied on top of it');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(dailyDecisionPool);
   await missingLinks.db.exec(verify);
   await missingLinks.db.close();
 
@@ -559,6 +569,7 @@ async function server_paths() {
   await missingPush.db.exec(missYou);
   await missingPush.db.exec(locations);
   await missingPush.db.exec(dailyDecisions);
+  await missingPush.db.exec(dailyDecisionPool);
   await missingPush.db.exec(verify);
   await missingPush.db.close();
 
