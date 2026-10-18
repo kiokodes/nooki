@@ -28,6 +28,8 @@ export async function installTestBackend(client) {
     -- reveals choices only after both reply). The decision question pool itself
     -- is never granted: the app reaches it only through the state RPC.
     GRANT SELECT ON public.miss_you_taps, public.daily_decision_assignments, public.daily_decision_responses TO authenticated;
+    -- The couple's framed picture: read by both partners, replaced by either.
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.couple_photo TO authenticated;
   `);
   const users = new Map();
   let currentUser = null;
@@ -101,6 +103,7 @@ export async function installTestBackend(client) {
       'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
       'shared_books', 'reading_progress', 'highlights', 'push_subscriptions', 'miss_you_taps',
       'daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses',
+      'couple_photo',
     ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;

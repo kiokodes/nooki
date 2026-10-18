@@ -112,8 +112,11 @@ test('global header: live counter, presence ticker and partner clock', async () 
     );
     await auth.signInWithEmail('alice@example.com', 'password');
 
-    // Realtime presence without a socket, mirroring the real channel API.
+    // Realtime presence without a socket, mirroring the real channel API. Every
+    // channel topic is recorded; presence specifics only apply to the presence
+    // channel (the couple picture frame opens its own couple-scoped channel too).
     const presence = { state: {}, tracked: [], topic: null, key: null, handlers: [], status: null };
+    const topics = [];
     let removedChannels = 0;
     const fakeChannel = {
       presenceState: () => presence.state,
@@ -133,8 +136,11 @@ test('global header: live counter, presence ticker and partner clock', async () 
       async unsubscribe() { return 'ok'; },
     };
     supabase.channel = (topic, options) => {
-      presence.topic = topic;
-      presence.key = options?.config?.presence?.key ?? null;
+      topics.push(topic);
+      if (options?.config?.presence) {
+        presence.topic = topic;
+        presence.key = options.config.presence.key ?? null;
+      }
       return fakeChannel;
     };
     supabase.removeChannel = async () => { removedChannels += 1; return 'ok'; };
@@ -280,14 +286,24 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(nookCaption?.style.top, '10px');
     assert.equal(nookCaption?.style.right, '12px');
     assert.equal(sceneArea.dataset.partnerOnline, 'false', 'starts with the partner marked away');
-    assert.equal(sceneArea.querySelector('img[data-nooki-pair]')?.dataset.expression, 'happy',
-      'uses the calm default artwork while the partner is away');
+    const nookFrame = sceneArea.querySelector('[data-component="nook-photo-frame"]');
+    assert(nookFrame, 'the nook holds the couple picture frame');
+    assert.equal(nookFrame.dataset.hasPhoto, 'false', 'the frame starts by inviting the couple to upload a picture');
+    assert.equal(
+      nookFrame.querySelector('button[data-nooki-frame-button]')?.getAttribute('aria-label'),
+      'Upload your couple picture',
+      'the empty frame prompts the upload',
+    );
     assert(sceneArea.style.borderRadius, 'the shared nook is rounded');
 
     // Presence: tracked on the couple channel, keyed by the signed-in account.
     assert.equal(presence.topic, `nooki-couple-${couple.id}`, 'presence stays scoped to the couple');
     assert.equal(presence.key, alice.id, 'presence is keyed by the current account');
     assert.equal(presence.status, 'SUBSCRIBED');
+    assert(
+      topics.includes(`nooki-couple-photo-${couple.id}`),
+      'the picture frame keeps its own couple-scoped realtime channel',
+    );
     assert.equal(presence.tracked[0]?.user_id, alice.id, 'the app announces this account as present');
 
     // The heartbeat keeps this account's last_seen_at fresh for the partner's screen.
@@ -302,9 +318,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.notEqual(dot().style.backgroundColor, offlineDotColor, 'an online partner turns the ticker green');
     assert(dot().getAttribute('aria-label').includes('is online'), 'the online dot announces itself');
     assert.equal(sceneArea.dataset.partnerOnline, 'true', 'the Home nook receives live partner availability');
-    await waitFor(
-      () => sceneArea.querySelector('[data-layer="overlay"] img[data-expression="affectionate"]'),
-      'the Nookis crossfade to affectionate art when both partners are online',
+    assert(
+      sceneArea.querySelector('[data-component="nook-photo-frame"]'),
+      'the framed couple picture keeps standing in the nook while presence changes',
     );
 
     // Partner leaves: the ticker greys out and re-reads the freshest database timestamp.
@@ -317,9 +333,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(dot().dataset.presence, 'offline');
     assert.equal(dot().style.backgroundColor, offlineDotColor, 'the ticker greys back out');
     assert.equal(sceneArea.dataset.partnerOnline, 'false', 'the Home nook returns to partner-away mode');
-    await waitFor(
-      () => sceneArea.querySelector('[data-layer="overlay"] img[data-expression="happy"]'),
-      'the Nookis return to calm happy art when the partner leaves',
+    assert(
+      sceneArea.querySelector('[data-component="nook-photo-frame"]'),
+      'the framed couple picture is unaffected by presence coming and going',
     );
     await waitFor(() => dot().getAttribute('aria-label').includes('Last seen 7m ago'),
       'leaving the app re-reads the stored last_seen_at');

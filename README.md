@@ -72,7 +72,8 @@ apply and verify the database migrations separately.
    marketplace key generated from them), then `202610170002_daily_decisions.sql` (the
    owner-uploaded daily three-choice decision), then
    `202610180001_daily_decision_pool.sql` (which turns that dated prompt table into an
-   undated question pool each couple draws a random unseen question from daily).
+   undated question pool each couple draws a random unseen question from daily), then
+   `202610180002_couple_photo.sql` (the couple picture frame standing in the Home nook).
    Apply pending migrations in this order; they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
    `202610150014_restore_chess_tetris_game_check.sql` are repairs, not part of a fresh
@@ -303,7 +304,8 @@ Opening the installed app is the one part of Nooki a couple does every session, 
 deliberately the cheapest:
 
 - **The boot splash paints before any JavaScript.** `index.html` carries a plain HTML/CSS
-  copy of the splash (wordmark + the pink and green race) inside `#root`, so a phone shows
+  copy of the splash (the Nooki couple — the app's cover artwork — plus the wordmark and the
+  pink and green race) inside `#root`, so a phone shows
   Nooki from the first frame instead of a blank page while the bundle downloads and parses.
   React replaces it on mount; a test keeps the two copies in step.
 - **The race is played once, not twice.** The boot splash starts the race — on a slow phone
@@ -352,8 +354,11 @@ The Home tab shows:
 - Two compact daily cards side by side: **Daily game** (`src/components/home/DailyGameCard.tsx`)
   has its eyebrow, Play button and a one-line initials-and-score tally (e.g. `A 1–4 J`);
   **Today’s decision** (`src/components/home/DailyDecisionCard.tsx`) opens the couple's private choice.
-- The **cozy nook** at the bottom of the screen — the shared room the companions stand in,
-  with the "I miss you" button in its top-left corner (see below).
+- The **cozy nook** at the bottom of the screen — the shared room where the couple's own
+  picture stands in a gift-wrapped frame (see **The framed couple picture** below), with the
+  "I miss you" button in its top-left corner and the caption pinned top-right. The cartoon
+  Nooki pair stays the app's branding — its icon, its favicon and its splash — just not the
+  thing standing in the nook.
 
 The full calendar is a **modal over the current tab** — never a page of its own, so the
 Home tab stays exactly as it was behind it:
@@ -473,6 +478,50 @@ the gesture survives the wait.
 table and no function to count with, so the button says "The database needs an update.
 Please ask the app owner to apply supabase/migrations/202610150016_miss_you.sql" rather than
 appearing to work. The migration is additive and rerunnable: it never resets a count.
+
+### The framed couple picture
+
+The centre of the nook is the couple's own picture, standing in a gift-wrapped frame
+(`src/components/home/NookPhotoFrame.tsx` — honey wood, stitched mat, corner hearts and a
+pink-and-green ribbon bow, the same duo as the racing splash dots). A real photo of the two
+of you is the highest form of personalisation the app can offer: opening it shows the picture
+from when you were last physically together, or simply your favourite one. Before anything
+is framed, the window carries a soft **"Upload your couple picture"** invite instead.
+
+- **One picture per couple.** `couple_photo` is keyed by the couple id itself, so a couple
+  frames at most one picture, ever; replacing it moves the same row. Either partner may
+  frame or replace — the frame belongs to the couple — and the row's couple can never move
+  (a database trigger refuses, past the app and its policies).
+- **The phone does the heavy lifting.** A chosen picture is resized to a 1600px JPEG in the
+  browser before a single byte leaves the device, so weak mobile data never carries a
+  12 MB camera-roll original; a 25 MB original is refused outright.
+- **"Fit it to the frame" comes first.** A chosen picture is never uploaded as-is: it opens
+  in a crop step (`src/components/home/PhotoCropDialog.tsx`) locked to the mat window's
+  exact aspect (67:47, kept in step with the frame's SVG), where the couple drags to
+  position and slides to zoom before **Frame picture** uploads exactly what they chose —
+  not a quiet `object-fit` crop centred on nobody's decision. Escape, Cancel or a backdrop
+  tap steps out without uploading a byte. Where a browser cannot preview or crop (very old
+  devices), the original travels on as-is rather than blocking the picture.
+- **The replace order is deliberate.** New bytes upload first, then the row moves, then the
+  old file is deleted — the frame never points at a file that is not there yet, and a failed
+  replace leaves the old picture standing. Tapping a framed picture asks
+  "Replace the picture in the frame?" first, because replacing is a couple decision, not an
+  accident waiting for a pocket tap.
+- **Privacy.** The file lives in the private `couple-photos` bucket under
+  `photos/{couple_id}/{photo_id}.jpg` — the folder name is the couple id, which is what the
+  storage policies check — and is opened only through short-lived signed URLs. There is
+  deliberately no public link: a picture is never readable outside the couple.
+- **Live on both phones.** The table sits on the `supabase_realtime` publication, so the
+  moment one partner frames a new picture, the other partner's nook updates without a
+  refresh (`useCouplePhoto` keeps the signed URL fresh with the row).
+- **The rest of the nook is untouched.** The "I miss you" button stays in its top-left
+  corner and the "Our little nook" caption stays pinned top-right.
+
+**The migration is required before the frame can hold anything.**
+`supabase/migrations/202610180002_couple_photo.sql` adds the table, its policies, the
+realtime publication entry and the private bucket. Without it the frame still renders and
+invites the upload, but the upload is refused with a readable sentence instead of appearing
+to work.
 
 ## The Chat tab
 
@@ -812,7 +861,7 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_couple_photo.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All of the migrations are idempotent and safe to rerun; they never drop or rewrite existing
 data (the pairing migration only changes policies, the calendar migration only adds a table
@@ -1025,6 +1074,7 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] The header clock beside the dot matches the partner's own device time and weekday, and never shows your own clock.
 - [ ] The Today card shows today's date and the anniversary/monthsary that fall today.
 - [ ] With one app open and the other closed, the nook shows a small "I miss you" pill in its top-left corner; open both and it disappears.
+- [ ] Before a picture is framed, the nook's frame invites "Upload your couple picture"; the chosen picture opens in the fit-to-frame step (drag + zoom) and frames exactly what was chosen. Framing one on device A shows it on device B without a refresh, and B's replace (behind its confirm) lands back on A.
 - [ ] Tapping it a few times shows the count on the button (2, 3…) and never on the other phone yet.
 - [ ] Opening the other app shows a big heart expanding over the load with "… missed you N times today" (a single tap reads "Hi, … missed you"), fading away on its own.
 - [ ] Opening that second app again shows no heart: the taps were received, and the count starts again from one.
@@ -1170,8 +1220,10 @@ voice/video calling is still a "coming soon" toast. No sample conversations or q
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, Discuss uses the rows imported into `questions`, and Daily Decisions uses the
 owner-uploaded pool rows in `daily_decision_questions`, drawn one random unseen question per couple per day.
-Home also carries the **"I miss you" button** in the nook — the small pink pill in the
-top-left corner, offered only while the partner is away. Taps are counted per partner and
+Home also carries the **framed couple picture** standing in the nook — the couple's own
+photo in a gift-wrapped frame, one per couple, replaceable by either partner, stored in a
+private couple-scoped bucket and opened only through signed URLs — and the **"I miss you"
+button** in the nook's top-left corner, offered only while the partner is away. Taps are counted per partner and
 per day, and the other phone opens them over its next load as a big heart with a sentence
 that counts them ("Hi, Jayo missed you", "Jayo missed you 4 times today"), then resets.
 Scenes and illustrated backgrounds are deliberately out of scope for now: the Discuss tab

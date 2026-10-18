@@ -32,6 +32,7 @@ import { useBooks } from './hooks/useBooks';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
+import { useCouplePhoto } from './hooks/useCouplePhoto';
 import { useDailyDecision } from './hooks/useDailyDecision';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import {
@@ -376,6 +377,13 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     active: appVisible && !loading && splashDone && Boolean(couple && partner && currentUser),
   });
 
+  // The couple's framed picture for the Home nook: one photo per couple, standing
+  // on both phones, kept live by the couple_photo realtime channel.
+  const couplePhoto = useCouplePhoto({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+  });
+
   const loadUserData = useCallback(async () => {
     try {
       const user = await getCurrentAuthUser();
@@ -663,6 +671,12 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             partnerWins={games.data?.wins[partner.id] ?? 0}
             onPlayDailyGame={() => { setActiveTab('games'); void games.start('tic-tac-toe', true); }}
             onOpenDailyDecision={() => setShowDailyDecision(true)}
+            photo={{
+              src: couplePhoto.url,
+              uploading: couplePhoto.busy,
+              error: couplePhoto.error,
+              onUpload: (file) => { void couplePhoto.upload(file); },
+            }}
             missYou={{
               visible: missYou.available,
               sentCount: missYou.sentCount,
