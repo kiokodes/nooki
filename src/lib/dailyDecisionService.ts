@@ -2,14 +2,14 @@ import { requireSupabase } from './supabaseClient';
 import { describeDatabaseError } from './authService';
 import type { DailyDecisionQuestion, DailyDecisionSnapshot } from '../types/database';
 
-/** Apply before deploying: the owner-uploaded prompt table and private response RPCs. */
-export const DAILY_DECISION_MIGRATION = 'supabase/migrations/202610170002_daily_decisions.sql';
+/** Apply before deploying: the owner-uploaded question pool and private response RPCs. */
+export const DAILY_DECISION_MIGRATION = 'supabase/migrations/202610180001_daily_decision_pool.sql';
 
 function isMissingMigration(error: { message: string; code?: string }): boolean {
   return error.code === '42P01'
     || error.code === '42883'
     || error.code === 'PGRST202'
-    || /daily_decision_(questions|responses|state|choice)/i.test(error.message)
+    || /daily_decision_(questions|assignments|responses|state|choice)/i.test(error.message)
        && /does not exist|could not find|schema cache/i.test(error.message);
 }
 
@@ -23,16 +23,22 @@ function choiceOf(value: unknown): number | null {
   return Number.isInteger(choice) && choice >= 1 && choice <= 3 ? choice : null;
 }
 
+function countOf(value: unknown): number {
+  const count = Number(value ?? 0);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
 function toQuestion(value: unknown): DailyDecisionQuestion | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== 'object') throw new Error('Today’s decision is not formatted correctly. Please ask the app owner to check its three options.');
   const row = value as Record<string, unknown>;
+  const id = Number(row.id);
   const options = Array.isArray(row.options) ? row.options.map((option) => String(option ?? '').trim()) : [];
-  if (typeof row.decision_date !== 'string' || typeof row.question !== 'string' || options.length !== 3 || options.some((option) => !option)) {
+  if (!Number.isInteger(id) || typeof row.question !== 'string' || options.length !== 3 || options.some((option) => !option)) {
     throw new Error('Today’s decision is not formatted correctly. Please ask the app owner to check its three options.');
   }
   return {
-    decision_date: row.decision_date,
+    id,
     question: row.question.trim(),
     options: [options[0], options[1], options[2]],
   };
@@ -55,10 +61,19 @@ function toSnapshot(value: unknown): DailyDecisionSnapshot {
     partner_responded: Boolean(row.partner_responded),
     both_answered: bothAnswered,
     agreed: bothAnswered && myChoice !== null && partnerChoice !== null && myChoice === partnerChoice,
+    exhausted: Boolean(row.exhausted),
+    remaining: countOf(row.remaining),
+    total: countOf(row.total),
   };
 }
 
-/** The database decides which answers are visible; this RPC never returns a sealed pick. */
+/**
+ * Today's decision for this couple. The database randomly assigns one pool
+ * question the couple has never been given, saves that assignment so both
+ * partners see the same question all day, and decides which answers are
+ * visible; this RPC never returns a sealed pick, and the phone never sees
+ * the rest of the pool.
+ */
 export async function fetchDailyDecisionState(): Promise<DailyDecisionSnapshot> {
   const { data, error } = await requireSupabase().rpc('daily_decision_state');
   if (error) {

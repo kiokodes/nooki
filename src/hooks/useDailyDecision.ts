@@ -33,6 +33,9 @@ const EMPTY_SNAPSHOT: DailyDecisionSnapshot = {
   partner_responded: false,
   both_answered: false,
   agreed: false,
+  exhausted: false,
+  remaining: 0,
+  total: 0,
 };
 
 /**
@@ -96,7 +99,8 @@ export function useDailyDecision({ coupleId, userId }: UseDailyDecisionOptions):
       // The submission path still refreshes directly; a missing socket should not block a choice.
     }
 
-    // If the app stays open across UTC midnight, fetch the next scheduled prompt then.
+    // If the app stays open across UTC midnight, fetch the next day's assignment then:
+    // the database hands out a fresh, never-before-given question for the new day.
     const nextUtcMidnight = new Date();
     nextUtcMidnight.setUTCHours(24, 0, 0, 0);
     const midnightTimer = window.setTimeout(

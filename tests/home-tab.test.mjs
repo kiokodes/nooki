@@ -105,11 +105,10 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await supabase.from('profiles').update({ last_seen_at: bobLastSeen }).eq('id', bob.id);
     await auth.signInWithEmail('alice@example.com', 'password');
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);
-    const dailyDecisionDate = new Date().toISOString().slice(0, 10);
     await backend.query(
-      `INSERT INTO public.daily_decision_questions (decision_date, question, option_a, option_b, option_c)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [dailyDecisionDate, 'What should we plan together?', 'Cook dinner', 'Watch a film', 'Take a walk'],
+      `INSERT INTO public.daily_decision_questions (question, option_a, option_b, option_c)
+       VALUES ($1, $2, $3, $4)`,
+      ['What should we plan together?', 'Cook dinner', 'Watch a film', 'Take a walk'],
     );
     await auth.signInWithEmail('alice@example.com', 'password');
 

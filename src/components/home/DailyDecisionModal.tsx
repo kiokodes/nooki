@@ -51,7 +51,7 @@ export const DailyDecisionModal: React.FC<DailyDecisionModalProps> = ({
 }) => {
   const question = state.question;
   const [draftChoice, setDraftChoice] = useState<{
-    decisionDate: string | undefined;
+    questionId: number | undefined;
     savedChoice: number | null;
     wasAgreed: boolean;
     value: number | null;
@@ -59,7 +59,7 @@ export const DailyDecisionModal: React.FC<DailyDecisionModalProps> = ({
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const selectedChoice = draftChoice
-    && draftChoice.decisionDate === question?.decision_date
+    && draftChoice.questionId === question?.id
     && draftChoice.savedChoice === state.my_choice
     && draftChoice.wasAgreed === state.agreed
     ? draftChoice.value
@@ -184,9 +184,13 @@ export const DailyDecisionModal: React.FC<DailyDecisionModalProps> = ({
             <p role="alert" data-decision-error style={{ margin: 0, color: '#B91C1C', fontSize: '0.8rem', fontWeight: 700, lineHeight: 1.5 }}>
               {state.error}
             </p>
+          ) : !question && state.exhausted ? (
+            <p data-decision-empty data-decision-exhausted style={{ margin: 0, color: tokens.colors.textSecondary, fontSize: '0.82rem', lineHeight: 1.5 }}>
+              You’ve been through every decision we have for now. More are on the way — check back soon.
+            </p>
           ) : !question ? (
             <p data-decision-empty style={{ margin: 0, color: tokens.colors.textSecondary, fontSize: '0.82rem', lineHeight: 1.5 }}>
-              No decision has been added for today yet. Check back soon.
+              No decisions have been added yet. Check back soon.
             </p>
           ) : (
             <>
@@ -278,7 +282,7 @@ export const DailyDecisionModal: React.FC<DailyDecisionModalProps> = ({
                         checked={checked}
                         disabled={state.busy || state.agreed}
                         onChange={() => setDraftChoice({
-                          decisionDate: question.decision_date,
+                          questionId: question.id,
                           savedChoice: state.my_choice,
                           wasAgreed: state.agreed,
                           value: index + 1,

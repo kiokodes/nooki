@@ -23,9 +23,11 @@ export async function installTestBackend(client) {
     GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles, public.couples, public.couple_events TO authenticated;
     GRANT SELECT, INSERT, DELETE ON public.push_subscriptions TO authenticated;
-    -- The miss-you and Daily Decisions tables are read by the app and written only by
-    -- their functions (the response read policy reveals choices only after both reply).
-    GRANT SELECT ON public.miss_you_taps, public.daily_decision_questions, public.daily_decision_responses TO authenticated;
+    -- The miss-you taps and the Daily Decisions assignments/responses are read by
+    -- the app and written only by their functions (the response read policy
+    -- reveals choices only after both reply). The decision question pool itself
+    -- is never granted: the app reaches it only through the state RPC.
+    GRANT SELECT ON public.miss_you_taps, public.daily_decision_assignments, public.daily_decision_responses TO authenticated;
   `);
   const users = new Map();
   let currentUser = null;
@@ -98,7 +100,7 @@ export async function installTestBackend(client) {
       'profiles', 'couples', 'couple_events', 'messages',
       'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
       'shared_books', 'reading_progress', 'highlights', 'push_subscriptions', 'miss_you_taps',
-      'daily_decision_questions', 'daily_decision_responses',
+      'daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses',
     ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;

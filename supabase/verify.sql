@@ -413,36 +413,45 @@ BEGIN
      OR has_table_privilege('anon', 'public.miss_you_taps', 'SELECT') THEN
     RAISE EXCEPTION 'miss_you_taps must only be written through its functions. Rerun supabase/migrations/202610150016_miss_you.sql.';
   END IF;
-  -- Daily decisions: one owner-uploaded question per UTC date, with three choices and
-  -- answers hidden by RLS until both partners have replied.
+  -- Daily decisions: an undated owner-uploaded question pool. Each couple is
+  -- randomly assigned one question a day they have never been given before,
+  -- with three choices and answers hidden by RLS until both partners replied.
   IF to_regclass('public.daily_decision_questions') IS NULL
+     OR to_regclass('public.daily_decision_assignments') IS NULL
      OR to_regclass('public.daily_decision_responses') IS NULL THEN
-    RAISE EXCEPTION 'Missing Daily Decisions tables. Apply supabase/migrations/202610170002_daily_decisions.sql.';
+    RAISE EXCEPTION 'Missing Daily Decisions tables. Apply supabase/migrations/202610180001_daily_decision_pool.sql.';
   END IF;
   IF EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
-      AND c.relname IN ('daily_decision_questions', 'daily_decision_responses')
+      AND c.relname IN ('daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses')
       AND NOT c.relrowsecurity
-  ) THEN RAISE EXCEPTION 'Row-level security is required on Daily Decisions. Rerun supabase/migrations/202610170002_daily_decisions.sql.'; END IF;
+  ) THEN RAISE EXCEPTION 'Row-level security is required on Daily Decisions. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.'; END IF;
   IF (SELECT count(*) FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'daily_decision_questions'
-        AND column_name IN ('decision_date', 'question', 'option_a', 'option_b', 'option_c')) <> 5
+        AND column_name IN ('id', 'question', 'option_a', 'option_b', 'option_c')) <> 5
+     OR EXISTS (SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'daily_decision_questions'
+           AND column_name = 'decision_date')
+     OR (SELECT count(*) FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'daily_decision_assignments'
+           AND column_name IN ('couple_id', 'decision_date', 'question_id')) <> 3
      OR (SELECT count(*) FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = 'daily_decision_responses'
            AND column_name IN ('couple_id', 'decision_date', 'user_id', 'option_index')) <> 4 THEN
-    RAISE EXCEPTION 'Daily Decisions tables are missing required columns. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+    RAISE EXCEPTION 'Daily Decisions tables are missing required columns. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.';
   END IF;
   IF to_regclass('public.daily_decision_responses_one_per_partner') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_decision_assignments_never_repeated')
      OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_decision_responses_option_check')
      OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_decision_questions_options_distinct') THEN
-    RAISE EXCEPTION 'Daily Decisions question and response constraints are missing. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+    RAISE EXCEPTION 'Daily Decisions question, assignment and response constraints are missing. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.';
   END IF;
   IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND (
-    (tablename = 'daily_decision_questions' AND policyname = 'Signed-in users can read daily decision questions')
+    (tablename = 'daily_decision_assignments' AND policyname = 'Couple members can view their daily decision assignments')
     OR (tablename = 'daily_decision_responses' AND policyname = 'Couples can read daily decision choices after the reveal')
   )) <> 2 THEN
-    RAISE EXCEPTION 'Daily Decisions privacy policies are missing. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+    RAISE EXCEPTION 'Daily Decisions privacy policies are missing. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.';
   END IF;
   FOREACH signature IN ARRAY ARRAY[
     'public.can_read_daily_decision_response(uuid,date,uuid)',
@@ -450,26 +459,43 @@ BEGIN
     'public.submit_daily_decision_choice(smallint)'
   ] LOOP
     IF to_regprocedure(signature) IS NULL THEN
-      RAISE EXCEPTION 'Missing function %. Apply supabase/migrations/202610170002_daily_decisions.sql.', signature;
+      RAISE EXCEPTION 'Missing function %. Apply supabase/migrations/202610180001_daily_decision_pool.sql.', signature;
     END IF;
     IF NOT has_function_privilege('authenticated', signature, 'EXECUTE')
        OR has_function_privilege('anon', signature, 'EXECUTE') THEN
       RAISE EXCEPTION 'Daily Decisions function permissions are incorrect for %.', signature;
     END IF;
   END LOOP;
-  IF NOT has_table_privilege('authenticated', 'public.daily_decision_questions', 'SELECT')
+  -- The assignment picker takes any couple id, so it must stay private to the
+  -- two RPCs above (which derive the couple from the caller).
+  IF to_regprocedure('public.ensure_daily_decision_assignment(uuid,date)') IS NULL THEN
+    RAISE EXCEPTION 'Missing function public.ensure_daily_decision_assignment(uuid,date). Apply supabase/migrations/202610180001_daily_decision_pool.sql.';
+  END IF;
+  IF has_function_privilege('authenticated', 'public.ensure_daily_decision_assignment(uuid,date)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.ensure_daily_decision_assignment(uuid,date)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'Daily Decisions assignment function must not be callable directly. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.';
+  END IF;
+  -- The pool is reached only through the state RPC (one question at a time);
+  -- phones read their couple's assignments and revealed responses, and write
+  -- nothing directly.
+  IF has_table_privilege('authenticated', 'public.daily_decision_questions', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.daily_decision_assignments', 'SELECT')
      OR NOT has_table_privilege('authenticated', 'public.daily_decision_responses', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.daily_decision_assignments', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.daily_decision_assignments', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.daily_decision_assignments', 'DELETE')
      OR has_table_privilege('authenticated', 'public.daily_decision_responses', 'INSERT')
      OR has_table_privilege('authenticated', 'public.daily_decision_responses', 'UPDATE')
      OR has_table_privilege('authenticated', 'public.daily_decision_responses', 'DELETE')
      OR has_table_privilege('anon', 'public.daily_decision_questions', 'SELECT')
+     OR has_table_privilege('anon', 'public.daily_decision_assignments', 'SELECT')
      OR has_table_privilege('anon', 'public.daily_decision_responses', 'SELECT') THEN
-    RAISE EXCEPTION 'Daily Decisions must be read through RLS and written only through its submit function. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+    RAISE EXCEPTION 'Daily Decisions must be read through RLS and written only through its submit function. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
      AND NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime'
                       AND schemaname = 'public' AND tablename = 'daily_decision_responses') THEN
-    RAISE EXCEPTION 'Daily Decisions responses are missing from supabase_realtime. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+    RAISE EXCEPTION 'Daily Decisions responses are missing from supabase_realtime. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.';
   END IF;
 END;
 $$;
