@@ -92,7 +92,10 @@ apply and verify the database migrations separately.
    adds the tap table behind the "I miss you" button (`202610150016`, the only one the
    frontend never writes directly), and the location one adds columns to `profiles` —
    no new table, no new policy, and every existing row keeps working with no place saved.
-   See **Locations, and the marketplace they are scaffolding for**.
+   See **Locations, and the marketplace they are scaffolding for**. `202610180003` lets a
+   retried run report skip taps the referee has already logged: a finish that repeated
+   them used to be refused as "out of order" forever, so a duel both partners had played
+   never settled and stood in their Ongoing games until the grace window erased it.
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
    anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat,
@@ -812,7 +815,7 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_duel_report_retries.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
 migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
@@ -1204,9 +1207,11 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
 - **Sudoku:** a solo, race or shared grid in easy, medium and hard difficulties.
 - **Tetris Duel:** each partner plays the same server-dealt pieces in a five-minute sprint
   or survival duel. The database replays taps to settle the result.
-- An unfinished match resumes when either partner opens the same game. Finished duels stay
-  available through the library's **Last Duel** row. The Games tab badge counts matches
-  waiting for this phone.
+- An unfinished match resumes when either partner opens the same game; the live matches
+  stand in the Games tab's swipeable **Ongoing games** card — one card's height however
+  many are open. Finished duels stay available through the **Last duel** row beneath it,
+  as history and never among the games that can still be played. The Games tab badge
+  counts matches waiting for this phone.
 - Secret picks and live opponent scores are never exposed through direct table access or a
   realtime payload; the app receives only the sanitized Games RPC snapshot.
 

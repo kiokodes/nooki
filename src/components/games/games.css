@@ -25,6 +25,34 @@
 .games-view .game-resume { display:block; width:100%; text-align:left; background:#e8efdf; padding:18px 20px; }
 .game-resume small { display:block; margin-top:5px; }
 
+/* --- Ongoing games ------------------------------------------------------------
+   One card's height, however many matches are open: the track scrolls sideways
+   with snap, so a thumb swipe (or a trackpad drag, or the arrows) walks through
+   the live games and none of them push the library off the screen. The rules are
+   self-contained: the design preview renders this card outside .games-view. */
+.ongoing-games { padding:16px 16px 14px; }
+.ongoing-games button { font:inherit; font-size:.85rem; font-weight:700; border:0; cursor:pointer; color:#402d38; }
+.ongoing-games button:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; }
+.ongoing-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.ongoing-head h2 { margin:0; font-size:1rem; color:#443c42; }
+.ongoing-count { font-size:.72rem; font-weight:800; color:#85767e; }
+.ongoing-track { display:flex; gap:10px; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -ms-overflow-style:none; touch-action:pan-x pan-y; }
+.ongoing-track::-webkit-scrollbar { display:none; }
+.ongoing-track:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; border-radius:14px; }
+.ongoing-games .ongoing-slide { flex:0 0 100%; min-width:0; scroll-snap-align:center; display:block; width:100%; text-align:left; background:#e8efdf; border-radius:16px; padding:16px 18px; }
+.ongoing-slide strong { display:block; font-size:.95rem; }
+.ongoing-slide small { display:block; margin-top:5px; }
+.ongoing-dots { display:flex; justify-content:center; align-items:center; gap:6px; margin-top:10px; }
+.ongoing-games .ongoing-dot { width:7px; min-width:0; height:7px; padding:0; border-radius:999px; background:#ddc6e4; transition:width .18s ease, background .18s ease; }
+.ongoing-games .ongoing-dot.is-active { width:18px; background:#8a6c93; }
+
+/* A finished duel is history: its own quiet row under the ongoing card, never a
+   card among the games that can still be played. */
+.game-last-duel { font:inherit; font-size:.85rem; font-weight:700; display:block; width:100%; text-align:left; background:transparent; border:1px dashed #e3d4e6; border-radius:16px; color:#795d88; padding:12px 16px; margin-bottom:14px; cursor:pointer; }
+.game-last-duel:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; }
+.game-last-duel > small:first-child { display:block; text-transform:uppercase; letter-spacing:.12em; font-size:.62rem; font-weight:800; opacity:.75; margin-bottom:3px; }
+.game-last-duel small { display:block; margin-top:3px; color:#85767e; font-weight:600; }
+
 /* Card rhythm.
    The global reset in index.css sets every margin to 0, so the blocks inside a
    game card need their own spacing. Without this the copy runs straight into
