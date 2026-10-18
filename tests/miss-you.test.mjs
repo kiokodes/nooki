@@ -273,7 +273,9 @@ test('miss you: the button in the nook, and the heart it becomes on the other ph
       presenceState: () => presence.state,
       on(type, filter, handler) { presence.handlers.push({ event: filter.event, handler }); return fakeChannel; },
       subscribe(callback) {
-        callback('SUBSCRIBED');
+        // The real client allows subscribe() with no status callback; the books and
+        // Together hooks use that form, so the stand-in must too.
+        callback?.('SUBSCRIBED');
         for (const entry of presence.handlers.filter((item) => item.event === 'sync')) entry.handler({ event: 'sync' });
         return fakeChannel;
       },

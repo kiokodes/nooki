@@ -15,7 +15,17 @@
  */
 
 const DEFAULT_TAB = 'chat';
-const TABS = ['chat', 'media', 'home', 'discuss', 'games'];
+const TABS = ['chat', 'home', 'discuss', 'games', 'together'];
+
+/** `media` is the Together tab's old name: notifications already delivered keep working. */
+const LEGACY_TABS = { media: 'together' };
+
+/** A known tab name, or null for anything else a sender might put in a payload. */
+function normalizeTab(value) {
+  const tab = LEGACY_TABS[value] || value;
+  return TABS.includes(tab) ? tab : null;
+}
+
 const ICON_URL = '/icons/icon-192.png';
 const BADGE_ICON_URL = '/icons/badge-72.png';
 
@@ -47,7 +57,7 @@ function readPayload(data) {
 }
 
 function tabOf(payload) {
-  return typeof payload.tab === 'string' && TABS.includes(payload.tab) ? payload.tab : DEFAULT_TAB;
+  return (typeof payload.tab === 'string' && normalizeTab(payload.tab)) || DEFAULT_TAB;
 }
 
 /** `/chat` is the deep link the app reads on boot, so a cold open lands on the tab too. */
@@ -105,7 +115,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
-  const tab = TABS.includes(data.tab) ? data.tab : DEFAULT_TAB;
+  const tab = normalizeTab(data.tab) || DEFAULT_TAB;
   const target = typeof data.url === 'string'
     ? data.url
     : new URL(`/?nooki=${tab}`, self.location.origin).href;

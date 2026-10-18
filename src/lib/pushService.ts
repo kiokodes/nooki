@@ -31,8 +31,11 @@ export const NOOKI_SERVICE_WORKER_SCOPE = '/';
 export const PUSH_DEEP_LINK_PARAM = 'nooki';
 
 /** The tabs a notification may open. Anything else is ignored, not followed. */
-export const PUSH_DEEP_LINK_TABS = ['discuss', 'games', 'home', 'together', 'chat'] as const;
+export const PUSH_DEEP_LINK_TABS = ['chat', 'together', 'home', 'discuss', 'games'] as const;
 export type PushDeepLinkTab = (typeof PUSH_DEEP_LINK_TABS)[number];
+
+/** `media` is the Together tab's old name: deep links already sent keep working. */
+const LEGACY_DEEP_LINK_TABS: Record<string, PushDeepLinkTab> = { media: 'together' };
 
 /** What this browser can do, before permission enters the picture. */
 export interface PushEnvironment {
@@ -300,7 +303,8 @@ export function takePushDeepLink(href?: string): PushDeepLinkTab | null {
     url.searchParams.delete(PUSH_DEEP_LINK_PARAM);
     const cleaned = `${url.pathname}${url.search}${url.hash}`;
     window.history.replaceState(window.history.state, '', cleaned || '/');
-    return (PUSH_DEEP_LINK_TABS as readonly string[]).includes(value) ? (value as PushDeepLinkTab) : null;
+    if ((PUSH_DEEP_LINK_TABS as readonly string[]).includes(value)) return value as PushDeepLinkTab;
+    return LEGACY_DEEP_LINK_TABS[value] ?? null;
   } catch {
     return null;
   }

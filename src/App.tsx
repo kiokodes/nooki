@@ -30,8 +30,8 @@ import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
-import { useVisits, type Visit } from './hooks/useVisits';
-import { useSomedayList, type SomedayItem } from './hooks/useSomedayList';
+import { useVisits } from './hooks/useVisits';
+import { useSomedayList } from './hooks/useSomedayList';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
@@ -961,17 +961,17 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
                   // Update existing visit
                   await visits.updateVisit(visits.visit.id, {
                     start_date: startDate,
-                    end_date,
+                    end_date: endDate,
                     location,
-                    timezone,
+                    timezone: timezone ?? 'UTC',
                     is_tentative: isTentative,
                   });
                 } else {
                   // Create new visit
                   await visits.planVisit(startDate, endDate, location, timezone, isTentative);
                 }
-              } catch (err) {
-                // Error is handled in the modal
+              } catch {
+                // The modal shows the save error beside the form.
               }
             }}
             existingVisit={visits.visit}

@@ -361,7 +361,7 @@ export interface MissYouTap {
 
 /* ---------------------------------------------------------------------------
    Together tab: Visits - planned visits with countdown.
-   See supabase/migrations/202610180003_together_visits_and_someday_list.sql.
+   See supabase/migrations/202610180007_together_visits_and_someday_list.sql.
    --------------------------------------------------------------------------- */
 
 export interface Visit {
@@ -379,7 +379,7 @@ export interface Visit {
 
 /* ---------------------------------------------------------------------------
    Together tab: Someday list - shared list of things to experience together.
-   See supabase/migrations/202610180003_together_visits_and_someday_list.sql.
+   See supabase/migrations/202610180007_together_visits_and_someday_list.sql.
    --------------------------------------------------------------------------- */
 
 export interface SomedayItem {

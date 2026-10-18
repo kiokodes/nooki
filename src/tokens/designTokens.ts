@@ -67,6 +67,7 @@ export const tokens = {
     card: '0 12px 30px rgba(78, 56, 44, 0.05)',
     navBar: '0 -8px 24px rgba(78, 56, 44, 0.05)',
     highlightPink: '0 10px 22px rgba(249, 168, 212, 0.45)',
+    modal: '0 24px 60px rgba(78, 56, 44, 0.24)',
   },
 
   spacing: {

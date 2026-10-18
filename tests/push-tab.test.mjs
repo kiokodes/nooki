@@ -117,7 +117,9 @@ test('push service: which platforms can subscribe, and what each one needs', asy
       assert.equal(push.takePushDeepLink(), null, 'and an unknown tab is ignored rather than followed');
       globalThis.window.location.href = 'https://nooki.test/chat';
       assert.equal(push.takePushDeepLink(), null, 'an ordinary visit has no deep link');
-      assert.equal(push.takePushDeepLink('https://nooki.test/?nooki=media'), 'media');
+      assert.equal(push.takePushDeepLink('https://nooki.test/?nooki=together'), 'together');
+      assert.equal(push.takePushDeepLink('https://nooki.test/?nooki=media'), 'together',
+        'a notification sent before the rename still opens Together');
     } finally {
       delete globalThis.window;
     }
@@ -126,7 +128,7 @@ test('push service: which platforms can subscribe, and what each one needs', asy
     assert.equal(push.isPushOpenTabMessage({ type: 'nooki-open-tab', tab: 'chat' }), true);
     assert.equal(push.isPushOpenTabMessage({ type: 'nooki-badge', count: 1 }), false);
     assert.equal(push.isPushOpenTabMessage(null), false);
-    assert.deepEqual([...push.PUSH_DEEP_LINK_TABS], ['chat', 'media', 'home', 'discuss', 'games']);
+    assert.deepEqual([...push.PUSH_DEEP_LINK_TABS], ['chat', 'together', 'home', 'discuss', 'games']);
     assert.equal(push.NOOKI_SERVICE_WORKER_URL, '/nooki-sw.js', 'the worker is served from public/, outside the bundler');
     assert.equal(push.NOOKI_SERVICE_WORKER_SCOPE, '/', 'and covers the whole app');
   } finally {
@@ -292,7 +294,9 @@ test('push plumbing: manifest, icons, worker and app wiring are all in place', (
   assert(worker.includes("addEventListener('message'"), 'and the badge message from the app');
   assert(worker.includes('showNotification'), 'a push always shows something (userVisibleOnly)');
   assert(worker.includes('setAppBadge') || worker.includes('clearAppBadge'), 'the icon badge is set from the worker');
-  assert(worker.includes("TABS.includes(data.tab)"), 'a tab from a notification is validated before it is followed');
+  assert(worker.includes('TABS.includes(tab)'), 'a tab from a notification is validated before it is followed');
+  assert(worker.includes("const LEGACY_TABS = { media: 'together' }"),
+    'a notification sent before the rename still opens Together');
   assert(worker.includes('clients.matchAll'), 'an already-open Nooki is focused instead of a second one opened');
   assert(worker.includes('nooki-open-tab'), 'and it tells that window which tab to show');
   assert(!worker.includes("addEventListener('fetch'"), 'the worker caches nothing: no fetch handler, no stale shell');

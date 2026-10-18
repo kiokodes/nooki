@@ -127,7 +127,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
       },
       subscribe(callback) {
         presence.status = 'SUBSCRIBED';
-        callback('SUBSCRIBED');
+        // The real client allows subscribe() with no status callback; the Together
+        // hooks use that form, so the stand-in must too.
+        callback?.('SUBSCRIBED');
         // The real client replays the current presence state on subscribe.
         for (const entry of presence.handlers.filter((item) => item.event === 'sync')) entry.handler({ event: 'sync' });
         return fakeChannel;
@@ -188,7 +190,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await waitFor(() => homeBadge()?.textContent.trim() === '1', 'an unanswered daily decision badges Home');
     assert.equal(homeTabButton().getAttribute('aria-label'), "Home, today's decision waiting for you");
     // Navigating away or simply visiting Home never counts as answering.
-    await act(async () => { document.querySelector('[data-nav-tab="media"]').click(); });
+    await act(async () => { document.querySelector('[data-nav-tab="together"]').click(); });
     assert(homeBadge(), 'the reminder remains visible on another tab');
     await act(async () => { homeTabButton().click(); });
     assert(homeBadge(), 'visiting Home does not clear the reminder');
@@ -350,9 +352,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
       'leaving the app re-reads the stored last_seen_at');
 
     // Presence survives browsing other tabs: it is owned by the app, not the Home tab.
-    const mediaTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Media'));
-    await act(async () => { mediaTab.click(); });
-    assert(body().includes('Read together'), 'the Media tab now opens the shared books shelf');
+    const togetherTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Together'));
+    await act(async () => { togetherTab.click(); });
+    assert(body().includes('Read together'), 'the Together tab now opens the shared books shelf');
     assert(dot(), 'the header ticker stays visible on every tab');
     assert.equal(removedChannels, 0, 'the presence channel is not torn down on tab switches');
 
