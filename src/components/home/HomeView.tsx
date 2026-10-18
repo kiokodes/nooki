@@ -1,6 +1,5 @@
 import React from 'react';
 import { TodayCard } from './TodayCard';
-import { DailyGameCard } from './DailyGameCard';
 import { DailyDecisionCard } from './DailyDecisionCard';
 import { NookPhotoFrame, type NookPhotoFrameProps } from './NookPhotoFrame';
 import { MissYouButton, type MissYouButtonProps } from './MissYouButton';
@@ -14,13 +13,8 @@ interface HomeViewProps {
   eventsLoading: boolean;
   eventsError: string | null;
   onOpenCalendar: () => void;
-  userName?: string;
-  partnerName?: string;
   /** Realtime presence for the other partner; this phone is already active on Home. */
   partnerOnline?: boolean;
-  userWins?: number;
-  partnerWins?: number;
-  onPlayDailyGame?: () => void;
   onOpenDailyDecision?: () => void;
   /**
    * The couple's framed picture standing in the nook (see `useCouplePhoto`). The
@@ -39,7 +33,7 @@ interface HomeViewProps {
  *
  * It shows:
  * - The Today card: today's date, anything happening today, and what is coming within the next day.
- * - Two compact daily cards side by side: the game score, and today's shared decision.
+ * - Today's shared decision.
  * - A shared cozy nook, with a small top-right caption, the couple's own picture standing
  *   in a gift-wrapped frame (the first thing either partner sees is the two of them), and
  *   the "I miss you" button in the top-left corner. The button belongs to the half of the
@@ -52,12 +46,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   eventsLoading,
   eventsError,
   onOpenCalendar,
-  userName,
-  partnerName,
   partnerOnline = false,
-  userWins = 0,
-  partnerWins = 0,
-  onPlayDailyGame,
   onOpenDailyDecision,
   photo,
   missYou,
@@ -88,23 +77,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         onOpenCalendar={onOpenCalendar}
       />
 
-      <div
-        data-home-daily-cards
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: '10px',
-        }}
-      >
-        <DailyGameCard
-          userName={userName}
-          partnerName={partnerName}
-          userWins={userWins}
-          partnerWins={partnerWins}
-          onPlay={onPlayDailyGame}
-        />
-        <DailyDecisionCard onPlay={onOpenDailyDecision} />
-      </div>
+      <DailyDecisionCard onPlay={onOpenDailyDecision} />
 
       {/* Cozy living nook — our shared little space. The frame in the middle is the
           couple's own picture; the miss-you button and the caption stay put. */}

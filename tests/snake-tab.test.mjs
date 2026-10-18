@@ -70,7 +70,7 @@ test('snake tab: a live run asks before a tab change, and leaving forfeits it', 
     };
 
     // Bob opens the duel, so it is waiting on Alice — and her Games tab says so.
-    const duel = await asBob(() => games.startGame('snake', false, 3));
+    const duel = await asBob(() => games.startGame('snake', 3));
 
     const { default: App } = await server.ssrLoadModule('/src/App.tsx');
     await act(async () => { root.render(React.createElement(App)); });

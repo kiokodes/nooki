@@ -6,7 +6,6 @@ import type { TetrisInput, TetrisMode } from './tetris';
 import { isTetrisAction } from './tetris';
 
 export const GAMES = [
-  { id: 'tic-tac-toe', name: 'Tic Tac Toe', icon: '✕ ◯', description: 'Three in a row. A little friendly rivalry.' },
   { id: 'rock-paper-scissors', name: 'Rock Paper Scissors', icon: '✊ ✋ ✌️', description: 'Pick in secret. Reveal together.' },
   {
     id: 'snake',
@@ -116,8 +115,8 @@ export interface ChessSnapshot {
 }
 
 export interface GameMatch {
-  id: string; game: GameId; daily_date: string | null; player_x: string; player_o: string;
-  board: string[]; turn_id: string; best_of: number; round: number; score_x: number; score_o: number;
+  id: string; game: GameId; player_x: string; player_o: string;
+  turn_id: string; best_of: number; round: number; score_x: number; score_o: number;
   my_pick: string | null; partner_locked: boolean; finished: boolean; winner_id: string | null;
   rounds: { round: number; x: string; o: string; winner: string | null }[];
   /** Present on snake duels only: the run this phone may play, and the partner's status. */
@@ -127,7 +126,7 @@ export interface GameMatch {
   /** Present on chess matches only: the position the database has validated. */
   chess?: ChessSnapshot | null;
 }
-export interface GamesSnapshot { today: string; wins: Record<string, number>; matches: GameMatch[] }
+export interface GamesSnapshot { wins: Record<string, number>; matches: GameMatch[] }
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
 const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
 const TETRIS_SETUP_ERROR = 'Tetris Duel needs a database update. Apply migration 202610150012_tetris_duel.sql after 202610150011_chess.sql; if Tetris is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
@@ -140,7 +139,7 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
     // Migration 007's start_game exists, but only accepts the two original games.
     // This is not a missing-RPC error: it rejects a perfectly valid Duel button click.
     const legacySnakeStart = name === 'start_game' && args.p_game === 'snake'
-      && args.p_daily === false && [3, 5].includes(Number(args.p_best_of))
+      && [3, 5].includes(Number(args.p_best_of))
       && ((error.code === 'P0001' && error.message === 'Invalid game settings.')
         || (error.code === '23514' && error.message.includes('game_matches_game_check')));
     if (legacySnakeStart) throw new Error(SNAKE_SETUP_ERROR);
@@ -172,12 +171,13 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
 }
 export async function fetchGames(): Promise<GamesSnapshot> {
   const data = await rpc<GamesSnapshot>('games_state');
-  if (!data || !Array.isArray(data.matches) || !data.wins || typeof data.wins !== 'object' || typeof data.today !== 'string') {
+  if (!data || !Array.isArray(data.matches) || !data.wins || typeof data.wins !== 'object') {
     throw new Error('Games returned an incomplete response. Retry the connection; if it persists, run supabase/verify-games.sql.');
   }
   return data;
 }
-export const startGame = (game: GameId, daily: boolean, bestOf: number) => rpc<string>('start_game', { p_game: game, p_daily: daily, p_best_of: bestOf });
+/** Start or resume an open Rock Paper Scissors match or Snake Duel. */
+export const startGame = (game: GameId, bestOf = 3) => rpc<string>('start_game', { p_game: game, p_best_of: bestOf });
 export const playGame = (match: GameMatch, move: string) => rpc<void>('play_game', { p_id: match.id, p_round: match.round, p_move: move });
 
 /* ---------------------------------------------------------------------------

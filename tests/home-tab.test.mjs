@@ -214,7 +214,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert(!appHeader().textContent.includes(`${aliceClock.time} ${aliceClock.weekday}`),
       'the reader never sees their own time');
 
-    // 2. The Home tab shows Today, two compact daily cards and the reserved bottom scene area.
+    // 2. The Home tab shows Today, today's decision and the reserved bottom scene area.
     const shell = document.querySelector('main.nooki-shell');
     assert(shell, 'the app renders inside the responsive .nooki-shell container');
     assert.equal(shell.style.width, '100%', 'the app shell uses fluid 100% width instead of a fixed pixel width');
@@ -225,21 +225,10 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(body().includes('This phone'), false, 'the old partner-status card is gone');
     assert.equal(body().includes('Partner status'), false, 'no leftover status card');
 
-    // Compact daily game card: the eyebrow, Play button and initials score line only.
-    const dailyGameCard = home.querySelector('[data-card="daily-game"]');
-    assert(dailyGameCard, 'the Daily game card is on the Home tab');
-    assert(dailyGameCard.textContent.includes('Daily game'), 'the card keeps the Daily game eyebrow');
-    assert.equal(dailyGameCard.textContent.includes("Today's challenge"), false, 'the old headline is removed');
-    const playButton = dailyGameCard.querySelector('[data-action="play-daily-game"]');
-    assert(playButton, 'the Daily game card has a Play button');
-    assert(playButton.textContent.includes('Play'), 'the Play button is labelled Play');
-    const scoreboard = dailyGameCard.querySelector('[data-scoreboard]');
-    assert(scoreboard, 'the Daily game card includes a scoreboard');
-    assert.equal(scoreboard.textContent.replace(/\s+/g, ''), 'A0–0B', 'only initials and the score are shown');
-    assert.match(scoreboard.getAttribute('aria-label'), /Alice 0 to 0 Bob/, 'full names stay available accessibly');
+    assert.equal(home.querySelector('[data-card="daily-game"]'), null, 'the retired Daily game card is absent');
 
     const dailyDecisionCard = home.querySelector('[data-card="daily-decision"]');
-    assert(dailyDecisionCard, 'the Daily decision card sits beside the game');
+    assert(dailyDecisionCard, 'the daily decision is the only daily Home card');
     const decisionCardCopy = dailyDecisionCard.textContent.replace(/\u2019/g, "'").trim();
     assert.equal(decisionCardCopy, "Today's decisionPlay", 'the card shows only its eyebrow and Play button');
     const openDecisionButton = dailyDecisionCard.querySelector('[data-action="play-daily-decision"]');
@@ -268,16 +257,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
       'the chat message carries all three options');
     await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
 
-    // Play the daily game from its compact card, then return to Home.
-    const currentPlayButton = document.querySelector('[data-card="daily-game"] [data-action="play-daily-game"]');
-    await act(async () => { currentPlayButton.click(); });
-    assert(document.querySelector('[aria-label="Games"]'), 'tapping Play opens the Games tab');
-    assert(document.body.textContent.includes('Daily challenge'), 'the daily match loads');
-    await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
-
     // The shared nook stays at the bottom of Home, with its caption pinned to the top-right.
     const currentHome = document.querySelector('[data-screen="home"]');
-    assert(currentHome, 'the Home tab is visible again after the daily game');
+    assert(currentHome, 'the Home tab is visible again after closing the daily decision');
     const sceneArea = currentHome.querySelector('[data-scene-placeholder]');
     assert(sceneArea, 'the Home tab includes the shared Nooki scene');
     assert.equal(currentHome.lastElementChild, sceneArea, 'the shared nook stays at the bottom of the Home screen');

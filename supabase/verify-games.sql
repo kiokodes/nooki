@@ -1,4 +1,5 @@
--- Read-only Games preflight; run after verify.sql and migrations 007, 010, 011 and 012.
+-- Read-only Games preflight; run after verify.sql and the Games migrations, including
+-- 202610180002_remove_daily_games_and_tic_tac_toe.sql.
 BEGIN TRANSACTION READ ONLY;
 DO $$
 DECLARE fn text;
@@ -12,22 +13,26 @@ BEGIN
  OR has_table_privilege('anon','public.game_matches','SELECT') THEN
    RAISE EXCEPTION 'Game secrets must be private: rerun migration 007.';
  END IF;
- FOREACH fn IN ARRAY ARRAY['public.games_state()','public.start_game(text,boolean,integer)','public.play_game(uuid,integer,text)'] LOOP
+ FOREACH fn IN ARRAY ARRAY['public.games_state()','public.start_game(text,integer)','public.play_game(uuid,integer,text)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Games RPC: %',fn; END IF;
    IF NOT has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
      RAISE EXCEPTION 'Unsafe Games RPC permissions: %',fn;
    END IF;
  END LOOP;
 
- -- Rerunning 007 after 010 leaves the Snake tables/functions present, but replaces
- -- these two entry points with pre-Snake versions. Existence checks alone miss that:
- -- Duel gets "Invalid game settings" and games_state no longer seals Snake scores.
- IF position('''snake''' IN pg_get_functiondef('public.start_game(text,boolean,integer)'::regprocedure)) = 0 THEN
-   RAISE EXCEPTION 'start_game does not support Snake Duel: rerun migration 010 after migration 007.';
+ -- The retirement migration owns the public entry point now: it must retain Snake while
+ -- exposing neither a daily flag nor the retired game/date fields.
+ IF position('''snake''' IN pg_get_functiondef('public.start_game(text,integer)'::regprocedure)) = 0 THEN
+   RAISE EXCEPTION 'start_game does not support Snake Duel: apply migration 202610180002 after the Games migrations.';
+ END IF;
+ IF to_regprocedure('public.start_game(text,boolean,integer)') IS NOT NULL
+    OR position('daily_date' IN pg_get_functiondef('public.games_state()'::regprocedure)) > 0
+    OR position('tic-tac-toe' IN pg_get_functiondef('public.games_state()'::regprocedure)) > 0 THEN
+   RAISE EXCEPTION 'Daily Games or Tic Tac Toe are still installed: apply migration 202610180002_remove_daily_games_and_tic_tac_toe.sql.';
  END IF;
  IF position('snake_view' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0
  OR position('snake_sweep' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0 THEN
-   RAISE EXCEPTION 'games_state is the pre-Snake version: rerun migration 010 after migration 007 to restore sealed scores and expiry.';
+   RAISE EXCEPTION 'games_state is missing the Snake snapshot or expiry sweep: apply the current Games migrations.';
  END IF;
 
  -- The Snake duel (migration 010). Its rules live in the database too: the food is dealt
@@ -130,5 +135,5 @@ BEGIN
    END IF;
  END LOOP;
 END $$;
-SELECT 'PASS: Games RPCs, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
+SELECT 'PASS: always-available Games RPCs, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;

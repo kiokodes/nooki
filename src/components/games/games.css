@@ -14,9 +14,6 @@
 .games-view legend { font-size:.75rem; font-weight:700; flex:0 0 100%; margin:0 0 8px; }
 .games-view [aria-pressed] { background:#f4edf5; }
 .games-view [aria-pressed=true] { background:#ddc6e4; box-shadow:inset 0 0 0 2px #93749d; }
-.ttt-board { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:320px; margin:20px auto; }
-.ttt-board button { aspect-ratio:1; font-size:2.4rem; background:#f4edf5; color:#795d88; padding:0; }
-.ttt-board button:disabled { opacity:1; }
 .game-status { font-weight:800; font-size:1rem!important; }
 .game-hint { color:#85767e; text-align:center; }
 .game-score { font-size:1.1rem; font-weight:800; padding:16px 0; overflow-wrap:anywhere; }
@@ -31,8 +28,7 @@
 /* Card rhythm.
    The global reset in index.css sets every margin to 0, so the blocks inside a
    game card need their own spacing. Without this the copy runs straight into
-   the next element — the call-to-action button in the Tic Tac Toe card ends
-   up sitting on top of the description above it. */
+   the next element or call-to-action button. */
 .game-card > p { margin:0 0 12px; }
 .game-card > p:last-child { margin-bottom:0; }
 .game-card h2 { margin:8px 0 6px; }

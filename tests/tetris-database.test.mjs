@@ -242,8 +242,8 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
     );
     assert.ok(clocked.pieces.length === TETRIS_PIECE_COUNT);
 
-    // --- Safe to rerun on a live project: the migration leaves the duels alone ---------
-    const migration = await readFile(new URL('../supabase/migrations/202610150012_tetris_duel.sql', import.meta.url), 'utf8');
+    // --- Safe to rerun on a live project: the retirement migration leaves duels alone ---
+    const migration = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql', import.meta.url), 'utf8');
     const beforeRerun = await games.fetchGames();
     const beforeMigration = beforeRerun.matches.map((item) => [item.id, item.finished, item.winner_id]);
     await db.exec(migration);
@@ -253,7 +253,7 @@ test('tetris duel: verified runs, shared pieces, both modes, forfeits and the gr
     assert.deepEqual(
       afterMigration.matches.map((item) => [item.id, item.finished, item.winner_id]),
       beforeMigration,
-      'rerunning the migration preserves every duel',
+      'rerunning the retirement migration preserves every duel',
     );
     assert.deepEqual(afterMigration.wins, beforeRerun.wins, 'and the scoreboard it fed');
     const stillSealed = afterMigration.matches.find((item) => item.id === fourth);

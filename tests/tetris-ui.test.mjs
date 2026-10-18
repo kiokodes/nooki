@@ -24,7 +24,7 @@ test('tetris UI: the gate, a playable board, the leave question, warm-ups and th
     const calls = [];
     const pieces = new Array(600).fill(0);          // every piece a bar, so a turn is obvious
     const duel = (tetris, finished = false, winnerId = null) => ({
-      id: 'duel-1', game: 'tetris', daily_date: null, player_x: 'a', player_o: 'b',
+      id: 'duel-1', game: 'tetris', player_x: 'a', player_o: 'b',
       board: Array(9).fill(''), turn_id: 'a', best_of: 3, round: 1, score_x: 0, score_o: 0,
       my_pick: null, partner_locked: false, finished, winner_id: winnerId, rounds: [], tetris,
     });
