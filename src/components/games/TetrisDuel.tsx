@@ -128,7 +128,9 @@ export const TetrisDuel: React.FC<TetrisDuelProps> = ({
         <p className="game-status" role="status">
           {them.status === 'running'
             ? `${partnerName} is playing right now…`
-            : `${partnerName} hasn't played yet — their go comes whenever it suits them.`}
+            : them.status === 'done' || them.status === 'forfeit'
+              ? `${partnerName}'s run is in as well — the reveal lands the moment the duel settles.`
+              : `${partnerName} hasn't played yet — their go comes whenever it suits them.`}
         </p>
         <p className="game-hint">
           Your run: {mine.lines} lines, {endReason(mine, true, partnerName)}. Scores stay sealed

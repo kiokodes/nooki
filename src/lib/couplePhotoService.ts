@@ -6,7 +6,7 @@ import type { CouplePhoto } from '../types/database';
  * Storage and data for the couple picture frame in the Home nook.
  *
  * Everything is couple-scoped and the database is what keeps it that way (see
- * `couple_photo` in supabase/migrations/202610180002_couple_photo.sql). The file
+ * `couple_photo` in supabase/migrations/202610180003_couple_photo.sql). The file
  * itself lives in the private `couple-photos` bucket under
  * `photos/{couple_id}/{photo_id}.jpg` — the folder name IS the couple id, which is
  * what the storage policies check — and is opened only through short-lived signed

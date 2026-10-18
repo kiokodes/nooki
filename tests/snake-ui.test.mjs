@@ -298,6 +298,14 @@ test('snake preview: the sample duel plays, and leaving it forfeits to the sampl
     await waitFor(() => document.querySelector('[data-card="today"]'), 'the preview should open on Home');
     assert(gamesTab(), 'the preview nav offers Games');
     await act(async () => { gamesTab().click(); });
+    // The tab head is the real thing: the eyebrow, the swipeable Ongoing games card and
+    // the last duel's history row — the same components the app renders, so the preview
+    // cannot drift from the Games tab it stands in for.
+    assert.equal(document.querySelector('.games-eyebrow').textContent, 'A little lovers rivalry');
+    const ongoing = document.querySelector('[data-ongoing-games]');
+    assert.ok(ongoing, 'the preview shows the Ongoing games card');
+    assert.equal(ongoing.querySelectorAll('[data-ongoing-slide]').length, 3, 'with the sample matches to swipe');
+    assert(document.querySelector('[data-last-duel]'), 'and the last duel below, as history');
     // The Games tab shows one duel at a time, and it opens on Tetris: ask for Snake.
     await act(async () => { document.querySelector('[data-preview-game="snake"]').click(); });
     const gate = document.querySelector('[data-preview-snake="gate"]');

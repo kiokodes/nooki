@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GAMES } from '../../lib/gamesService';
+import { GAMES, type GameMatch } from '../../lib/gamesService';
 import { needsMyMove, type GamesState } from '../../hooks/useGames';
 import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
 import { dealPracticePieces, tetrisModeLabel, type TetrisMode } from '../../lib/tetris';
@@ -9,6 +9,7 @@ import { TetrisBoard } from './TetrisBoard';
 import { TetrisDuel } from './TetrisDuel';
 import { Sudoku } from './Sudoku';
 import { ChessDuel } from './ChessDuel';
+import { LastDuelRow, OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import './games.css';
 
@@ -18,6 +19,19 @@ interface WarmUp {
   foods: SnakePoint[];
   pieces: number[];
   nonce: number;
+}
+
+/**
+ * A duel whose two runs are in is no longer ongoing — it is waiting on the referee, at
+ * most one poll away. Listing it as "Resume" in the meantime is the one thing a couple
+ * must never see: they have both played, and the card claims the game is still going.
+ */
+function runDuelConcluded(match: GameMatch): boolean {
+  const duel = match.game === 'tetris' ? match.tetris : match.game === 'snake' ? match.snake : null;
+  if (!duel) return false;
+  const mineIn = !!duel.mine && duel.mine.status !== 'running';
+  const theirsIn = duel.partner.status !== 'waiting' && duel.partner.status !== 'running';
+  return mineIn && theirsIn;
 }
 
 export function GamesView({ games, userId, partnerName }: { games: GamesState; userId: string; partnerName: string }) {
@@ -34,8 +48,15 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   const startSnakeWarmUp = () => setWarmUp({ game: 'snake', foods: dealPracticeFoods(), pieces: [], nonce: Date.now() });
   // Keep failed starts beside the button that was tapped, not above an offscreen header.
   const inlineErrorGame = !m && !sudokuOpen && !warmUp ? games.errorGame : null;
-  /** The most recent duel of either kind, so its result stays reachable after it leaves the list. */
-  const lastDuel = games.data?.matches?.find((match) => match.game === 'snake' || match.game === 'tetris');
+  /** The most recent *settled* duel of either kind, so its result stays reachable below the library. */
+  const lastDuel = games.data?.matches?.find((match) => (match.game === 'snake' || match.game === 'tetris') && match.finished);
+  /** The couple's live matches: still to be played, one swipe away in their own card. */
+  const ongoing = (games.data?.matches ?? []).filter((match) => !match.finished && !runDuelConcluded(match));
+  const ongoingSlides: OngoingSlide[] = ongoing.map((match) => ({
+    id: match.id,
+    name: GAMES.find(g => g.id === match.game)?.name ?? 'Game',
+    statusLine: `${needsMyMove(match, userId) ? 'Your turn · ' : ''}With your partner →`,
+  }));
   // A warm-up stands in for whatever the Games tab was showing: the duel panel, or the
   // whole library. It is the same board either way, and it never touches the database.
   // It yields the moment the duel is decided: nobody wants to be practising through the
@@ -58,7 +79,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
   } : null;
 
   return <section className="games-view" aria-label="Games">
-    <header><span className="games-eyebrow">A little friendly rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
+    <header><span className="games-eyebrow">A little lovers rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
     {games.error && !inlineErrorGame && <GameError games={games} card />}
     {!games.data && !games.error && <p role="status">Loading your games…</p>}
     {m ? <>
@@ -110,8 +131,15 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
       <button className="game-back" onClick={() => setWarmUp(null)}>← All games</button>
       {practice}
     </> : <>
-      {games.data?.matches?.filter(match => !match.finished).map(match => <button className="game-card game-resume" key={match.id} onClick={() => openMatch(match.id)}>Resume {GAMES.find(g => g.id === match.game)?.name} <small>{needsMyMove(match, userId) ? 'Your turn · ' : ''}With your partner →</small></button>)}
-      {lastDuelLine && <button className="game-card game-resume" onClick={() => openMatch(lastDuel?.id ?? null)} data-last-duel>Last {lastDuelLine.name} <small>{lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You {lastDuelLine.mine} — {lastDuelLine.theirs} {partnerName} →</small></button>}
+      {/* Ongoing games live in their own swipeable card — ten open matches are ten
+          swipes, not ten screens. Finished duels are history and sit below the library,
+          never among the games that can still be played. */}
+      <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
+      {lastDuelLine && <LastDuelRow
+        name={lastDuelLine.name}
+        outcome={`${lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You ${lastDuelLine.mine} — ${lastDuelLine.theirs} ${partnerName} →`}
+        onOpen={() => openMatch(lastDuel?.id ?? null)}
+      />}
       {GAMES.map(game => (
         <article className="game-card" key={game.id} data-game={game.id}>
           <div className="game-icon" aria-hidden="true">{game.icon}</div>

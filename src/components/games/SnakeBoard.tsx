@@ -95,8 +95,12 @@ export function SnakeBoard({
     appliedRef.current = true;
     setEnded(final.ended);
     if (warmUp || !onFinishRef.current) return;
-    const changes = unsentRef.current;
-    unsentRef.current = [];
+    // Take the queue with splice, the way the beat does: anything still on the wire was
+    // taken out of it when that report was made, so a run that ends mid-report cannot
+    // hand the same turns to both. A finish that repeats turns the server has already
+    // logged is refused as out of order — and a refused finish is a duel that never
+    // settles, sitting in the couple's ongoing games until the grace window erases it.
+    const changes = unsentRef.current.splice(0);
     setUnsavedFinish({ ticks: final.ticks, changes });
     void Promise.resolve(onFinishRef.current(final.ticks, changes))
       .then(() => setUnsavedFinish(null))
@@ -146,19 +150,27 @@ export function SnakeBoard({
     if (warmUp || !live || ended) return;
     const timer = setInterval(() => {
       if (appliedRef.current || !onBeatRef.current) return;
-      const changes = unsentRef.current;
-      // How much of the queue is going out with this report, counted *before* the call:
-      // the array is the live one and the board keeps pushing to it while the report is on
-      // the wire, so counting afterwards would quietly drop everything tapped mid-flight —
-      // and a tap the server never hears is a replay that no longer matches what was played.
-      const reported = changes.length;
+      // The queue leaves with the report the moment it is made (splice, not a peek and a
+      // later trim): turns steered while the report is on the wire start a fresh queue
+      // and belong to the next one. If the report never lands, its turns come straight
+      // back — into the queue while the run is live, or into the pending finish if the
+      // run has already ended under it — so no turn is ever sent twice and none is lost.
+      const changes = unsentRef.current.splice(0);
       void Promise.resolve(onBeatRef.current(stateRef.current.ticks, changes))
-        .then(() => {
-          // Anything added while that report was in flight stays for the next one.
-          unsentRef.current = unsentRef.current.slice(reported);
-          setConnection('live');
-        })
-        .catch(() => setConnection('trouble'));
+        .then(() => setConnection('live'))
+        .catch(() => {
+          setConnection('trouble');
+          if (appliedRef.current) {
+            // The run ended while this report was on the wire: its turns join the pending
+            // finish (stable-sorted by tick, in the order they were steered), so the
+            // finish that goes out is complete — and unique.
+            setUnsavedFinish((pending) => (pending
+              ? { ticks: pending.ticks, changes: [...changes, ...pending.changes].sort((a, b) => a.tick - b.tick) }
+              : pending));
+          } else {
+            unsentRef.current = [...changes, ...unsentRef.current];
+          }
+        });
     }, SNAKE_BEAT_MS);
     return () => clearInterval(timer);
   }, [warmUp, live, ended]);

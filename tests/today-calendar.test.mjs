@@ -300,7 +300,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const missYouMigration = await readFile(new URL('../supabase/migrations/202610150016_miss_you.sql', import.meta.url), 'utf8');
   const dailyDecisionMigration = await readFile(new URL('../supabase/migrations/202610170002_daily_decisions.sql', import.meta.url), 'utf8');
   const dailyDecisionPoolMigration = await readFile(new URL('../supabase/migrations/202610180001_daily_decision_pool.sql', import.meta.url), 'utf8');
-  const couplePhotoMigration = await readFile(new URL('../supabase/migrations/202610180002_couple_photo.sql', import.meta.url), 'utf8');
+  const couplePhotoMigration = await readFile(new URL('../supabase/migrations/202610180003_couple_photo.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -364,7 +364,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
     await db.exec(dailyDecisionPoolMigration);
     // The pool upgrade is in but the couple picture frame is not: the preflight
     // asks for the frame's migration last of all.
-    await assert.rejects(db.exec(verification), /202610180002_couple_photo\.sql/,
+    await assert.rejects(db.exec(verification), /202610180003_couple_photo\.sql/,
       'the preflight must send the owner to the couple picture migration');
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(couplePhotoMigration);
@@ -395,7 +395,7 @@ async function server_paths() {
   const locations = await read('../supabase/migrations/202610170001_partner_locations.sql');
   const dailyDecisions = await read('../supabase/migrations/202610170002_daily_decisions.sql');
   const dailyDecisionPool = await read('../supabase/migrations/202610180001_daily_decision_pool.sql');
-  const couplePhoto = await read('../supabase/migrations/202610180002_couple_photo.sql');
+  const couplePhoto = await read('../supabase/migrations/202610180003_couple_photo.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -562,7 +562,7 @@ async function server_paths() {
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(dailyDecisionPool);
   // ...and finally the couple picture frame, which the preflight asks for last.
-  await assert.rejects(missingLinks.db.exec(verify), /202610180002_couple_photo\.sql/,
+  await assert.rejects(missingLinks.db.exec(verify), /202610180003_couple_photo\.sql/,
     'and then until the couple picture migration lands');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(couplePhoto);

@@ -13,6 +13,7 @@ import { CoupleHeader } from '../components/common/CoupleHeader';
 import { PreviewSnake } from './PreviewSnake';
 import { PreviewTetris } from './PreviewTetris';
 import { ChessDuel } from '../components/games/ChessDuel';
+import { LastDuelRow, OngoingGames } from '../components/games/OngoingGames';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { MissYouReveal } from '../components/home/MissYouReveal';
@@ -545,9 +546,24 @@ export const AppPreview = () => {
             />
 
             {tab === 'games' ? (
-              /* The duels, played out on this page: same boards, same rules, no backend.
+              /* The Games tab head — the real eyebrow, the real swipeable Ongoing games
+                 card and the real Last duel row, fed sample matches — and below it the
+                 duels played out on this page: same boards, same rules, no backend.
                  A toggle rather than two tabs — the preview is a page, not an app. */
               <section style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px 24px' }}>
+                <header style={{ margin: '6px 0 16px' }}>
+                  <span className="games-eyebrow">A little lovers rivalry</span>
+                  <h1 style={{ fontSize: '1.6rem', margin: '6px 0 0', color: tokens.colors.textPrimary }}>Play together</h1>
+                </header>
+                <OngoingGames
+                  slides={[
+                    { id: 'sample-tetris', name: 'Tetris Duel', statusLine: 'Your turn · With your partner →' },
+                    { id: 'sample-chess', name: 'Chess', statusLine: 'Your turn · With your partner →' },
+                    { id: 'sample-snake', name: 'Snake Duel', statusLine: 'With your partner →' },
+                  ]}
+                  onOpen={() => {}}
+                />
+                <LastDuelRow name="Tetris Duel" outcome="You won · You 4100 — 900 Ana →" onOpen={() => {}} />
                 <ChessDuel partnerName={partner.name} />
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', marginTop: '12px' }}>
                   {(['snake', 'tetris'] as const).map((game) => (
