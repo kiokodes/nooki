@@ -185,6 +185,16 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await waitFor(() => body().includes('Together for'), 'the unlocked app should render once the splash and couple load complete');
     assert.equal(document.querySelector('[data-screen="splash"]'), null, 'the splash screen dismisses after under 0.5 seconds');
 
+    // The bottom navigation reads Chat · Together · Home · Discuss · Games, left to right,
+    // with Home as the raised centre button — the same order the push deep links accept, so
+    // a tapped notification lands on the tab where the couple sees it sitting.
+    const navOrder = [...document.querySelectorAll('[data-nav-tab]')].map((node) => node.dataset.navTab);
+    assert.deepEqual(navOrder, ['chat', 'together', 'home', 'discuss', 'games'],
+      'the tabs keep their left-to-right order');
+    const push = await server.ssrLoadModule('/src/lib/pushService.ts');
+    assert.deepEqual(navOrder, [...push.PUSH_DEEP_LINK_TABS],
+      'the navigation and the push deep links agree on the tab order');
+
     const homeBadge = () => document.querySelector('[data-nav-badge="home"]');
     const homeTabButton = () => document.querySelector('[data-nav-tab="home"]');
     await waitFor(() => homeBadge()?.textContent.trim() === '1', 'an unanswered daily decision badges Home');

@@ -54,7 +54,7 @@ import {
 } from './lib/authService';
 import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
 
-type TabKey = 'discuss' | 'games' | 'home' | 'together' | 'chat';
+type TabKey = 'chat' | 'together' | 'home' | 'discuss' | 'games';
 
 interface TabConfig {
   key: TabKey;
@@ -66,7 +66,38 @@ interface TabConfig {
   accentSoft: string;
 }
 
+/**
+ * The bottom navigation, left to right: Chat, Together, Home (the raised centre
+ * button), Discuss, Games. This is the same order the push deep links accept
+ * (`PUSH_DEEP_LINK_TABS`) and the one the design preview shows, so a tapped
+ * notification and the bar on screen always agree about where a tab sits.
+ */
 const TABS: TabConfig[] = [
+  {
+    key: 'chat',
+    label: 'Chat',
+    icon: MessageCircle,
+    comingSoonSubtitle: 'Heartbeat nooks & whisper messages',
+    accentColor: tokens.colors.primaryPinkDeep,
+    accentSoft: tokens.colors.primaryPinkSoft,
+  },
+  {
+    key: 'together',
+    label: 'Together',
+    icon: ImageIcon,
+    comingSoonSubtitle: 'Shared books, visits & someday list',
+    accentColor: tokens.colors.primaryGreenDeep,
+    accentSoft: tokens.colors.primaryGreenSoft,
+  },
+  {
+    key: 'home',
+    label: 'Home',
+    icon: HomeIcon,
+    isCenter: true,
+    comingSoonSubtitle: 'Our shared couple space & daily questions',
+    accentColor: tokens.colors.primaryPinkDeep,
+    accentSoft: tokens.colors.primaryPinkSoft,
+  },
   {
     key: 'discuss',
     label: 'Discuss',
@@ -82,31 +113,6 @@ const TABS: TabConfig[] = [
     comingSoonSubtitle: 'Mini-games & chibi room decoration drops',
     accentColor: tokens.colors.accentLavenderDeep,
     accentSoft: tokens.colors.accentLavenderSoft,
-  },
-  {
-    key: 'home',
-    label: 'Home',
-    icon: HomeIcon,
-    isCenter: true,
-    comingSoonSubtitle: 'Our shared couple space & daily questions',
-    accentColor: tokens.colors.primaryPinkDeep,
-    accentSoft: tokens.colors.primaryPinkSoft,
-  },
-  {
-    key: 'together',
-    label: 'Together',
-    icon: ImageIcon,
-    comingSoonSubtitle: 'Shared books, visits & someday list',
-    accentColor: tokens.colors.primaryGreenDeep,
-    accentSoft: tokens.colors.primaryGreenSoft,
-  },
-  {
-    key: 'chat',
-    label: 'Chat',
-    icon: MessageCircle,
-    comingSoonSubtitle: 'Heartbeat nooks & whisper messages',
-    accentColor: tokens.colors.primaryPinkDeep,
-    accentSoft: tokens.colors.primaryPinkSoft,
   },
 ];
 
@@ -658,12 +664,14 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Discuss tab: the question engine over the imported library.
-            Games tab: mini-games and chibi room decoration.
-            Home tab: Today card, today's shared decision and the reserved animated scene area.
+        {/* Chat tab: the couple's live conversation.
             Together tab: shared books, visits & someday list, with the full-screen
             reader opening over whatever tab is active.
-            Chat tab: the couple's live conversation. */}
+            Home tab: Today card, today's shared decision and the reserved animated scene area.
+            Discuss tab: the question engine over the imported library.
+            Games tab: mini-games and chibi room decoration.
+            (Listed in the bottom navigation's order, left to right; the checks below
+            keep Chat as the fall-through so an unknown tab still lands somewhere safe.) */}
         {isDiscuss ? (
           <DiscussView
             discuss={discuss}
