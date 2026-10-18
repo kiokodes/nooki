@@ -33,7 +33,7 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
 
     const retirement = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql', import.meta.url), 'utf8');
     const verify = await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8');
-    const connectFourMigration = await readFile(new URL('../supabase/migrations/202610180005_connect_four.sql', import.meta.url), 'utf8');
+    const connectFourMigration = await readFile(new URL('../supabase/migrations/202610180006_connect_four.sql', import.meta.url), 'utf8');
     // Mimic a pre-Snake generic entry point with the current, no-daily API shape. The
     // library can still read Games, but the button gets the named migration repair.
     await db.exec(`

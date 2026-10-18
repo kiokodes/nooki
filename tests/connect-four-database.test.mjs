@@ -13,7 +13,7 @@ test('Connect Four is async-resumable and its turns, wins and draws are database
   try {
     const { supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts');
     db = await installTestBackend(supabase);
-    await db.exec(await readFile(new URL('../supabase/migrations/202610180005_connect_four.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/202610180006_connect_four.sql', import.meta.url), 'utf8'));
     const auth = await server.ssrLoadModule('/src/lib/authService.ts');
     const service = await server.ssrLoadModule('/src/lib/gamesService.ts');
     const a = (await auth.signUpWithEmail('four-a@test.com', 'password')).user;

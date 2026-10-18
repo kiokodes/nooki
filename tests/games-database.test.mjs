@@ -68,7 +68,7 @@ test('games: only always-available multiplayer matches remain, with sealed RPS p
 
   const retirement = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql',import.meta.url),'utf8');
   await db.exec(retirement);
-  await db.exec(await readFile(new URL('../supabase/migrations/202610180005_connect_four.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202610180006_connect_four.sql',import.meta.url),'utf8'));
   const verify = await readFile(new URL('../supabase/verify-games.sql',import.meta.url),'utf8');
   await db.exec(verify);
   const perms = await db.query("SELECT has_table_privilege('authenticated','public.game_matches','SELECT') allowed");

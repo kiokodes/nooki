@@ -167,7 +167,7 @@ Use a new sequential migration after Connect Four: **`supabase/migrations/202610
 - `dash_forfeit(p_id uuid) RETURNS jsonb`: participant’s own running/waiting attempt only; settle it as forfeited with zero distance/hearts; check idempotency.
 - Private helpers: `dash_replay`, `dash_commit`, `dash_settle`, `dash_sweep`, `dash_view`, `dash_max_ticks`, and course generation/validation. Revoke private helper EXECUTE from `PUBLIC`, `anon`, and `authenticated`; grant only public wrapper RPCs to authenticated. Keep match table inaccessible directly, consistent with the rest of Games.
 - Use row locks for the match mutation and lock consistently to avoid race conditions between simultaneous heartbeat/finish/forfeit requests. A repeated stale tick/report must not erase newer data.
-- Make migration safe to apply after `202610180005_connect_four.sql` and safe to rerun where practical. Keep fresh consolidated `supabase/schema.sql` in sync.
+- Make migration safe to apply after `202610180006_connect_four.sql` and safe to rerun where practical. Keep fresh consolidated `supabase/schema.sql` in sync.
 - Extend `supabase/verify-games.sql` to check the column, game constraint, RPC signatures/privileges, and that all replay/settle internals remain server-only.
 
 ### Client integration

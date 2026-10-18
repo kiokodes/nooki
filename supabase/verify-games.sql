@@ -138,11 +138,11 @@ BEGIN
  IF NOT EXISTS (
    SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='game_matches' AND column_name='board'
- ) THEN RAISE EXCEPTION 'Apply supabase/migrations/202610180005_connect_four.sql before deploying Connect Four.'; END IF;
+ ) THEN RAISE EXCEPTION 'Apply supabase/migrations/202610180006_connect_four.sql before deploying Connect Four.'; END IF;
  IF NOT EXISTS (
    SELECT 1 FROM pg_constraint WHERE conrelid='public.game_matches'::regclass AND contype='c'
      AND pg_get_constraintdef(oid) LIKE '%connect-four%'
- ) THEN RAISE EXCEPTION 'The game_matches game check does not allow Connect Four: apply migration 202610180005_connect_four.sql.'; END IF;
+ ) THEN RAISE EXCEPTION 'The game_matches game check does not allow Connect Four: apply migration 202610180006_connect_four.sql.'; END IF;
  FOREACH fn IN ARRAY ARRAY['public.start_connect_four()','public.connect_four_move(uuid,integer,integer)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Connect Four RPC: %',fn; END IF;
    IF NOT has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN

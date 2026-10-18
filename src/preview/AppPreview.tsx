@@ -1,3 +1,4 @@
+import { PreviewEverydayStatus } from './PreviewEverydayStatus';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
@@ -595,6 +596,7 @@ export const AppPreview = () => {
               </section>
             ) : tab === 'home' ? (
               <HomeView
+                everyday={<PreviewEverydayStatus coupleId={couple.id} userId={profile.id} partnerId={partner.id} partnerName={partner.name} onMessage={() => setTab('chat')} />}
                 events={events}
                 anniversaryDate={couple.anniversary_date}
                 eventsLoading={false}

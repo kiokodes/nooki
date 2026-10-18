@@ -76,7 +76,7 @@ apply and verify the database migrations separately.
    `202610180003_couple_photo.sql` (the couple picture frame standing in the Home nook),
    then `202610180002_remove_daily_games_and_tic_tac_toe.sql` (removes the retired daily
    Games feature, Tic Tac Toe and their match history), then
-   `202610180005_connect_four.sql` (adds Connect Four with database-refereed turns).
+   `202610180006_connect_four.sql` (adds Connect Four with database-refereed turns).
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -866,7 +866,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180005_connect_four.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+`202610180006_connect_four.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
 migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
@@ -1248,7 +1248,7 @@ Games are always available: there is no daily Games challenge. Apply
 **`202610150010_snake_duel.sql`**, **`202610150011_chess.sql`**,
 **`202610150012_tetris_duel.sql`**, then
 **`202610180002_remove_daily_games_and_tic_tac_toe.sql`** and
-**`202610180005_connect_four.sql`** to an existing project before running
+**`202610180006_connect_four.sql`** to an existing project before running
 **`supabase/verify-games.sql`**. New projects receive the same final shape from
 `schema.sql`. The retirement migration deletes historical daily-game and Tic Tac Toe rows,
 removes their date/board columns, and replaces the daily-flag Games RPC.
@@ -1429,3 +1429,53 @@ both devices at once, jump to each other, highlight with and without comments, j
 from a chat quote back into the passage, then Leave / Finish / Delete (checking the
 chat quote after Delete). Upload a scanned PDF and confirm the no-selectable-text
 note. Finally, check a third account cannot reach any of it in its network responses.
+
+## Everyday status + mood (Home)
+
+Before deploying this feature to an **existing** project, apply
+`supabase/migrations/202610180005_everyday_status.sql` in the Supabase SQL Editor.
+It is additive and safe to rerun. New projects get it through `supabase/schema.sql`.
+
+Home now shows a compact **Our day** card beside **Today’s decision**. It opens a
+modal with both partners’ current check-ins side by side: optional mood, activity and a
+120-character note. At least one field is required; sharing is never mandatory.
+Updates expire after 12 hours by default, with 1- and 4-hour choices. A server-side
+policy hides expired rows; Home also checks expiry every 30 seconds and on resume.
+Realtime refreshes inserts, updates and acknowledgements; polling covers missed
+changes, expiry and clears (Realtime delete filters are not reliable).
+
+Only the author can save/clear their own check-in, through authenticated functions.
+Their paired partner can acknowledge the exact visible version once. Editing resets
+the acknowledgement. There is one stored snapshot per person, not a mood history;
+expired snapshots remain inaccessible until replaced/cleared or the couple is deleted.
+Deleting the couple cascades to these snapshots. Nothing is inferred from presence
+or location, and check-ins do not send push notifications.
+
+**Message** opens the existing couple chat without posting an automatic message or
+carrying over a Discuss question. The editor stays inside the Our day modal, so Home preserves space for
+the couple picture frame. The compact card reads “[Partner] left a message” when
+the partner has an active check-in, otherwise “Update [Partner] on your day”. Switching accounts/couples or leaving Home discards unsaved drafts.
+
+Two-device acceptance check after migration:
+1. Share a mood-only update on one device; confirm the other sees it.
+2. Send “Thinking of you”; verify the author sees it, and a replacement resets it.
+3. Save an activity/note, cancel an edit, and clear your update. Confirm your partner's
+   snapshot is unaffected; the other device reflects a clear within 30 seconds.
+4. Tap Message and verify the existing conversation opens with no auto-sent text.
+5. Test expiry and re-entry, and verify an unrelated account cannot read either row.
+
+Local coverage: `node --test tests/everyday-status.test.mjs tests/everyday-status-ui.test.mjs`.
+
+### Mascot artwork transparency
+
+The five `src/assets/companions/pair-*.png` expressions use real alpha, including
+inside the affectionate pose's heart pocket (not a baked-in grey checkerboard).
+`public/assets/nooki/boot-pair.png` is derived from the cleaned happy pose so the
+pre-React loader and React splash do not use different cutouts. Installed-app icons
+retain their intentional cream canvas, with grey residue removed between the faces.
+User-uploaded couple photos are not processed or changed by this cleanup.
+
+To repeat or verify this targeted cleanup after changing artwork, install Pillow
+in a Python virtual environment, then run `python scripts/clean-companion-art.py`
+and `python scripts/check-companion-art.py`. The cleanup preserves enclosed eye,
+shoe and clothing details; the regression check also protects the pink heart.
