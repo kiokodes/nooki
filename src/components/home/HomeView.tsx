@@ -1,6 +1,7 @@
 import React from 'react';
 import { TodayCard } from './TodayCard';
 import { DailyGameCard } from './DailyGameCard';
+import { DailyDecisionCard } from './DailyDecisionCard';
 import { HomeNookiCompanions } from './HomeNookiCompanions';
 import { MissYouButton, type MissYouButtonProps } from './MissYouButton';
 import { useNow } from '../../hooks/useNow';
@@ -19,9 +20,8 @@ interface HomeViewProps {
   partnerOnline?: boolean;
   userWins?: number;
   partnerWins?: number;
-  dailyStatus?: string;
-  dailyLabel?: string;
   onPlayDailyGame?: () => void;
+  onOpenDailyDecision?: () => void;
   /**
    * The "I miss you" button in the corner of the nook. Omitted (or hidden) whenever the
    * couple is not both paired and apart — the button is for the partner who is alone.
@@ -34,8 +34,7 @@ interface HomeViewProps {
  *
  * It shows:
  * - The Today card: today's date, anything happening today, and what is coming within the next day.
- * - The Daily game card: a "Today's challenge" card with a play button and a
- *   scoreboard showing wins for each partner (saved match wins).
+ * - Two compact daily cards side by side: the game score, and today's shared decision.
  * - A shared cozy nook, with a small top-right caption, presence-aware companion art, and
  *   the "I miss you" button in the top-left corner. The button belongs to the half of the
  *   couple who is in the app alone (see `useMissYou`): it is only rendered while the partner
@@ -53,8 +52,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   userWins = 0,
   partnerWins = 0,
   onPlayDailyGame,
-  dailyStatus,
-  dailyLabel,
+  onOpenDailyDecision,
   missYou,
 }) => {
   // Minute granularity is plenty for a date, and it keeps the tab from re-rendering every second.
@@ -83,15 +81,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
         onOpenCalendar={onOpenCalendar}
       />
 
-      <DailyGameCard
-        userName={userName}
-        partnerName={partnerName}
-        userWins={userWins}
-        partnerWins={partnerWins}
-        onPlay={onPlayDailyGame}
-        status={dailyStatus}
-        playLabel={dailyLabel}
-      />
+      <div
+        data-home-daily-cards
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '10px',
+        }}
+      >
+        <DailyGameCard
+          userName={userName}
+          partnerName={partnerName}
+          userWins={userWins}
+          partnerWins={partnerWins}
+          onPlay={onPlayDailyGame}
+        />
+        <DailyDecisionCard onPlay={onOpenDailyDecision} />
+      </div>
 
       {/* Cozy living nook — our shared little space. Watch-only, never interactive. */}
       <div

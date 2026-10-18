@@ -298,6 +298,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const repliesMigration = await readFile(new URL('../supabase/migrations/202610150006_chat_replies_edits.sql', import.meta.url), 'utf8');
   const pushMigration = await readFile(new URL('../supabase/migrations/202610150015_web_push.sql', import.meta.url), 'utf8');
   const missYouMigration = await readFile(new URL('../supabase/migrations/202610150016_miss_you.sql', import.meta.url), 'utf8');
+  const dailyDecisionMigration = await readFile(new URL('../supabase/migrations/202610170002_daily_decisions.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -351,6 +352,10 @@ test('verify.sql spots a live project that is missing a migration', async () => 
 
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(missYouMigration);
+    await assert.rejects(db.exec(verification), /202610170002_daily_decisions\.sql/,
+      'the preflight must send the owner to the Daily Decisions migration');
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(dailyDecisionMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -375,6 +380,8 @@ async function server_paths() {
   const replies = await read('../supabase/migrations/202610150006_chat_replies_edits.sql');
   const push = await read('../supabase/migrations/202610150015_web_push.sql');
   const missYou = await read('../supabase/migrations/202610150016_miss_you.sql');
+  const locations = await read('../supabase/migrations/202610170001_partner_locations.sql');
+  const dailyDecisions = await read('../supabase/migrations/202610170002_daily_decisions.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -458,7 +465,7 @@ async function server_paths() {
   check('schema.sql on a project with no auto-grant', freshNew, true);
   await freshNew.db.close();
 
-  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou];
+  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions];
   const existingOld = await run({
     defaults: legacyDefaults,
     // Every migration twice: a live project may have run any of them before.
@@ -477,8 +484,8 @@ async function server_paths() {
   const upgraded = await run({
     defaults: legacyDefaults,
     steps: [schemaBeforeCalendar, pairing, legacyCalendar,
-            calendar, chat, discuss, links, replies, push, missYou,
-            calendar, chat, discuss, links, replies, push, missYou],
+            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions,
+            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -531,6 +538,11 @@ async function server_paths() {
     'and then until the miss-you migration lands');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(missYou);
+  await assert.rejects(missingLinks.db.exec(verify), /202610170002_daily_decisions\.sql/,
+    'and then until the Daily Decisions migration is applied');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(locations);
+  await missingLinks.db.exec(dailyDecisions);
   await missingLinks.db.exec(verify);
   await missingLinks.db.close();
 
@@ -545,6 +557,8 @@ async function server_paths() {
   try { await missingPush.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingPush.db.exec(push);
   await missingPush.db.exec(missYou);
+  await missingPush.db.exec(locations);
+  await missingPush.db.exec(dailyDecisions);
   await missingPush.db.exec(verify);
   await missingPush.db.close();
 

@@ -215,6 +215,33 @@ export interface CoupleSettings {
 }
 
 /* ---------------------------------------------------------------------------
+   Daily decisions: one manually scheduled three-choice question, two private
+   partner selections, and a shared decision only after the selections match.
+   --------------------------------------------------------------------------- */
+
+export interface DailyDecisionQuestion {
+  /** UTC date this prompt is scheduled for, and its stable identity. */
+  decision_date: string;
+  question: string;
+  /** Exactly three answer labels, in the order the owner uploaded them. */
+  options: [string, string, string];
+}
+
+export interface DailyDecisionSnapshot {
+  today: string;
+  question: DailyDecisionQuestion | null;
+  /** The caller's selection, always visible to them. */
+  my_choice: number | null;
+  /** The partner's selection, populated only after both partners have replied. */
+  partner_choice: number | null;
+  /** Progress can be known before the answer itself is revealed. */
+  partner_responded: boolean;
+  both_answered: boolean;
+  /** A shared decision is final only when both selections are identical. */
+  agreed: boolean;
+}
+
+/* ---------------------------------------------------------------------------
    Shared books: the Media tab's "Read together" shelf. One book in play per
    couple, both partners' places saved in it, and the passages they highlight.
    See supabase/migrations/202610150008_shared_books.sql.

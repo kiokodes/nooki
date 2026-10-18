@@ -413,7 +413,65 @@ BEGIN
      OR has_table_privilege('anon', 'public.miss_you_taps', 'SELECT') THEN
     RAISE EXCEPTION 'miss_you_taps must only be written through its functions. Rerun supabase/migrations/202610150016_miss_you.sql.';
   END IF;
+  -- Daily decisions: one owner-uploaded question per UTC date, with three choices and
+  -- answers hidden by RLS until both partners have replied.
+  IF to_regclass('public.daily_decision_questions') IS NULL
+     OR to_regclass('public.daily_decision_responses') IS NULL THEN
+    RAISE EXCEPTION 'Missing Daily Decisions tables. Apply supabase/migrations/202610170002_daily_decisions.sql.';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname IN ('daily_decision_questions', 'daily_decision_responses')
+      AND NOT c.relrowsecurity
+  ) THEN RAISE EXCEPTION 'Row-level security is required on Daily Decisions. Rerun supabase/migrations/202610170002_daily_decisions.sql.'; END IF;
+  IF (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'daily_decision_questions'
+        AND column_name IN ('decision_date', 'question', 'option_a', 'option_b', 'option_c')) <> 5
+     OR (SELECT count(*) FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'daily_decision_responses'
+           AND column_name IN ('couple_id', 'decision_date', 'user_id', 'option_index')) <> 4 THEN
+    RAISE EXCEPTION 'Daily Decisions tables are missing required columns. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+  END IF;
+  IF to_regclass('public.daily_decision_responses_one_per_partner') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_decision_responses_option_check')
+     OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_decision_questions_options_distinct') THEN
+    RAISE EXCEPTION 'Daily Decisions question and response constraints are missing. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+  END IF;
+  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND (
+    (tablename = 'daily_decision_questions' AND policyname = 'Signed-in users can read daily decision questions')
+    OR (tablename = 'daily_decision_responses' AND policyname = 'Couples can read daily decision choices after the reveal')
+  )) <> 2 THEN
+    RAISE EXCEPTION 'Daily Decisions privacy policies are missing. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+  END IF;
+  FOREACH signature IN ARRAY ARRAY[
+    'public.can_read_daily_decision_response(uuid,date,uuid)',
+    'public.daily_decision_state()',
+    'public.submit_daily_decision_choice(smallint)'
+  ] LOOP
+    IF to_regprocedure(signature) IS NULL THEN
+      RAISE EXCEPTION 'Missing function %. Apply supabase/migrations/202610170002_daily_decisions.sql.', signature;
+    END IF;
+    IF NOT has_function_privilege('authenticated', signature, 'EXECUTE')
+       OR has_function_privilege('anon', signature, 'EXECUTE') THEN
+      RAISE EXCEPTION 'Daily Decisions function permissions are incorrect for %.', signature;
+    END IF;
+  END LOOP;
+  IF NOT has_table_privilege('authenticated', 'public.daily_decision_questions', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.daily_decision_responses', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.daily_decision_responses', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.daily_decision_responses', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.daily_decision_responses', 'DELETE')
+     OR has_table_privilege('anon', 'public.daily_decision_questions', 'SELECT')
+     OR has_table_privilege('anon', 'public.daily_decision_responses', 'SELECT') THEN
+    RAISE EXCEPTION 'Daily Decisions must be read through RLS and written only through its submit function. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime'
+                      AND schemaname = 'public' AND tablename = 'daily_decision_responses') THEN
+    RAISE EXCEPTION 'Daily Decisions responses are missing from supabase_realtime. Rerun supabase/migrations/202610170002_daily_decisions.sql.';
+  END IF;
 END;
 $$;
-SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages, the Discuss question tables, the web-push device table, the miss-you tap table and the partner locations are present. Still complete the two-device acceptance test.' AS result;
+SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages, the Discuss question tables, web push, miss-you taps, daily decisions and partner locations are present. Still complete the two-device acceptance test.' AS result;
 COMMIT;
