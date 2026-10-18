@@ -634,7 +634,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Home tab: Today card, daily game card and reserved animated scene area.
+        {/* Home tab: Today card, today's shared decision and the reserved animated scene area.
             Chat tab: the couple's live conversation.
             Discuss tab: the question engine over the imported library.
             Media tab: the "Read together" shelf (shared books), with the full-screen
@@ -656,12 +656,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             eventsLoading={calendar.loading}
             eventsError={calendar.error}
             onOpenCalendar={() => setShowCalendar(true)}
-            userName={profile.name}
-            partnerName={partner.name}
             partnerOnline={partnerOnline}
-            userWins={games.data?.wins[currentUser.id] ?? 0}
-            partnerWins={games.data?.wins[partner.id] ?? 0}
-            onPlayDailyGame={() => { setActiveTab('games'); void games.start('tic-tac-toe', true); }}
             onOpenDailyDecision={() => setShowDailyDecision(true)}
             missYou={{
               visible: missYou.available,

@@ -69,7 +69,7 @@ export const SnakeDuel: React.FC<SnakeDuelProps> = ({
           <button
             type="button"
             disabled={games.busy}
-            onClick={() => { onWarmUpSkip(); void games.start('snake', false, 3); }}
+            onClick={() => { onWarmUpSkip(); void games.start('snake', 3); }}
           >
             Start a new duel
           </button>
