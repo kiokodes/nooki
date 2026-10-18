@@ -175,6 +175,16 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await waitFor(() => body().includes('Together for'), 'the unlocked app should render once the splash and couple load complete');
     assert.equal(document.querySelector('[data-screen="splash"]'), null, 'the splash screen dismisses after under 0.5 seconds');
 
+    const homeBadge = () => document.querySelector('[data-nav-badge="home"]');
+    const homeTabButton = () => document.querySelector('[data-nav-tab="home"]');
+    await waitFor(() => homeBadge()?.textContent.trim() === '1', 'an unanswered daily decision badges Home');
+    assert.equal(homeTabButton().getAttribute('aria-label'), "Home, today's decision waiting for you");
+    // Navigating away or simply visiting Home never counts as answering.
+    await act(async () => { document.querySelector('[data-nav-tab="media"]').click(); });
+    assert(homeBadge(), 'the reminder remains visible on another tab');
+    await act(async () => { homeTabButton().click(); });
+    assert(homeBadge(), 'visiting Home does not clear the reminder');
+
     // 1. Global header: names, the live YMD counter, the partner clock and an offline dot.
     const expectedDuration = coupleTime.formatTogetherDuration(
       coupleTime.getTogetherDuration(couple.anniversary_date, new Date()),
@@ -238,16 +248,21 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await waitFor(() => decisionModal()?.querySelector('[data-decision-question]'), 'today’s uploaded decision should load');
     assert.equal(decisionModal().querySelector('[data-decision-question]').textContent, 'What should we plan together?');
     assert.equal(decisionModal().querySelectorAll('[data-decision-option]').length, 3, 'the question has exactly three choices');
+    assert(homeBadge(), 'opening the decision does not clear its badge');
     assert.match(decisionModal().querySelector('[data-decision-status]').textContent, /Neither answer is revealed/);
     await act(async () => {
       decisionModal().querySelector('[data-decision-option="2"] input').click();
     });
     const submitDecision = decisionModal().querySelector('[data-action="submit-daily-decision"]');
     assert.equal(submitDecision.disabled, false, 'a single choice can be submitted privately');
+    assert(homeBadge(), 'selecting an option without saving still leaves the decision pending');
     await act(async () => { submitDecision.click(); });
     await waitFor(() => decisionModal().querySelector('[data-decision-status]').textContent.includes('Your choice stays private'),
       'the first choice is saved privately while the partner waits');
     assert.equal(decisionModal().querySelector('[data-decision-reveal]'), null, 'the partner answer is still hidden');
+    await waitFor(() => homeBadge() === null, 'saving your own choice clears the Home badge');
+    assert.equal(homeTabButton().getAttribute('aria-label'), 'Home',
+      'waiting for the partner does not badge a decision you have already answered');
 
     // Take to chat shares the exact prompt and all three options so the couple can deliberate.
     await act(async () => { decisionModal().querySelector('[data-action="take-decision-to-chat"]').click(); });
@@ -277,6 +292,10 @@ test('global header: live counter, presence ticker and partner clock', async () 
       'the empty frame prompts the upload',
     );
     assert(sceneArea.style.borderRadius, 'the shared nook is rounded');
+    assert.equal(sceneArea.style.flexDirection, 'column', 'the photo grows below the caption row');
+    assert.equal(sceneArea.style.paddingTop, '44px', 'the photo leaves the caption and miss-you control clear');
+    assert.equal(sceneArea.style.paddingBottom, '8px', 'only a small gap remains above navigation');
+    assert.equal(nookFrame.style.flexGrow, '1', 'the photo fills the remaining nook height');
 
     // Presence: tracked on the couple channel, keyed by the signed-in account.
     assert.equal(presence.topic, `nooki-couple-${couple.id}`, 'presence stays scoped to the couple');

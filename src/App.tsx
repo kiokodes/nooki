@@ -241,6 +241,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     coupleId: couple?.id ?? null,
   });
 
+  // A reminder belongs to this account, not to the partner who may still be deciding.
+  // No loaded question (including an empty/exhausted pool) means nothing is pending.
+  const pendingDailyDecision = dailyDecision.question !== null && dailyDecision.my_choice === null;
+
   // The full-screen reader is a layer over whatever tab is open (Chat jumps come
   // straight here too). Tagged with the couple so nothing outlives the account.
   const [readerStored, setReaderStored] = useState<{
@@ -751,8 +755,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
                 >
                   <button
                     type="button"
-                    aria-label="Home"
+                    data-nav-tab="home"
+                    aria-label={pendingDailyDecision ? "Home, today's decision waiting for you" : 'Home'}
                     style={{
+                      position: 'relative',
                       width: '48px',
                       height: '48px',
                       borderRadius: tokens.radii.full,
@@ -770,6 +776,11 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
                     }}
                   >
                     <Icon size={21} strokeWidth={2.4} />
+                    {pendingDailyDecision && (
+                      <span className="nooki-nav-badge" data-nav-badge="home" aria-hidden="true">
+                        1
+                      </span>
+                    )}
                   </button>
                   <span
                     style={{

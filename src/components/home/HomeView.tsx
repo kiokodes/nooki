@@ -17,8 +17,8 @@ interface HomeViewProps {
   partnerOnline?: boolean;
   onOpenDailyDecision?: () => void;
   /**
-   * The couple's framed picture standing in the nook (see `useCouplePhoto`). The
-   * frame invites the couple to upload one before anything is framed.
+   * The couple's picture filling the nook (see `useCouplePhoto`).
+   * Before the first upload, the photo area invites them to choose one.
    */
   photo?: NookPhotoFrameProps;
   /**
@@ -34,8 +34,8 @@ interface HomeViewProps {
  * It shows:
  * - The Today card: today's date, anything happening today, and what is coming within the next day.
  * - Today's shared decision.
- * - A shared cozy nook, with a small top-right caption, the couple's own picture standing
- *   in a gift-wrapped frame (the first thing either partner sees is the two of them), and
+ * - A shared cozy nook, with a small top-right caption, the couple's own picture
+ *   filling the space below it with a thin coloured border and two hearts, and
  *   the "I miss you" button in the top-left corner. The button belongs to the half of the
  *   couple who is in the app alone (see `useMissYou`): it is only rendered while the partner
  *   is away, and each tap is counted for that partner to open later.
@@ -79,15 +79,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       <DailyDecisionCard onPlay={onOpenDailyDecision} />
 
-      {/* Cozy living nook — our shared little space. The frame in the middle is the
-          couple's own picture; the miss-you button and the caption stay put. */}
+      {/* The picture fills the nook below the miss-you button and caption. */}
       <div
         data-scene-placeholder
         data-area="animated-scene"
         data-nooki-nook="cozy"
         data-partner-online={partnerOnline ? 'true' : 'false'}
         role="region"
-        aria-label="Our little nook — our favourite picture in its frame"
+        aria-label="Our little nook — our favourite picture together"
         className="nooki-cozy-nook"
         style={{
           flex: '1 1 145px',
@@ -95,42 +94,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
           width: '100%',
           borderRadius: tokens.radii.lg,
           backgroundColor: '#FFFBF2',
-          // No border lines around the nook: the frame is the picture's card, and
-          // the nook is simply the room it stands in — a soft shadow is all the
-          // edge the room needs.
           boxShadow: tokens.shadows.subtle,
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          flexDirection: 'column',
+          alignItems: 'stretch',
           position: 'relative',
           overflow: 'hidden',
-          padding: '10px 8px 16px 8px',
+          // Reserve the caption / miss-you row, then fill down to the tab bar.
+          padding: '44px 8px 8px',
         }}
       >
-        {/* Subtle floor + vignette — purely decorative, inside the nook */}
-        <div
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: '26px',
-            background: 'linear-gradient(180deg, rgba(240,232,220,0) 0%, rgba(240,232,220,0.55) 100%)',
-            borderTop: '1px solid rgba(240,232,220,0.7)',
-            pointerEvents: 'none',
-          }}
-        />
-        <div
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'radial-gradient(ellipse 85% 70% at 50% 42%, rgba(255,255,255,0.9) 0%, rgba(255,251,242,0) 72%)',
-            pointerEvents: 'none',
-          }}
-        />
         <div
           data-nooki-caption
           aria-hidden="true"

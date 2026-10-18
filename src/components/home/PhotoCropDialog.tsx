@@ -7,7 +7,7 @@ import { tokens } from '../../tokens/designTokens';
  * A photo straight from the camera roll is almost never the shape of the frame's
  * mat window, and object-fit: cover would quietly crop it on its own — centred on
  * nobody's choice. So the chosen picture opens here first, in a crop stage locked
- * to the mat window's exact aspect (see PHOTO_WINDOW_ASPECT in NookPhotoFrame):
+ * to the displayed photo window's measured aspect (see NookPhotoFrame):
  * drag to position, slide to zoom, then "Frame picture". Escape, Cancel or a tap
  * on the backdrop steps out without uploading a single byte.
  *
@@ -29,7 +29,7 @@ const OUTPUT_MAX_EDGE = 1600;
 export interface PhotoCropDialogProps {
   /** The picture the couple just chose, before anything is uploaded. */
   file: Blob;
-  /** The frame window's aspect (width ÷ height), so the crop is exactly what fits. */
+  /** The displayed photo window's aspect (width ÷ height), so the crop is exactly what fits. */
   aspect: number;
   /** The fitted picture, as a JPEG file ready to upload. */
   onCropped: (file: File) => void;

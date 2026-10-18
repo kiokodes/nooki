@@ -57,6 +57,26 @@ test('couple photo frame: the upload invite, the deliberate replace, and the ser
     assert.equal(pickerOpened, 1, 'tapping the empty frame opens the picture picker');
     assert.equal(confirmCalls, 0, 'the first upload needs no confirmation');
 
+    // The photo now fills its flex area instead of sitting inside a capped SVG frame.
+    const photoArea = document.querySelector('[data-component="nook-photo-frame"]');
+    const stand = photoArea.querySelector('[data-nooki-frame-stand]');
+    const photoWindow = photoArea.querySelector('[data-nooki-frame-window]');
+    assert.equal(photoArea.style.flexGrow, '1');
+    assert.equal(stand.style.flexGrow, '1');
+    assert.equal(stand.style.maxWidth, '', 'no percentage cap shrinks the picture');
+    assert.equal(stand.style.aspectRatio, '', 'the photo area follows available height');
+    assert.equal(frameButton().style.borderWidth, '5px', 'a 5px coloured border replaces the mat');
+    assert.equal(photoWindow.style.inset, '0px', 'there is no inset mat around the photo');
+    const hearts = photoArea.querySelectorAll('[data-nooki-photo-heart]');
+    assert.equal(hearts.length, 2, 'one heart for each partner');
+    assert.notEqual(hearts[0].getAttribute('fill'), hearts[1].getAttribute('fill'));
+    assert.equal(hearts[0].style.top, '12px');
+    assert.equal(hearts[1].style.bottom, '12px', 'the hearts sit at opposite corners');
+    assert.equal(photoArea.querySelector('svg rect'), null, 'the wood, mat and bow are gone');
+
+    // Crop to the responsive photo area, not the old fixed landscape mat.
+    photoWindow.getBoundingClientRect = () => ({ width: 300, height: 420 });
+
     // --- A chosen picture is fitted before it uploads --------------------------------
     const file = new dom.window.File(['us'], 'us.png', { type: 'image/png' });
     const chooseFile = async () => {
@@ -67,6 +87,10 @@ test('couple photo frame: the upload invite, the deliberate replace, and the ser
 
     await chooseFile();
     assert(cropDialog(), 'the fit-to-frame step opens over the app');
+    const cropWindow = cropDialog().querySelector('[data-crop-window]');
+    const cropRatio = parseFloat(cropWindow.style.width) / parseFloat(cropWindow.style.height);
+    assert(Math.abs(cropRatio - 300 / 420) < 1e-6,
+      'the crop matches the actual photo window on this phone');
     assert.equal(uploads.length, 0, 'nothing uploads before the picture is fitted');
 
     // Stepping out uploads nothing at all.
