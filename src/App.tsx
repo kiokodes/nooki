@@ -1,3 +1,4 @@
+import { EverydayStatusCards } from './components/home/EverydayStatusCards';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   MessageCircle,
@@ -663,6 +664,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
           />
         ) : isHome ? (
           <HomeView
+            everyday={<EverydayStatusCards coupleId={couple.id} userId={currentUser.id} partnerId={partner.id} partnerName={partner.name} onMessage={() => { setChatContextStored(null); setActiveTab('chat'); }} />}
             events={calendar.events}
             anniversaryDate={couple.anniversary_date}
             eventsLoading={calendar.loading}
