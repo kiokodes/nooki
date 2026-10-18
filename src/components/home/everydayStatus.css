@@ -1,0 +1,27 @@
+.everyday { background:#fffbf2; border:1px solid #eedfcd; border-radius:18px; padding:14px; color:#534239; flex-shrink:0; }
+.everyday h2 { font-size:16px; margin:0 0 4px; }
+.everyday header p,.day-editor p { font-size:12px; margin:0 0 12px; }
+.day-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.day-grid article { background:#fff; border-radius:12px; padding:12px; min-width:0; }
+.everyday h3 { font-size:14px; margin:0 0 8px; overflow-wrap:anywhere; }
+.everyday button { background:#f7e8dd; border:1px solid #e4cabb; border-radius:12px; color:#624535; padding:9px 12px; margin:4px 5px 0 0; cursor:pointer; font:inherit; font-size:12px; }
+.everyday button:disabled { opacity:.6; cursor:default; }
+.everyday button:focus-visible,.everyday select:focus-visible,.everyday textarea:focus-visible { outline:3px solid #ae785d; outline-offset:2px; }
+.day-summary,.day-note,.day-ack { font-size:13px; line-height:1.5; overflow-wrap:anywhere; white-space:pre-wrap; }
+.day-muted { color:#796d64; font-size:11px; line-height:1.5; }
+.day-editor { border-top:1px solid #eedfcd; margin-top:14px; padding-top:14px; }
+.day-editor label { display:block; font-size:13px; margin:10px 0; }
+.day-editor select,.day-editor textarea { display:block; width:100%; box-sizing:border-box; margin-top:5px; padding:10px; border:1px solid #dbcaba; border-radius:10px; background:white; color:#534239; font:inherit; }
+.day-editor textarea { min-height:75px; resize:vertical; }
+
+
+.our-day-card { min-width:0; min-height:82px; box-sizing:border-box; padding:12px; border:0; border-radius:16px; background:#fffbf2; color:#624535; box-shadow:0 4px 12px rgba(58,45,32,.08); display:flex; flex-direction:column; justify-content:center; gap:8px; text-align:left; font:inherit; cursor:pointer; }
+.our-day-card-title { display:flex; align-items:center; gap:5px; font-size:.62rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.our-day-card-title svg:last-child { margin-left:auto; flex-shrink:0; }
+.our-day-card-subtext { font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
+.our-day-card:focus-visible { outline:3px solid #ae785d; outline-offset:2px; }
+.our-day-backdrop { position:fixed; inset:0; z-index:2000; background:rgba(49,38,32,.4); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; }
+.our-day-modal { width:100%; max-width:560px; max-height:calc(100dvh - 32px); overflow-y:auto; box-sizing:border-box; box-shadow:0 20px 70px rgba(49,38,32,.2); }
+.our-day-modal-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:12px; }
+.our-day-modal-heading button { display:flex; align-items:center; justify-content:center; min-width:36px; min-height:36px; margin:0; }
+@media(max-width:380px) { .day-grid { gap:6px; } .day-grid article { padding:9px; } .our-day-backdrop { padding:10px; } .our-day-modal { padding:10px; max-height:calc(100dvh - 20px); } }

@@ -117,6 +117,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     // channel (the couple picture frame opens its own couple-scoped channel too).
     const presence = { state: {}, tracked: [], topic: null, key: null, handlers: [], status: null };
     const topics = [];
+    const checkInChannels = new Set();
     let removedChannels = 0;
     const fakeChannel = {
       presenceState: () => presence.state,
@@ -137,13 +138,20 @@ test('global header: live counter, presence ticker and partner clock', async () 
     };
     supabase.channel = (topic, options) => {
       topics.push(topic);
+      // Home-only check-ins may unsubscribe on navigation; the global presence
+      // channel must not. Give these their own identity instead of conflating them.
+      if (topic.startsWith('everyday:')) {
+        const channel = { on: () => channel, subscribe: () => channel };
+        checkInChannels.add(channel);
+        return channel;
+      }
       if (options?.config?.presence) {
         presence.topic = topic;
         presence.key = options.config.presence.key ?? null;
       }
       return fakeChannel;
     };
-    supabase.removeChannel = async () => { removedChannels += 1; return 'ok'; };
+    supabase.removeChannel = async (channel) => { if (!checkInChannels.has(channel)) removedChannels += 1; return 'ok'; };
 
     const body = () => document.body.textContent.replace(/\u2019/g, "'");
     const waitFor = async (predicate, message) => {

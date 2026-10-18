@@ -8,6 +8,7 @@ import { tokens } from '../../tokens/designTokens';
 import type { CoupleEvent } from '../../types/database';
 
 interface HomeViewProps {
+  everyday?: React.ReactNode;
   events: CoupleEvent[];
   anniversaryDate: string | null;
   eventsLoading: boolean;
@@ -41,6 +42,7 @@ interface HomeViewProps {
  *   is away, and each tap is counted for that partner to open later.
  */
 export const HomeView: React.FC<HomeViewProps> = ({
+  everyday,
   events,
   anniversaryDate,
   eventsLoading,
@@ -77,7 +79,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
         onOpenCalendar={onOpenCalendar}
       />
 
-      <DailyDecisionCard onPlay={onOpenDailyDecision} />
+      <div className="home-daily-cards" style={{ display: 'grid', gridTemplateColumns: everyday ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap: '10px', flexShrink: 0 }}>
+        <DailyDecisionCard onPlay={onOpenDailyDecision} />
+        {everyday}
+      </div>
 
       {/* The picture fills the nook below the miss-you button and caption. */}
       <div
