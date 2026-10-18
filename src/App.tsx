@@ -18,6 +18,7 @@ import { GamesView } from './components/games/GamesView';
 import { DuelLeaveDialog } from './components/games/DuelLeaveDialog';
 import { useGames } from './hooks/useGames';
 import { HomeView } from './components/home/HomeView';
+import { DailyDecisionModal } from './components/home/DailyDecisionModal';
 import { MissYouReveal } from './components/home/MissYouReveal';
 import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
@@ -31,6 +32,7 @@ import { useBooks } from './hooks/useBooks';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
+import { useDailyDecision } from './hooks/useDailyDecision';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import {
   PUSH_DEEP_LINK_TABS,
@@ -45,7 +47,7 @@ import {
   signOutUser,
   type AuthUser,
 } from './lib/authService';
-import type { Profile, Couple } from './types/database';
+import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
 
 type TabKey = 'chat' | 'media' | 'home' | 'discuss' | 'games';
 
@@ -144,6 +146,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // paused, so leaving the Games tab is a forfeit and they get asked first.
   const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  // The daily decision is a sheet over Home; the page stays mounted behind it.
+  const [showDailyDecision, setShowDailyDecision] = useState(false);
   // The calendar is a modal over whatever tab is open, never a page of its own.
   const [showCalendar, setShowCalendar] = useState(false);
   // A message is only "read" while the Chat tab is on screen *and* the app is awake.
@@ -187,6 +191,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     partnerId: partner?.id ?? null,
     active: activeTab === 'chat' && appVisible,
   });
+  const sendChatMessage = chat.send;
 
   // The Discuss question engine sits at app level too, so a question the partner asks
   // still badges its tab while this phone is somewhere else.
@@ -227,6 +232,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // App-level like the chat: the home-screen badge is cleared from here, and a
   // notification tapped while the app is closed lands on the right tab on first paint.
   const push = usePushNotifications({
+    userId: currentUser?.id ?? null,
+    coupleId: couple?.id ?? null,
+  });
+  const dailyDecision = useDailyDecision({
     userId: currentUser?.id ?? null,
     coupleId: couple?.id ?? null,
   });
@@ -293,6 +302,21 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     setActiveTab('chat');
   }, []);
 
+  // "Take to chat" shares the prompt and all three choices as a normal message, so both
+  // partners have the exact decision in their transcript to deliberate on.
+  const handleTakeDecisionToChat = useCallback(async (question: DailyDecisionQuestion) => {
+    const content = [
+      `Today’s decision: ${question.question}`,
+      '',
+      ...question.options.map((option, index) => `${index + 1}. ${option}`),
+      '',
+      'What do you think?',
+    ].join('\n');
+    await sendChatMessage(content);
+    setShowDailyDecision(false);
+    setActiveTab('chat');
+  }, [sendChatMessage]);
+
   // The quote on a linked bubble: jump back to that question and its answers.
   const handleOpenQuestion = useCallback((sessionId: string) => {
     if (!couple) return;
@@ -308,7 +332,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // saved and painted, and useChat has already recorded the failed message in the
   // transcript ("Not sent — tap to retry").
   const addHighlight = books.addHighlight;
-  const sendChatMessage = chat.send;
   const handleShareHighlight = useCallback(async (bookId: string, input: ShareHighlightInput, comment: string) => {
     const highlight = await addHighlight({
       bookId,
@@ -638,9 +661,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             partnerOnline={partnerOnline}
             userWins={games.data?.wins[currentUser.id] ?? 0}
             partnerWins={games.data?.wins[partner.id] ?? 0}
-            dailyStatus={games.data?.matches?.find(m => m.daily_date === games.data?.today)?.finished ? 'Completed today · next challenge at midnight UTC' : 'One shared match a day · resets at midnight UTC'}
-            dailyLabel={games.data?.matches?.find(m => m.daily_date === games.data?.today)?.finished ? 'View result' : games.data?.matches?.some(m => m.daily_date === games.data?.today) ? 'Resume' : 'Play'}
             onPlayDailyGame={() => { setActiveTab('games'); void games.start('tic-tac-toe', true); }}
+            onOpenDailyDecision={() => setShowDailyDecision(true)}
             missYou={{
               visible: missYou.available,
               sentCount: missYou.sentCount,
@@ -846,6 +868,17 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onEditEvent={calendar.editEvent}
             onDeleteEvent={calendar.removeEvent}
             onClose={() => setShowCalendar(false)}
+          />
+        )}
+
+        {/* Today's private choices and their reveal, in a sheet over Home. */}
+        {showDailyDecision && (
+          <DailyDecisionModal
+            state={dailyDecision}
+            userName={profile.name}
+            partnerName={partner.name}
+            onTakeToChat={handleTakeDecisionToChat}
+            onClose={() => setShowDailyDecision(false)}
           />
         )}
 

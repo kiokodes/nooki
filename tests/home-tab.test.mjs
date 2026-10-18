@@ -105,6 +105,13 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await supabase.from('profiles').update({ last_seen_at: bobLastSeen }).eq('id', bob.id);
     await auth.signInWithEmail('alice@example.com', 'password');
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);
+    const dailyDecisionDate = new Date().toISOString().slice(0, 10);
+    await backend.query(
+      `INSERT INTO public.daily_decision_questions (decision_date, question, option_a, option_b, option_c)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [dailyDecisionDate, 'What should we plan together?', 'Cook dinner', 'Watch a film', 'Take a walk'],
+    );
+    await auth.signInWithEmail('alice@example.com', 'password');
 
     // Realtime presence without a socket, mirroring the real channel API.
     const presence = { state: {}, tracked: [], topic: null, key: null, handlers: [], status: null };
@@ -123,6 +130,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
         return fakeChannel;
       },
       async track(meta) { presence.tracked.push(meta); return 'ok'; },
+      async send() { return 'ok'; },
       async unsubscribe() { return 'ok'; },
     };
     supabase.channel = (topic, options) => {
@@ -201,7 +209,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert(!appHeader().textContent.includes(`${aliceClock.time} ${aliceClock.weekday}`),
       'the reader never sees their own time');
 
-    // 2. The Home tab shows the Today card, the Daily game card, and the reserved bottom scene area.
+    // 2. The Home tab shows Today, two compact daily cards and the reserved bottom scene area.
     const shell = document.querySelector('main.nooki-shell');
     assert(shell, 'the app renders inside the responsive .nooki-shell container');
     assert.equal(shell.style.width, '100%', 'the app shell uses fluid 100% width instead of a fixed pixel width');
@@ -212,23 +220,52 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(body().includes('This phone'), false, 'the old partner-status card is gone');
     assert.equal(body().includes('Partner status'), false, 'no leftover status card');
 
-    // Daily game card: "Today's challenge" with Play button and 0-to-0 scoreboard.
+    // Compact daily game card: the eyebrow, Play button and initials score line only.
     const dailyGameCard = home.querySelector('[data-card="daily-game"]');
     assert(dailyGameCard, 'the Daily game card is on the Home tab');
-    assert(dailyGameCard.textContent.includes("Today's challenge"), 'the card shows "Today\'s challenge"');
+    assert(dailyGameCard.textContent.includes('Daily game'), 'the card keeps the Daily game eyebrow');
+    assert.equal(dailyGameCard.textContent.includes("Today's challenge"), false, 'the old headline is removed');
     const playButton = dailyGameCard.querySelector('[data-action="play-daily-game"]');
     assert(playButton, 'the Daily game card has a Play button');
     assert(playButton.textContent.includes('Play'), 'the Play button is labelled Play');
     const scoreboard = dailyGameCard.querySelector('[data-scoreboard]');
     assert(scoreboard, 'the Daily game card includes a scoreboard');
-    assert(scoreboard.textContent.includes('Alice'), 'the scoreboard shows the current user');
-    assert(scoreboard.textContent.includes('Bob'), 'the scoreboard shows the partner');
-    assert(scoreboard.textContent.includes('0 to 0'), 'the scoreboard starts at 0 to 0');
-    assert.equal(scoreboard.querySelector('[data-partner-score="self"]')?.textContent.includes('0 wins'), true,
-      'the current user starts with 0 wins');
-    assert.equal(scoreboard.querySelector('[data-partner-score="partner"]')?.textContent.includes('0 wins'), true,
-      'the partner starts with 0 wins');
-    await act(async () => { playButton.click(); });
+    assert.equal(scoreboard.textContent.replace(/\s+/g, ''), 'A0–0B', 'only initials and the score are shown');
+    assert.match(scoreboard.getAttribute('aria-label'), /Alice 0 to 0 Bob/, 'full names stay available accessibly');
+
+    const dailyDecisionCard = home.querySelector('[data-card="daily-decision"]');
+    assert(dailyDecisionCard, 'the Daily decision card sits beside the game');
+    const decisionCardCopy = dailyDecisionCard.textContent.replace(/\u2019/g, "'").trim();
+    assert.equal(decisionCardCopy, "Today's decisionPlay", 'the card shows only its eyebrow and Play button');
+    const openDecisionButton = dailyDecisionCard.querySelector('[data-action="play-daily-decision"]');
+    assert(openDecisionButton, 'the Daily decision card has a Play button');
+    await act(async () => { openDecisionButton.click(); });
+    const decisionModal = () => document.querySelector('[data-modal="daily-decision"]');
+    await waitFor(() => decisionModal()?.querySelector('[data-decision-question]'), 'today’s uploaded decision should load');
+    assert.equal(decisionModal().querySelector('[data-decision-question]').textContent, 'What should we plan together?');
+    assert.equal(decisionModal().querySelectorAll('[data-decision-option]').length, 3, 'the question has exactly three choices');
+    assert.match(decisionModal().querySelector('[data-decision-status]').textContent, /Neither answer is revealed/);
+    await act(async () => {
+      decisionModal().querySelector('[data-decision-option="2"] input').click();
+    });
+    const submitDecision = decisionModal().querySelector('[data-action="submit-daily-decision"]');
+    assert.equal(submitDecision.disabled, false, 'a single choice can be submitted privately');
+    await act(async () => { submitDecision.click(); });
+    await waitFor(() => decisionModal().querySelector('[data-decision-status]').textContent.includes('Your choice stays private'),
+      'the first choice is saved privately while the partner waits');
+    assert.equal(decisionModal().querySelector('[data-decision-reveal]'), null, 'the partner answer is still hidden');
+
+    // Take to chat shares the exact prompt and all three options so the couple can deliberate.
+    await act(async () => { decisionModal().querySelector('[data-action="take-decision-to-chat"]').click(); });
+    await waitFor(() => document.querySelector('[data-screen="chat"]'), 'Take to chat opens the shared conversation');
+    await waitFor(() => body().includes('What should we plan together?'), 'the decision prompt is sent to Chat');
+    assert(body().includes('1. Cook dinner') && body().includes('2. Watch a film') && body().includes('3. Take a walk'),
+      'the chat message carries all three options');
+    await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
+
+    // Play the daily game from its compact card, then return to Home.
+    const currentPlayButton = document.querySelector('[data-card="daily-game"] [data-action="play-daily-game"]');
+    await act(async () => { currentPlayButton.click(); });
     assert(document.querySelector('[aria-label="Games"]'), 'tapping Play opens the Games tab');
     assert(document.body.textContent.includes('Daily challenge'), 'the daily match loads');
     await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
