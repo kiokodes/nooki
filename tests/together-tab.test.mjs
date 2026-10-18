@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 
-// The Media tab's shelf card states, and the chat's quote card for shared highlights.
+// The Together tab's shelf card states, and the chat's quote card for shared highlights.
 // Both are presentational: the database rules are covered in books-database.test.mjs.
-test('media tab: read-together card, both progress bars, and the two-book shelf limit', async () => {
+test('together tab: read-together card, both progress bars, and the two-book shelf limit', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'File', 'FileReader']) {
     globalThis[key] = dom.window[key];
@@ -16,7 +16,7 @@ test('media tab: read-together card, both progress bars, and the two-book shelf 
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
   const root = createRoot(document.getElementById('root'));
   try {
-    const { MediaView } = await server.ssrLoadModule('/src/components/media/MediaView.tsx');
+    const { TogetherView } = await server.ssrLoadModule('/src/components/together/TogetherView.tsx');
 
     const calls = [];
     const makeState = (overrides = {}) => ({
@@ -38,7 +38,7 @@ test('media tab: read-together card, both progress bars, and the two-book shelf 
     });
 
     const openReader = (id) => calls.push(['openReader', id]);
-    const render = (state) => act(async () => root.render(React.createElement(MediaView, {
+    const render = (state) => act(async () => root.render(React.createElement(TogetherView, {
       state,
       userId: 'me',
       userName: 'Alice',

@@ -112,17 +112,17 @@ export function useVisits(coupleId: string | null, userId: string | null): Visit
     try {
       setState((prev) => ({ ...prev, saving: true, error: null }));
       
-      const { data, error } = await requireSupabase()
+      const { error } = await requireSupabase()
         .from('visits')
         .insert({
           couple_id: coupleId,
-          start_date,
-          end_date,
+          start_date: startDate,
+          end_date: endDate,
           location,
           timezone,
           is_tentative: isTentative,
-        })
-        .select();
+          created_by: userId,
+        });
 
       if (error) {
         throw new Error(describeDatabaseError(error));
@@ -140,7 +140,7 @@ export function useVisits(coupleId: string | null, userId: string | null): Visit
     } finally {
       setState((prev) => ({ ...prev, saving: false }));
     }
-  }, [coupleId, loadVisits]);
+  }, [coupleId, userId, loadVisits]);
 
   const updateVisit = useCallback(async (visitId: string, updates: Partial<Omit<Visit, 'id' | 'couple_id' | 'created_at' | 'updated_at'>>) => {
     if (!coupleId) return;

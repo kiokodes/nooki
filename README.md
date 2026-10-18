@@ -76,7 +76,9 @@ apply and verify the database migrations separately.
    `202610180003_couple_photo.sql` (the couple picture frame standing in the Home nook),
    then `202610180002_remove_daily_games_and_tic_tac_toe.sql` (removes the retired daily
    Games feature, Tic Tac Toe and their match history), then
-   `202610180006_connect_four.sql` (adds Connect Four with database-refereed turns).
+   `202610180006_connect_four.sql` (adds Connect Four with database-refereed turns), then
+   `202610180007_together_visits_and_someday_list.sql` (the Together tab's planned visits
+   and shared someday list).
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -571,7 +573,7 @@ left, live, with no refresh anywhere. It is built from:
   app is in the foreground, because you have to be looking at a message to have read it.
   Opening the tab stamps everything the partner sent.
 - **Unread badge** — the partner's unseen messages are counted on the Chat tab icon in the
-  bottom nav (capped at `99+`), updated live even while this phone sits on Home, Media or
+  bottom nav (capped at `99+`), updated live even while this phone sits on Home, Together or
   Games, and cleared the moment the chat opens. Screen readers hear
   *"Chat, 2 unread messages"* instead of the raw number.
 - **Conversation bar** — the partner's name and live status (`Online`, `typing…`, or
@@ -595,7 +597,7 @@ left, live, with no refresh anywhere. It is built from:
   loaded (`MESSAGE_PAGE_SIZE`).
 
 Presence runs at app level, so a partner still reads as online while this phone browses
-Chat, Media, Discussion or Games. The app writes its own `last_seen_at` on mount, every
+Chat, Together, Discussion or Games. The app writes its own `last_seen_at` on mount, every
 minute while open, and when the tab is hidden — permitted by the existing "update own
 profile" RLS policy, so **no migration is required** for any of this. Two caveats:
 
@@ -689,7 +691,7 @@ a link back to those answers) attached. It is built from:
   empty list.
 - **Unanswered badge** — sessions without your answer badge the Discuss tab in the bottom
   nav and repeat the count in the tab header, live, even while this phone sits on Home,
-  Media or Games. Screen readers hear *"Discuss, 1 question waiting"*.
+  Together or Games. Screen readers hear *"Discuss, 1 question waiting"*.
 - **18+ (Intimacy)** — hidden from the library by default. It opens only when **both**
   partners turn it on under Settings → *Intimacy questions (18+)*; either one turning it
   off closes it again, for both phones. The gate lives in the database: the `questions`
@@ -866,7 +868,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
 migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
@@ -1144,7 +1146,7 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] A third account cannot read either partner's responses, and an app user cannot write
       prompt rows or update/delete responses directly.
 - [ ] A third account cannot read the couple's sessions, answers or comments.
-- [ ] The Media tab's empty shelf shows **Read together** with an Upload book button and
+- [ ] The Together tab's empty shelf shows **Read together** with an Upload book button and
       the "DRM-free EPUB or PDF only" note; a picked file appears as the reading book.
 - [ ] A second upload while a book is reading says "Leave or delete current book first."
       and the same rule holds even if the request is forced through.
@@ -1213,7 +1215,7 @@ this repository's own `send-push` Edge Function — no notification service, SDK
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
 tab, and an unread count on the installed app's icon; the chat is the only thing announced
-so far. Media hosts **Read together** (shared books:
+so far. Together hosts **Read together** (shared books:
 one EPUB or PDF in play per couple, a full-screen reader, saved places for both
 partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
 back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes
@@ -1354,9 +1356,9 @@ npm run test:browser
 # PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser
 ```
 
-## Media tab: Read together (shared books)
+## Together tab: Read together (shared books)
 
-The first Media feature: one book the couple reads together, EPUB first and PDF on the
+The first Together feature: one book the couple reads together, EPUB first and PDF on the
 same flow. Apply **`supabase/migrations/202610150008_shared_books.sql`** to an existing
 project before shipping books, then run **`supabase/verify-books.sql`** in addition to
 the usual `verify.sql`. New projects get books from `schema.sql`. The migration is
@@ -1365,7 +1367,7 @@ applied to your live project by the frontend build.
 
 ### The shelf, the reader and the loop
 
-- **Upload** — a file picker on the Media tab takes a **DRM-free EPUB or PDF, up to
+- **Upload** — a file picker on the Together tab takes a **DRM-free EPUB or PDF, up to
   40 MB**. The shelf row is created first (so a couple that already has an active book
   is told "Leave or delete current book first." before a single byte uploads), then the
   file goes up. The card shows the title, both people's percentages and **Continue

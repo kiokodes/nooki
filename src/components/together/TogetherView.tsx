@@ -5,6 +5,7 @@ import {
   Clock,
   Heart,
   MapPin,
+  Play,
   Plus,
   Sparkles,
   Trash2,
@@ -42,7 +43,7 @@ interface TogetherViewProps {
   onViewVisitPlans?: () => void;
   // Someday list props
   somedayItems?: SomedayItem[];
-  onAddSomedayItem?: (text: string) => Promise<void>;
+  onAddSomedayItem?: (text: string) => Promise<unknown>;
   onToggleSomedayItem?: (item: SomedayItem) => Promise<void>;
   onDeleteSomedayItem?: (item: SomedayItem) => Promise<void>;
 }
@@ -371,9 +372,7 @@ function VisitCard({
 
   // Check if visit is currently happening
   const endDate = visit.end_date ? new Date(visit.end_date) : null;
-  const isDuringVisit = !visit.end_date
-    ? false
-    : today >= startDate && today <= endDate;
+  const isDuringVisit = endDate !== null && today >= startDate && today <= endDate;
 
   // Check if visit is in the past
   const isPastVisit = endDate ? today > endDate : today > startDate;
@@ -669,16 +668,12 @@ function formatDateRange(startDate: string, endDate: string | null): string {
 
 function SomedayList({
   items,
-  userName,
-  partnerName,
   onAddItem,
   onToggleItem,
   onDeleteItem,
 }: {
   items: SomedayItem[];
-  userName: string;
-  partnerName: string;
-  onAddItem: (text: string) => Promise<void>;
+  onAddItem: (text: string) => Promise<unknown>;
   onToggleItem: (item: SomedayItem) => Promise<void>;
   onDeleteItem: (item: SomedayItem) => Promise<void>;
 }) {
@@ -1300,8 +1295,6 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
         {onAddSomedayItem && onToggleSomedayItem && onDeleteSomedayItem ? (
           <SomedayList
             items={somedayItems}
-            userName={userName}
-            partnerName={partnerName}
             onAddItem={onAddSomedayItem}
             onToggleItem={onToggleSomedayItem}
             onDeleteItem={onDeleteSomedayItem}
