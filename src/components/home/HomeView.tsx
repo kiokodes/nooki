@@ -1,7 +1,7 @@
 import React from 'react';
 import { TodayCard } from './TodayCard';
 import { DailyDecisionCard } from './DailyDecisionCard';
-import { HomeNookiCompanions } from './HomeNookiCompanions';
+import { NookPhotoFrame, type NookPhotoFrameProps } from './NookPhotoFrame';
 import { MissYouButton, type MissYouButtonProps } from './MissYouButton';
 import { useNow } from '../../hooks/useNow';
 import { tokens } from '../../tokens/designTokens';
@@ -17,6 +17,11 @@ interface HomeViewProps {
   partnerOnline?: boolean;
   onOpenDailyDecision?: () => void;
   /**
+   * The couple's framed picture standing in the nook (see `useCouplePhoto`). The
+   * frame invites the couple to upload one before anything is framed.
+   */
+  photo?: NookPhotoFrameProps;
+  /**
    * The "I miss you" button in the corner of the nook. Omitted (or hidden) whenever the
    * couple is not both paired and apart — the button is for the partner who is alone.
    */
@@ -29,7 +34,8 @@ interface HomeViewProps {
  * It shows:
  * - The Today card: today's date, anything happening today, and what is coming within the next day.
  * - Today's shared decision.
- * - A shared cozy nook, with a small top-right caption, presence-aware companion art, and
+ * - A shared cozy nook, with a small top-right caption, the couple's own picture standing
+ *   in a gift-wrapped frame (the first thing either partner sees is the two of them), and
  *   the "I miss you" button in the top-left corner. The button belongs to the half of the
  *   couple who is in the app alone (see `useMissYou`): it is only rendered while the partner
  *   is away, and each tap is counted for that partner to open later.
@@ -42,6 +48,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenCalendar,
   partnerOnline = false,
   onOpenDailyDecision,
+  photo,
   missYou,
 }) => {
   // Minute granularity is plenty for a date, and it keeps the tab from re-rendering every second.
@@ -72,14 +79,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       <DailyDecisionCard onPlay={onOpenDailyDecision} />
 
-      {/* Cozy living nook — our shared little space. Watch-only, never interactive. */}
+      {/* Cozy living nook — our shared little space. The frame in the middle is the
+          couple's own picture; the miss-you button and the caption stay put. */}
       <div
         data-scene-placeholder
         data-area="animated-scene"
         data-nooki-nook="cozy"
         data-partner-online={partnerOnline ? 'true' : 'false'}
         role="region"
-        aria-label="Our little nook — watch the Nookis sharing a cozy moment"
+        aria-label="Our little nook — our favourite picture in its frame"
         className="nooki-cozy-nook"
         style={{
           flex: '1 1 145px',
@@ -87,7 +95,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           width: '100%',
           borderRadius: tokens.radii.lg,
           backgroundColor: '#FFFBF2',
-          border: `1px solid ${tokens.colors.borderSubtle}`,
+          // No border lines around the nook: the frame is the picture's card, and
+          // the nook is simply the room it stands in — a soft shadow is all the
+          // edge the room needs.
           boxShadow: tokens.shadows.subtle,
           display: 'flex',
           alignItems: 'center',
@@ -149,13 +159,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
         >
           Our little nook
         </div>
-        {/* The one thing in the nook that is clickable: "I miss you", for when the
-            partner is away and this phone is the only one in the app. */}
+        {/* "I miss you", for when the partner is away and this phone is the only one
+            in the app. It stays exactly where it has always been, in the nook's
+            top-left corner. */}
         {missYou && <MissYouButton {...missYou} />}
-        <HomeNookiCompanions
-          ambient
-          partnerOnline={partnerOnline}
-          expression={partnerOnline ? 'affectionate' : 'happy'}
+        <NookPhotoFrame
+          src={photo?.src ?? null}
+          uploading={photo?.uploading ?? false}
+          error={photo?.error ?? null}
+          onUpload={photo?.onUpload ?? (() => {})}
+          altText={photo?.altText}
         />
       </div>
     </section>

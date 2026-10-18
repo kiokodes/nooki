@@ -14,7 +14,7 @@ BEGIN;
 DO $$
 BEGIN
   IF to_regclass('public.game_matches') IS NULL THEN
-    RAISE EXCEPTION 'Apply the Games migrations before 202610180003_duel_report_retries.sql.';
+    RAISE EXCEPTION 'Apply the Games migrations before 202610180004_duel_report_retries.sql.';
   END IF;
 END $$;
 

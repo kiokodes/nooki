@@ -20,6 +20,7 @@ import { MissYouReveal } from '../components/home/MissYouReveal';
 import { ChatView } from '../components/chat/ChatView';
 import { CalendarModal } from '../components/calendar/CalendarModal';
 import { DangerSettingsModal } from '../components/common/DangerSettingsModal';
+import pairAffectionate from '../assets/companions/pair-affectionate.png';
 import type { PushNotificationsState } from '../hooks/usePushNotifications';
 import type { MissYouBatch } from '../lib/missYou';
 import type { ChatEntry, Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
@@ -248,6 +249,10 @@ export const AppPreview = () => {
   // by the real components; the count here is the preview's own, never a backend's.
   const [missYouTaps, setMissYouTaps] = useState(0);
   const [missYouReveal, setMissYouReveal] = useState<MissYouBatch | null>(null);
+  // The couple picture frame: the preview stands the cartoon pair in for the couple's
+  // own photo, so both the framed and the empty "upload your couple picture" invite
+  // can be looked at without a backend.
+  const [photoFramed, setPhotoFramed] = useState(true);
   const [adultEnabled, setAdultEnabled] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   // "Update location" edits this phone's place, so the sheet can be looked at after a
@@ -490,6 +495,9 @@ export const AppPreview = () => {
         <button type="button" style={controlStyle(missYouTaps > 0)} onClick={() => setMissYouTaps(0)}>
           {missYouTaps > 0 ? `Reset the ${missYouTaps} miss-you taps` : 'I miss you (tap it in the nook)'}
         </button>
+        <button type="button" style={controlStyle(!photoFramed)} onClick={() => setPhotoFramed((value) => !value)}>
+          {photoFramed ? 'Empty the picture frame' : 'Frame the sample picture'}
+        </button>
         <button
           type="button"
           style={controlStyle(Boolean(missYouReveal))}
@@ -593,6 +601,12 @@ export const AppPreview = () => {
                 eventsError={null}
                 onOpenCalendar={() => setShowCalendar(true)}
                 partnerOnline={partnerOnline}
+                photo={{
+                  src: photoFramed ? pairAffectionate : null,
+                  uploading: false,
+                  error: null,
+                  onUpload: () => setPhotoFramed(true),
+                }}
                 missYou={{
                   visible: !partnerOnline,
                   sentCount: missYouTaps,

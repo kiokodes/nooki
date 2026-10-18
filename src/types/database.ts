@@ -67,6 +67,23 @@ export interface CoupleEvent {
 }
 
 /**
+ * The one picture standing in the couple's nook frame. Exactly one row per couple
+ * (the couple id is the key): either partner may replace it, and the row's couple
+ * never moves (see `couple_photo` in supabase/schema.sql). The file itself lives in
+ * the private `couple-photos` bucket and is opened only through short-lived signed
+ * URLs.
+ */
+export interface CouplePhoto {
+  couple_id: string;
+  /** Storage path, always `photos/{couple_id}/{photo_id}.jpg` in the private bucket. */
+  file_path: string;
+  /** Who framed it last; null if that account was later deleted. */
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * What a message row is for. Only 'text' is produced by the Chat tab today; the Discuss
  * tab will reuse the same log for prompts ('question'), their replies ('answer') and
  * automatic notes ('system').

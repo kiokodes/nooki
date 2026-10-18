@@ -497,7 +497,27 @@ BEGIN
                       AND schemaname = 'public' AND tablename = 'daily_decision_responses') THEN
     RAISE EXCEPTION 'Daily Decisions responses are missing from supabase_realtime. Rerun supabase/migrations/202610180001_daily_decision_pool.sql.';
   END IF;
+
+  -- Couple picture frame: one private photo per couple, live on both phones.
+  IF to_regclass('public.couple_photo') IS NULL THEN
+    RAISE EXCEPTION 'Missing couple_photo table. Apply supabase/migrations/202610180003_couple_photo.sql.';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'couple_photo' AND NOT c.relrowsecurity
+  ) THEN RAISE EXCEPTION 'Row-level security must be enabled on couple_photo. Rerun supabase/migrations/202610180003_couple_photo.sql.'; END IF;
+  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'couple_photo') < 4 THEN
+    RAISE EXCEPTION 'couple_photo is missing its couple-scoped policies. Rerun supabase/migrations/202610180003_couple_photo.sql.';
+  END IF;
+  IF has_table_privilege('anon', 'public.couple_photo', 'SELECT') THEN
+    RAISE EXCEPTION 'Anonymous users must not read couple_photo. Rerun supabase/migrations/202610180003_couple_photo.sql.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime'
+                      AND schemaname = 'public' AND tablename = 'couple_photo') THEN
+    RAISE EXCEPTION 'couple_photo is missing from supabase_realtime. Rerun supabase/migrations/202610180003_couple_photo.sql.';
+  END IF;
 END;
 $$;
-SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages, the Discuss question tables, web push, miss-you taps, daily decisions and partner locations are present. Still complete the two-device acceptance test.' AS result;
+SELECT 'PASS: required functions, pairing permissions, RLS, anniversary trigger, couple_events calendar, realtime messages, the Discuss question tables, web push, miss-you taps, daily decisions, partner locations and the couple picture frame are present. Still complete the two-device acceptance test.' AS result;
 COMMIT;
