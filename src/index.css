@@ -553,6 +553,69 @@ html, body {
 
 
 /* =========================================================================
+   Nook Photo Frame: the couple's own picture, standing in the nook
+   A gift-wrapped frame (see NookPhotoFrame.tsx) with a restrained 6-second
+   sway anchored at its feet — a standing frame, not a bouncing widget — and
+   a soft fade over the window while a new picture is being framed.
+   ========================================================================= */
+
+.nooki-photo-frame-stand {
+  transform-origin: 50% 100%;
+  animation: nooki-photo-frame-sway 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes nooki-photo-frame-sway {
+  0%,
+  100% {
+    transform: rotate(-0.35deg);
+  }
+  50% {
+    transform: rotate(0.35deg) translateY(-0.5px);
+  }
+}
+
+/* The one focus ring the nook's centrepiece ever shows: keyboard only. */
+.nooki-photo-frame-button:focus {
+  outline: none;
+}
+
+.nooki-photo-frame-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(249, 168, 212, 0.55),
+    0 0 0 1px rgba(236, 72, 153, 0.35);
+  border-radius: 16px;
+}
+
+/* While a chosen picture uploads, the window dims and breathes. */
+.nooki-photo-frame-busy .nooki-photo-frame-window {
+  animation: nooki-photo-frame-busy 1.2s ease-in-out infinite;
+}
+
+@keyframes nooki-photo-frame-busy {
+  0%,
+  100% {
+    filter: saturate(0.7) brightness(1.02);
+  }
+  50% {
+    filter: saturate(0.5) brightness(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-photo-frame-stand {
+    animation: none !important;
+    transform: none !important;
+  }
+  .nooki-photo-frame-busy .nooki-photo-frame-window {
+    animation: none !important;
+    filter: saturate(0.6);
+  }
+}
+
+
+/* =========================================================================
    "I miss you": the small button in the nook, and the heart it becomes
    The button is offered only while the partner is away. Every tap is counted
    (one row per sender per own day in miss_you_taps); the next time the partner

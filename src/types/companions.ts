@@ -3,7 +3,7 @@
  *
  * Canonical identities:
  * - Nooki A (male-presenting): bald scalp, dark eyebrows, short goatee, pink sweatshirt, dusty-rose trousers.
- * - Nooki B (female-presenting): natural afro puff, gold hoops, green dungarees, cream tee.
+ * - Nooki B (female-presenting): natural afro puff, gold hoops, green wax-print ankara dress cinched at the waist, white shoes.
  * - Both: warm medium-brown skin, super-deformed adult-chibi proportions.
  */
 
