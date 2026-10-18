@@ -1,7 +1,8 @@
 import React from 'react';
 import { Lock, Shuffle, Sparkles } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
-import { DISCUSS_CATEGORIES, SERIOUSNESS_LEVELS, categoryDisplay } from '../../lib/questionFormat';
+import { DISCUSS_CATEGORIES, categoryDisplay } from '../../lib/questionFormat';
+import { DifficultyModal } from './DifficultyModal';
 import type { CategoryCount } from '../../lib/discussService';
 
 interface CategoryPickerProps {
@@ -38,26 +39,10 @@ const tileStyle = (dimmed: boolean): React.CSSProperties => ({
   position: 'relative',
 });
 
-const chipStyle = (active: boolean, disabled: boolean): React.CSSProperties => ({
-  padding: '8px 14px',
-  borderRadius: tokens.radii.pill,
-  border: `1.5px solid ${active ? tokens.colors.accentSageDeep : tokens.colors.borderSubtle}`,
-  backgroundColor: active ? tokens.colors.accentSageDeep : tokens.colors.bgSurface,
-  color: active ? tokens.colors.textWhite : disabled ? tokens.colors.textMuted : tokens.colors.textSecondary,
-  fontSize: '0.78rem',
-  fontWeight: 700,
-  fontFamily: tokens.typography.fontFamily,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-  opacity: disabled ? 0.6 : 1,
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '6px',
-});
-
 /**
- * Step one of the Discuss flow: choose a category, then how heavy it should be, and a
- * question card follows. "Surprise me" skips both and pulls anything the couple has not
- * asked yet.
+ * Step one of the Discuss flow: choose a category, and a pop-up asks how heavy it
+ * should be before a question card follows. "Surprise me" skips both and pulls anything
+ * the couple has not asked yet.
  *
  * The tiles describe the imported library — nothing here carries question text of its own.
  */
@@ -163,7 +148,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
                 data-category={display.name}
                 data-selected={isSelected ? 'true' : 'false'}
                 disabled={busy}
-                onClick={() => onSelectCategory(isSelected ? null : display.name)}
+                onClick={() => onSelectCategory(display.name)}
                 style={{
                   ...tileStyle(busy),
                   borderColor: isSelected ? display.accent : tokens.colors.borderSubtle,
@@ -237,59 +222,12 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
       )}
 
       {selected && (
-        <div
-          data-seriousness-picker
-          style={{
-            padding: '14px',
-            borderRadius: tokens.radii.lg,
-            backgroundColor: tokens.colors.bgSurface,
-            border: `1.5px solid ${tokens.colors.borderSubtle}`,
-            boxShadow: tokens.shadows.subtle,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px',
-          }}
-        >
-          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: tokens.colors.textPrimary }}>
-            {`How deep should ${selected.category} go?`}
-          </span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            <button
-              type="button"
-              aria-label="Any level"
-              disabled={busy || selected.remaining === 0}
-              onClick={() => onPick(selected.category, null)}
-              style={chipStyle(false, busy || selected.remaining === 0)}
-            >
-              <Sparkles size={13} aria-hidden="true" />
-              <span>Any</span>
-            </button>
-            {SERIOUSNESS_LEVELS.map((level) => {
-              const remaining = selected.byLevel[level.level] ?? 0;
-              const disabled = busy || remaining === 0;
-              return (
-                <button
-                  key={level.level}
-                  type="button"
-                  aria-label={`${level.label}, level ${level.level}, ${remaining} left`}
-                  data-seriousness={level.level}
-                  disabled={disabled}
-                  title={level.hint}
-                  onClick={() => onPick(selected.category, level.level)}
-                  style={chipStyle(false, disabled)}
-                >
-                  <span>{`${level.level} · ${level.label}`}</span>
-                  <span style={{ fontSize: '0.68rem', opacity: 0.75 }}>{remaining}</span>
-                </button>
-              );
-            })}
-          </div>
-          {selected.remaining === 0 && (
-            <span style={{ fontSize: '0.74rem', color: tokens.colors.textSecondary }}>
-              {`You have asked every ${selected.category} question in your library.`}
-            </span>
-          )}
-        </div>
+        <DifficultyModal
+          entry={selected}
+          busy={busy}
+          onPick={onPick}
+          onClose={() => onSelectCategory(null)}
+        />
       )}
     </div>
   );

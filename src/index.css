@@ -177,6 +177,12 @@ html, body {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* Centered pop-ups (the Discuss difficulty picker): a small scale-up from the middle. */
+@keyframes nooki-modal-pop {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
 /* Couple Settings: the sheet is capped by the phone frame around it and only the block
    below its pinned header scrolls, so a new setting lengthens the panel instead of pushing
    it off the screen. Containment matters here — without it, a drag that reaches the end of
