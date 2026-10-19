@@ -6,6 +6,8 @@ import type { TetrisInput, TetrisMode } from './tetris';
 import { isTetrisAction } from './tetris';
 import type { DashAction, DashCourseEvent, DashLevel } from './dash';
 import { isDashAction, isDashLevel } from './dash';
+import type { WordDuration, WordLevel } from './wordWheel';
+import { isWordDuration, isWordLevel, normalizeWord } from './wordWheel';
 
 export const GAMES = [
   { id: 'rock-paper-scissors', name: 'Rock Paper Scissors', icon: '✊ ✋ ✌️', description: 'Pick in secret. Reveal together.' },
@@ -39,6 +41,12 @@ export const GAMES = [
     name: 'Dash Duel',
     icon: '🏃',
     description: 'Three lanes, one Lagos track. Grab hearts, dodge barriers, and beat your partner’s distance.',
+  },
+  {
+    id: 'word-wheel',
+    name: 'Word Wheel',
+    icon: '🔤',
+    description: 'Swipe the letters, fill the blanks. Same wheel, same clock — most words wins.',
   },
 ] as const;
 export type GameId = typeof GAMES[number]['id'];
@@ -148,6 +156,40 @@ export interface DashDuel {
   partner: DashSide;
 }
 
+/** One phone's half of a Word Wheel round. */
+export interface WordSide {
+  ready: boolean;
+  ready_at: string | null;
+  submitted: boolean;
+  words: string[];
+  count: number;
+  finished_ms: number | null;
+}
+
+/**
+ * A shared Word Wheel round. `words` is the round's immutable hidden list: both
+ * phones receive the same one so a swipe can be judged locally without a round trip.
+ * The database still only accepts words from this list when a result is submitted.
+ */
+export interface WordRound {
+  letters: string;
+  difficulty: WordLevel;
+  duration_seconds: WordDuration;
+  grand_word: string;
+  words: string[];
+  /** `[length, count]` pairs, shortest first; used for the blank rows. */
+  layout: { length: number; count: number }[];
+  words_total: number;
+  status: 'waiting' | 'running' | 'finished';
+  start_at: string | null;
+  /** The server clock when this snapshot was read; used to correct phone clock skew. */
+  server_now: string | null;
+  created_by: string | null;
+  winner_id: string | null;
+  mine: WordSide;
+  partner: WordSide;
+}
+
 /** A chess match as the database reports it: the position, and only the position. */
 export interface ChessSnapshot {
   mode: 'classic' | 'capture-race' | 'queen-hunt';
@@ -177,12 +219,15 @@ export interface GameMatch {
   board?: string[];
   /** Dash Duel's shared Lagos course and individual verified runs. */
   dash?: DashDuel | null;
+  /** Word Wheel's shared wheel, hidden list and each partner's result. */
+  word?: WordRound | null;
 }
 export interface GamesSnapshot { wins: Record<string, number>; matches: GameMatch[] }
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
 const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
 const TETRIS_SETUP_ERROR = 'Tetris Duel needs a database update. Apply migration 202610150012_tetris_duel.sql after 202610150011_chess.sql; if Tetris is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
 const DASH_SETUP_ERROR = 'Dash Duel needs a database update. Apply supabase/migrations/202610180009_dash_duel.sql after 202610180008_someday_details_order_and_visit_link.sql, then run supabase/verify-games.sql before retrying.';
+const WORD_SETUP_ERROR = 'Word Wheel needs a database update. Apply supabase/migrations/202610190001_word_wheel.sql, then run supabase/seed/word_puzzles.sql and supabase/verify-games.sql before retrying.';
 
 async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args);
@@ -190,6 +235,7 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
     const snakeRequest = name.startsWith('snake_') || (name === 'start_game' && args.p_game === 'snake');
     const tetrisRequest = name.startsWith('tetris_') || name === 'start_tetris';
     const dashRequest = name.startsWith('dash_') || name === 'start_dash' || error.message.includes('dash_');
+    const wordRequest = name.startsWith('word_') || name === 'start_word_round' || error.message.includes('word_');
     // Migration 007's start_game exists, but only accepts the two original games.
     // This is not a missing-RPC error: it rejects a perfectly valid Duel button click.
     const legacySnakeStart = name === 'start_game' && args.p_game === 'snake'
@@ -214,7 +260,9 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
       && error.code === '23514' && error.message.includes('game_matches_game_check');
     if (legacyDashStart) throw new Error(DASH_SETUP_ERROR);
     if (['PGRST202', '42P01', '42703', '42883'].includes(error.code)) {
-      throw new Error(dashRequest
+      throw new Error(wordRequest
+        ? WORD_SETUP_ERROR
+        : dashRequest
         ? DASH_SETUP_ERROR
         : snakeRequest || error.message.includes('snake_')
         ? SNAKE_SETUP_ERROR
@@ -237,7 +285,9 @@ export async function fetchGames(): Promise<GamesSnapshot> {
     ...data,
     matches: data.matches.map((match) => match.game === 'dash-duel'
       ? { ...match, dash: dashDuelFromWire(match.dash) }
-      : match),
+      : match.game === 'word-wheel'
+        ? { ...match, word: wordRoundFromWire(match.word) }
+        : match),
   };
 }
 
@@ -273,6 +323,63 @@ export function dashActions(rows: [number, string][] | undefined): DashAction[] 
 }
 
 export const dashActionRows = (actions: DashAction[]): [number, string][] => actions.map(({ tick, action }) => [tick, action]);
+
+function wordSideFromWire(value: unknown): WordSide {
+  const side = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const words = Array.isArray(side.words)
+    ? [...new Set(side.words.map(normalizeWord).filter((word) => word.length >= 2 && word.length <= 7))]
+    : [];
+  return {
+    ready: side.ready === true,
+    ready_at: typeof side.ready_at === 'string' ? side.ready_at : null,
+    submitted: side.submitted === true,
+    words,
+    count: Math.max(0, Math.min(words.length, Number.isFinite(Number(side.count)) ? Number(side.count) : words.length)),
+    finished_ms: Number.isFinite(Number(side.finished_ms)) ? Math.max(0, Number(side.finished_ms)) : null,
+  };
+}
+
+function wordRoundFromWire(value: unknown): WordRound | null {
+  if (!value || typeof value !== 'object') return null;
+  const round = value as Record<string, unknown>;
+  if (!isWordLevel(round.difficulty) || !isWordDuration(Number(round.duration_seconds))) return null;
+  const words = Array.isArray(round.words)
+    ? [...new Set(round.words.map(normalizeWord).filter((word) => word.length >= 2 && word.length <= 7))]
+    : [];
+  const layout = Array.isArray(round.layout)
+    ? round.layout
+      .map((row) => {
+        const item = row && typeof row === 'object' ? row as Record<string, unknown> : {};
+        const length = Number(item.length);
+        const count = Number(item.count);
+        return Number.isInteger(length) && length >= 2 && length <= 7 && Number.isInteger(count) && count > 0
+          ? { length, count }
+          : null;
+      })
+      .filter((row): row is { length: number; count: number } => row !== null)
+    : [];
+  const letters = typeof round.letters === 'string'
+    ? round.letters.toLowerCase().replace(/[^a-z]/g, '').slice(0, 7)
+    : '';
+  if (letters.length !== 7) return null;
+  const status = round.status === 'running' || round.status === 'finished' ? round.status : 'waiting';
+  return {
+    letters,
+    difficulty: round.difficulty,
+    duration_seconds: Number(round.duration_seconds) as WordDuration,
+    grand_word: typeof round.grand_word === 'string' ? normalizeWord(round.grand_word) : '',
+    words,
+    layout,
+    words_total: words.length,
+    status,
+    start_at: typeof round.start_at === 'string' ? round.start_at : null,
+    server_now: typeof round.server_now === 'string' ? round.server_now : null,
+    created_by: typeof round.created_by === 'string' ? round.created_by : null,
+    winner_id: typeof round.winner_id === 'string' ? round.winner_id : null,
+    mine: wordSideFromWire(round.mine),
+    partner: wordSideFromWire(round.partner),
+  };
+}
 
 function dashDuelFromWire(value: unknown): DashDuel | null {
   if (!value || typeof value !== 'object') return null;
@@ -475,3 +582,17 @@ export const beatDashRun = (id: string, ticks: number, actions: DashAction[]) =>
 export const finishDashRun = (id: string, ticks: number, actions: DashAction[]) =>
   rpc<DashRun>('dash_finish', { p_id: id, p_ticks: ticks, p_actions: dashActionRows(actions) });
 export const forfeitDashRun = (id: string) => rpc<DashRun>('dash_forfeit', { p_id: id });
+
+/* ---------------------------------------------------------------------------
+   Word Wheel. The puzzle bank lives in word_puzzles; a round copies one pack of
+   hidden words and both phones play the same list against one server start time.
+   The database counts only words from that list, then compares count and the time
+   of each player's last found word. See 202610190001_word_wheel.sql.
+   --------------------------------------------------------------------------- */
+
+export const startWordRound = (difficulty: WordLevel, seconds: WordDuration) =>
+  rpc<string>('start_word_round', { p_difficulty: difficulty, p_seconds: seconds });
+export const readyWordRound = (id: string) => rpc<WordRound>('word_ready', { p_id: id });
+export const submitWordRound = (id: string, words: string[], finishedMs: number) =>
+  rpc<WordRound>('word_submit', { p_id: id, p_words: words, p_finished_ms: Math.max(0, Math.round(finishedMs)) });
+export const cancelWordRound = (id: string) => rpc<WordRound>('word_cancel', { p_id: id });

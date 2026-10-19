@@ -11,9 +11,14 @@ import { Sudoku } from './Sudoku';
 import { ChessDuel } from './ChessDuel';
 import { ConnectFour } from './ConnectFour';
 import { DashDuel, DashFreePlay } from './DashDuel';
+import { WordWheel } from './WordWheel';
 import { LastDuelRow, OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import { DASH_LEVELS, dashLevelLabel, type DashLevel } from '../../lib/dash';
+import {
+  WORD_DURATIONS, WORD_LEVELS, WORD_LEVEL_LABELS, WORD_LEVEL_HINTS, wordDurationLabel,
+  type WordDuration, type WordLevel,
+} from '../../lib/wordWheel';
 import './games.css';
 
 /** A practice run in progress: its own pieces or food, dealt on this phone and never reported. */
@@ -44,6 +49,8 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   const [sudokuOpen, setSudokuOpen] = useState(false);
   const [chessMode, setChessMode] = useState<ChessMode>('classic');
   const [dashLevel, setDashLevel] = useState<DashLevel>('steady');
+  const [wordLevel, setWordLevel] = useState<WordLevel>('easy');
+  const [wordSeconds, setWordSeconds] = useState<WordDuration>(60);
   const [dashFreePlay, setDashFreePlay] = useState(false);
   const [dashFreeSeed, setDashFreeSeed] = useState(0);
   const startDashFreePlay = () => { setDashFreeSeed(Date.now()); setDashFreePlay(true); };
@@ -56,7 +63,7 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   // Keep failed starts beside the button that was tapped, not above an offscreen header.
   const inlineErrorGame = !m && !sudokuOpen && !warmUp ? games.errorGame : null;
   /** The most recent *settled* duel of either kind, so its result stays reachable below the library. */
-  const lastDuel = games.data?.matches?.find((match) => (match.game === 'snake' || match.game === 'tetris' || match.game === 'dash-duel') && match.finished);
+  const lastDuel = games.data?.matches?.find((match) => (match.game === 'snake' || match.game === 'tetris' || match.game === 'dash-duel' || match.game === 'word-wheel') && match.finished);
   /** The couple's live matches: still to be played, one swipe away in their own card. */
   const ongoing = (games.data?.matches ?? []).filter((match) => !match.finished && !runDuelConcluded(match));
   const ongoingSlides: OngoingSlide[] = ongoing.map((match) => ({
@@ -79,12 +86,17 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
     name: GAMES.find(g => g.id === lastDuel.game)?.name ?? 'Duel',
     won: lastDuel.winner_id === userId,
     drawn: lastDuel.winner_id === null,
-    mine: lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? lastDuel.dash?.mine?.distance ?? 0,
+    mine: lastDuel.game === 'word-wheel'
+      ? lastDuel.word?.mine.count ?? 0
+      : lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? lastDuel.dash?.mine?.distance ?? 0,
     // Optional chaining all the way down: each duel's own column is absent until its
     // migration is installed, and a missing field is never shown as a claimed score.
-    theirs: lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? lastDuel.dash?.partner?.distance ?? 0,
-    mineHearts: lastDuel.dash?.mine?.hearts ?? null,
-    theirHearts: lastDuel.dash?.partner?.hearts ?? null,
+    theirs: lastDuel.game === 'word-wheel'
+      ? lastDuel.word?.partner.count ?? 0
+      : lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? lastDuel.dash?.partner?.distance ?? 0,
+    mineHearts: lastDuel.game === 'word-wheel' ? null : lastDuel.dash?.mine?.hearts ?? null,
+    theirHearts: lastDuel.game === 'word-wheel' ? null : lastDuel.dash?.partner?.hearts ?? null,
+    words: lastDuel.game === 'word-wheel',
   } : null;
 
   return <section className="games-view" aria-label="Games">
@@ -95,6 +107,8 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       {!(m.game === 'dash-duel' && m.dash?.mine?.status === 'running') && <button className="game-back" onClick={() => openMatch(null)}>← All games</button>}
       {practice ?? (m.game === 'dash-duel' ? (
         <DashDuel match={m} userId={userId} partnerName={partnerName} partnerOnline={partnerOnline} games={games} onExit={() => openMatch(null)} />
+      ) : m.game === 'word-wheel' ? (
+        <WordWheel match={m} userId={userId} partnerName={partnerName} games={games} onExit={() => openMatch(null)} />
       ) : m.game === 'connect-four' ? (
         <ConnectFour match={m} userId={userId} partnerName={partnerName} busy={games.busy} onMove={(column) => void games.playConnectFour(m, column)} onExit={() => openMatch(null)} />
       ) : m.game === 'chess' ? (
@@ -153,7 +167,7 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
       {lastDuelLine && <LastDuelRow
         name={lastDuelLine.name}
-        outcome={`${lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You ${lastDuelLine.mine}${lastDuelLine.mineHearts === null ? '' : ` 💗 ${lastDuelLine.mineHearts}`} — ${lastDuelLine.theirs}${lastDuelLine.theirHearts === null ? '' : ` 💗 ${lastDuelLine.theirHearts}`} ${partnerName} →`}
+        outcome={`${lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You ${lastDuelLine.mine}${lastDuelLine.words ? ' words' : ''}${lastDuelLine.mineHearts === null ? '' : ` 💗 ${lastDuelLine.mineHearts}`} — ${lastDuelLine.theirs}${lastDuelLine.words ? ' words' : ''}${lastDuelLine.theirHearts === null ? '' : ` 💗 ${lastDuelLine.theirHearts}`} ${partnerName} →`}
         onOpen={() => openMatch(lastDuel?.id ?? null)}
       />}
       {GAMES.map(game => (
@@ -189,6 +203,27 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
               {DASH_LEVELS.map(option => <button key={option} type="button" aria-pressed={dashLevel === option} onClick={() => setDashLevel(option)}>{dashLevelLabel(option)}</button>)}
             </fieldset>
           )}
+          {game.id === 'word-wheel' && (
+            <>
+              <fieldset className="word-level-picker">
+                <legend>Choose the difficulty</legend>
+                {WORD_LEVELS.map(option => (
+                  <button key={option} type="button" aria-pressed={wordLevel === option} onClick={() => setWordLevel(option)}>
+                    {WORD_LEVEL_LABELS[option]}
+                  </button>
+                ))}
+              </fieldset>
+              <p className="game-hint word-level-hint">{WORD_LEVEL_HINTS[wordLevel]}</p>
+              <fieldset className="word-duration-picker">
+                <legend>How long is the round?</legend>
+                {WORD_DURATIONS.map(option => (
+                  <button key={option} type="button" aria-pressed={wordSeconds === option} onClick={() => setWordSeconds(option)}>
+                    {wordDurationLabel(option)}
+                  </button>
+                ))}
+              </fieldset>
+            </>
+          )}
           {games.error && inlineErrorGame === game.id && <GameError games={games} />}
           {game.id === 'dash-duel' ? (
             <div className="game-actions dash-library-actions">
@@ -205,11 +240,11 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
               type="button"
               disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
               aria-busy={games.pendingGame === game.id}
-              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : game.id === 'connect-four' ? void games.startConnectFour() : void games.start(game.id, bestOf)}
+              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : game.id === 'connect-four' ? void games.startConnectFour() : game.id === 'word-wheel' ? void games.startWordRound(wordLevel, wordSeconds) : void games.start(game.id, bestOf)}
             >
               {games.pendingGame === game.id
-                ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : 'Opening game…'
-                : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
+                ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : game.id === 'word-wheel' ? 'Setting the wheel…' : 'Opening game…'
+                : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'word-wheel' ? `Set the wheel for ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
             </button>
             {game.id === 'snake' && (
               <button type="button" className="snake-secondary" disabled={games.busy} onClick={startSnakeWarmUp} data-action="library-warm-up">

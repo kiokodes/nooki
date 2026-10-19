@@ -184,6 +184,39 @@ BEGIN
      RAISE EXCEPTION 'Dash Duel internals must stay server-side: %',fn;
    END IF;
  END LOOP;
+
+ -- Word Wheel: a pregenerated puzzle bank, one shared round and server-counted words.
+ FOREACH fn IN ARRAY ARRAY['public.word_puzzles','public.word_rounds','public.word_round_results'] LOOP
+   IF to_regclass(fn) IS NULL THEN
+     RAISE EXCEPTION 'Apply supabase/migrations/202610190001_word_wheel.sql before deploying Word Wheel.';
+   END IF;
+   IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = fn::regclass)
+      OR has_table_privilege('authenticated', fn, 'SELECT')
+      OR has_table_privilege('anon', fn, 'SELECT') THEN
+     RAISE EXCEPTION 'Word Wheel tables must stay private: rerun migration 202610190001_word_wheel.sql.';
+   END IF;
+ END LOOP;
+ IF NOT EXISTS (
+   SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='word_one_open_round'
+ ) THEN RAISE EXCEPTION 'Word Wheel needs a single open round per couple: rerun migration 202610190001_word_wheel.sql.'; END IF;
+ IF position('word_view' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0
+    OR position('word_sweep' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0 THEN
+   RAISE EXCEPTION 'games_state is missing the Word Wheel snapshot or grace-window sweep: rerun migration 202610190001_word_wheel.sql.';
+ END IF;
+ FOREACH fn IN ARRAY ARRAY['public.start_word_round(text,integer)','public.word_ready(uuid)',
+   'public.word_submit(uuid,text[],integer)','public.word_cancel(uuid)'] LOOP
+   IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Word Wheel RPC: %',fn; END IF;
+   IF NOT has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
+     RAISE EXCEPTION 'Unsafe Word Wheel RPC permissions: %',fn;
+   END IF;
+ END LOOP;
+ FOREACH fn IN ARRAY ARRAY['public.word_layout(text[])','public.word_view(public.word_rounds,uuid)',
+   'public.word_settle(uuid)','public.word_sweep(uuid)'] LOOP
+   IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Word Wheel internals: %',fn; END IF;
+   IF has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
+     RAISE EXCEPTION 'Word Wheel internals must stay server-side: %',fn;
+   END IF;
+ END LOOP;
 END $$;
-SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four and Dash Duel, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
+SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, Dash Duel and Word Wheel, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;

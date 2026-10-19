@@ -13,6 +13,7 @@ import { tokens } from '../tokens/designTokens';
 import { CoupleHeader } from '../components/common/CoupleHeader';
 import { PreviewSnake } from './PreviewSnake';
 import { PreviewTetris } from './PreviewTetris';
+import { PreviewWordWheel } from './PreviewWordWheel';
 import { ChessDuel } from '../components/games/ChessDuel';
 import { LastDuelRow, OngoingGames } from '../components/games/OngoingGames';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
@@ -238,7 +239,7 @@ export const AppPreview = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<PreviewTab>('home');
   // Which duel the Games tab is showing: the preview has both, one at a time.
-  const [previewGame, setPreviewGame] = useState<'snake' | 'tetris'>('tetris');
+  const [previewGame, setPreviewGame] = useState<'snake' | 'tetris' | 'word'>('tetris');
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -567,7 +568,7 @@ export const AppPreview = () => {
                 <LastDuelRow name="Tetris Duel" outcome="You won · You 4100 — 900 Ana →" onOpen={() => {}} />
                 <ChessDuel partnerName={partner.name} />
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', marginTop: '12px' }}>
-                  {(['snake', 'tetris'] as const).map((game) => (
+                  {(['snake', 'tetris', 'word'] as const).map((game) => (
                     <button
                       key={game}
                       type="button"
@@ -586,13 +587,15 @@ export const AppPreview = () => {
                         color: tokens.colors.textPrimary,
                       }}
                     >
-                      {game === 'tetris' ? '🧱 Tetris Duel' : '🐍 Snake Duel'}
+                      {game === 'tetris' ? '🧱 Tetris Duel' : game === 'word' ? '🔤 Word Wheel' : '🐍 Snake Duel'}
                     </button>
                   ))}
                 </div>
                 {previewGame === 'tetris'
                   ? <PreviewTetris partnerName={partner.name} />
-                  : <PreviewSnake partnerName={partner.name} />}
+                  : previewGame === 'word'
+                    ? <PreviewWordWheel userId={profile.id} partnerId={partner.id} partnerName={partner.name} />
+                    : <PreviewSnake partnerName={partner.name} />}
               </section>
             ) : tab === 'home' ? (
               <HomeView
@@ -818,7 +821,9 @@ export const AppPreview = () => {
           : tab === 'games'
             ? (previewGame === 'tetris'
               ? 'Tetris Duel preview · played out on this page, no backend · the real duel is scored by the database'
-              : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
+              : previewGame === 'word'
+                ? 'Word Wheel preview · sample wheel, played on this page · the real round is timed and scored by the database'
+                : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
             : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
       </p>
     </div>

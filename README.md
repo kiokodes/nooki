@@ -82,7 +82,9 @@ apply and verify the database migrations separately.
    `202610180008_someday_details_order_and_visit_link.sql` (the list's notes, its manual
    drag order, and the "Add to our next visit" link), then
    `202610180009_dash_duel.sql` (Dash Duel's shared course, verified runs and live-ready
-   handshake).
+   handshake), then `202610190001_word_wheel.sql` (the Word Wheel round, ready handshake
+   and server-counted results). Finally run `supabase/seed/word_puzzles.sql` once to
+   install the pregenerated puzzle bank.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -877,7 +879,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
 migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
@@ -893,9 +895,11 @@ direct update" rule and the three RPCs), the miss-you tap table (that it can onl
 written through its functions), the profile locations (their seven columns, the
 whole-place check, the generated `city_key` and the key rule spelled the way the frontend
 spells it), and that `anon` cannot reach couple data. If it raises,
-it names the file to rerun. `verify-games.sql` additionally checks that both duels'
-replays and their private internals are in place, and that a phone cannot settle a duel or
-score a run without playing it.
+it names the file to rerun. `verify-games.sql` additionally checks that both duels' replays and their private
+internals are in place, that a phone cannot settle a duel or score a run without playing
+it, and that the Word Wheel round, its ready handshake and its server-counted results are
+installed. Word Wheel also needs its pregenerated puzzle bank: run
+**`supabase/seed/word_puzzles.sql`** once after the migration.
 
 **If you already ran the calendar migration before the repeat control existed**, rerun
 `202610150002_couple_events.sql`: it upgrades `repeats_yearly` to `repeat_frequency` in
@@ -1277,10 +1281,11 @@ Games are always available: there is no daily Games challenge. Apply
 **`202610150012_tetris_duel.sql`**, then
 **`202610180002_remove_daily_games_and_tic_tac_toe.sql`**, **`202610180006_connect_four.sql`**,
 **`202610180007_together_visits_and_someday_list.sql`**,
-**`202610180008_someday_details_order_and_visit_link.sql`**, and
-**`202610180009_dash_duel.sql`** to an existing project before running
-**`supabase/verify-games.sql`**. New projects receive the same final shape from
-`schema.sql`. The retirement migration deletes historical daily-game and Tic Tac Toe rows,
+**`202610180008_someday_details_order_and_visit_link.sql`**,
+**`202610180009_dash_duel.sql`**, and **`202610190001_word_wheel.sql`** to an existing
+project before running **`supabase/verify-games.sql`**. New projects receive the same
+final shape from `schema.sql`. Word Wheel also needs its puzzle rows: run
+**`supabase/seed/word_puzzles.sql`** once after the migration (the seed is idempotent). The retirement migration deletes historical daily-game and Tic Tac Toe rows,
 removes their date/board columns, and replaces the daily-flag Games RPC.
 
 - **Rock Paper Scissors:** best of 3 (first to 2 wins) or 5 (first to 3). Ties replay
@@ -1297,6 +1302,13 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
 - **Dash Duel:** a three-lane Lagos runner with an async shared-course challenge (the first
   partner chooses the difficulty), a live race shown only while the partner is online, and a
   local unranked free run. The server replays inputs to verify distance and hearts.
+- **Word Wheel:** both phones get the same seven-letter wheel and the same hidden words.
+  Choose Easy, Medium or Hard and a 1, 3 or 5 minute clock. Both partners ready up; the
+  server sets one shared start time, and each phone runs its own countdown from it. Swipe
+  across the letters (each letter once, swipe back to undo) or type a word. Correct words
+  fill the blanks and the seven-letter grand prize has its own row. Most words wins; a tie
+  goes to the earlier time of the last found word. Two hints each, and shuffling only
+  reorders the wheel. Leaving does not pause the clock.
 - An unfinished match resumes when either partner opens the same game; the live matches
   stand in the Games tab's swipeable **Ongoing games** card — one card's height however
   many are open. Finished duels stay available through the **Last duel** row beneath it,
@@ -1306,9 +1318,46 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
   realtime payload; the app receives only the sanitized Games RPC snapshot.
 
 Before release, test each game with two paired accounts, including a reload during an open
-match and a sealed Rock Paper Scissors pick. For Snake, Tetris and Dash Duel, test a live
-run on two phones; verify that Play Together is hidden while the partner is offline and
-starts on a shared ready handshake.
+match and a sealed Rock Paper Scissors pick. For Snake, Tetris, Dash Duel and Word Wheel,
+test a live run on two phones; verify that Play Together is hidden while the partner is
+offline and starts on a shared ready handshake. For Word Wheel, also test a lobby left
+unaccepted (it disappears after 30 minutes), a phone that never submits (the other side
+wins after the grace window), and a tie on both word count and last-word time.
+
+### Word Wheel puzzles
+
+The puzzle bank is generated ahead of time and stored; the server never invents a puzzle
+during a round. Each row in `word_puzzles` holds seven letters, the seven-letter
+`base_word` (the grand prize), the union of every word used by its packs (a searchable
+vocabulary record), and a `packs` object with one exact hidden list for every
+difficulty × duration combination:
+
+```json
+{
+  "letters": "ceiprtu",
+  "base_word": "picture",
+  "packs": {
+    "easy":   { "60": ["picture", "price", "cute", "true", "cut", "put", "it"] },
+    "medium": { "60": ["picture", "cutie", "price", "truce", "cute", "true", "cut", "put", "it"] },
+    "hard":   { "300": ["picture", "...20 words..."] }
+  }
+}
+```
+
+Longer rounds ask for more words; harder levels lean toward longer words while keeping
+the same 2–7 letter mix and the seven-letter grand prize. A pack the base cannot fill is
+omitted, so the server never deals an impossible round.
+
+- **Regenerate:** `npm run build:word-puzzles` writes
+  `supabase/seed/word_puzzles.sql` and `.json` from the curated base list in
+  `scripts/word-puzzle-bases.json`, using the SUBTLEX frequency list and the English
+  dictionary dev-dependencies.
+- **Upload:** run `supabase/seed/word_puzzles.sql` in the Supabase SQL Editor, or set
+  `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (server-side only, never a `VITE_`
+  variable) and run `npm run upload:word-puzzles`. Both paths upsert on `base_word`, so
+  rerunning is safe.
+- **Review:** the generator blocks rude, medical, violent and name-like words. Read a new
+  batch before uploading anyway; word quality is the part players notice most.
 
 ### Troubleshooting the Duel button
 

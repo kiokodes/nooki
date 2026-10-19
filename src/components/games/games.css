@@ -367,3 +367,113 @@
   .dash-chibi.is-running,.dash-track-heart { animation:none!important; }
   .dash-runner-position { transition:none!important; }
 }
+
+/* --- Word Wheel ---------------------------------------------------------------
+   A seven-letter wheel, a shared hidden list and a clock that belongs to the
+   server. The blanks are the scoreboard: every solved word fills its own row.
+   The wheel's hit test uses a radius a little smaller than the painted letter,
+   so a diagonal swipe through the gap does not grab a neighbour. */
+.word-wheel-card { background:#fffdfb; border:1px solid #eee4e7; border-radius:22px; padding:18px; margin-bottom:14px; box-shadow:0 4px 16px #49344306; }
+.word-wheel-card.word-play { background:transparent; border:0; box-shadow:none; padding:0; }
+.word-eyebrow { color:#8a6c93; font-size:.66rem; font-weight:800; text-transform:uppercase; letter-spacing:.12em; }
+.word-lobby-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.word-lobby-head h2 { margin:4px 0 0; font-size:1.15rem; }
+.word-pill { display:inline-block; padding:3px 9px; border-radius:999px; background:#f4edf5; color:#795d88; font-size:.65rem; font-weight:800; white-space:nowrap; }
+.word-pill.is-ready { background:#e8efdf; color:#5f7154; }
+.word-lobby-copy { color:#6b5c66; margin:10px 0 12px!important; }
+.word-ready-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
+.word-ready-grid > div { display:flex; flex-direction:column; gap:3px; padding:11px 13px; border-radius:15px; border:1px solid #eee4e7; background:#faf6fb; }
+.word-ready-grid > div.is-ready { border-color:#b9cdaa; background:#f1f6ea; }
+.word-ready-grid span { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#8a6c93; }
+.word-ready-grid strong { font-size:.86rem; color:#4a3a52; overflow-wrap:anywhere; }
+.word-rules { margin:10px 0 14px; padding-left:18px; color:#6b5c66; font-size:.82rem; line-height:1.5; }
+.word-rules li { margin-bottom:5px; }
+.word-countdown { text-align:center; font-weight:900!important; color:#795d88; font-size:1rem!important; margin:8px 0 10px!important; }
+.word-big-countdown { text-align:center; font-size:3.2rem; line-height:1; font-weight:900; color:#795d88; margin:10px 0 12px!important; font-variant-numeric:tabular-nums; }
+.word-countdown-screen { text-align:center; }
+.word-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.word-actions button { flex:1 1 140px; }
+.word-saved h2 { margin:6px 0 8px; }
+.word-saved-line { color:#6b5c66; }
+.word-result h2 { margin:5px 0 6px; font-size:1.35rem; }
+.word-result-sub { color:#85767e; margin-bottom:12px!important; }
+.word-result-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+.word-result-grid > div { display:flex; flex-direction:column; gap:2px; padding:13px; border-radius:16px; background:#faf6fb; border:1px solid #eee4e7; }
+.word-result-grid > div.is-winner { border-color:#ed91ad; background:#fff1f6; box-shadow:inset 0 0 0 1px #ed91ad66; }
+.word-result-grid span { font-size:.7rem; font-weight:800; color:#85767e; text-transform:uppercase; letter-spacing:.07em; }
+.word-result-grid strong { font-size:1.7rem; color:#4a3a52; font-variant-numeric:tabular-nums; }
+.word-result-grid small { font-size:.68rem; color:#9b8b93; }
+.word-found-list h3 { margin:14px 0 5px; font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; color:#8a6c93; }
+.word-found-list p { margin:0; color:#5c4c56; font-size:.8rem; line-height:1.6; overflow-wrap:anywhere; }
+
+.word-hud { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.word-timer,.word-score { display:flex; flex-direction:column; }
+.word-timer span,.word-score span { font-size:.64rem; font-weight:800; text-transform:uppercase; letter-spacing:.1em; color:#8a6c93; }
+.word-timer strong { font-size:2.2rem; line-height:1.02; color:#4a3a52; font-variant-numeric:tabular-nums; }
+.word-timer strong.is-low { color:#c23c66; }
+.word-score strong { font-size:2rem; line-height:1.05; color:#4a3a52; font-variant-numeric:tabular-nums; }
+.word-score strong small { font-size:.85rem; color:#9b8b93; font-weight:700; }
+.word-hud-side { display:flex; flex-direction:column; align-items:flex-end; gap:4px; text-align:right; }
+.word-hud-side small { font-size:.68rem; color:#85767e; font-weight:700; overflow-wrap:anywhere; }
+.word-progress { height:5px; border-radius:999px; background:#eee4e7; overflow:hidden; margin-bottom:12px; }
+.word-progress i { display:block; height:100%; background:#cbb3d8; transition:width .2s ease; }
+
+.word-blanks { max-height:34vh; min-height:84px; overflow-y:auto; padding:10px 10px 6px; border-radius:16px; background:#faf6fb; border:1px solid #eee4e7; margin-bottom:10px; }
+.word-group { display:flex; align-items:flex-start; gap:8px; padding:4px 0; touch-action:pan-y; }
+.word-group + .word-group { border-top:1px dashed #eadfe9; margin-top:3px; padding-top:7px; }
+.word-group-label { flex:0 0 54px; padding-top:2px; font-size:.6rem; font-weight:900; color:#9b8b93; text-transform:uppercase; letter-spacing:.05em; }
+.word-group.is-grand .word-group-label { color:#b0772e; }
+.word-slots { display:flex; flex-wrap:wrap; gap:5px 7px; min-width:0; }
+.word-slot { display:inline-flex; gap:1px; padding:3px 5px; border-radius:7px; background:#fffdfb; border:1px solid #eee4e7; color:#8f7f88; font-size:.72rem; font-weight:800; letter-spacing:.04em; }
+.word-slot-letter { display:inline-block; width:.78em; text-align:center; }
+.word-slot.is-found { background:#e8efdf; border-color:#b9cdaa; color:#4f6a44; text-decoration:none; }
+.word-group.is-grand .word-slot { border-color:#e7cfa8; background:#fff9ed; color:#9b6c2f; }
+.word-group.is-grand .word-slot.is-found { background:#f5e6c8; border-color:#d8b574; color:#7d5418; }
+
+.word-current { min-height:2.1em; display:flex; align-items:center; justify-content:center; margin:2px 0 2px; color:#795d88; font-size:1.15rem; font-weight:900; letter-spacing:.18em; text-transform:uppercase; }
+.word-wheel { position:relative; width:100%; max-width:330px; aspect-ratio:1/1; margin:0 auto 4px; touch-action:none; user-select:none; -webkit-user-select:none; }
+.games-view .word-letter { position:absolute; z-index:3; transform:translate(-50%,-50%); width:19.5%; aspect-ratio:1/1; min-width:0; padding:0; border-radius:50%; border:1px solid #e4d3e3; background:#fffdfb; color:#4a3a52; font-size:clamp(1.05rem,5vw,1.3rem); font-weight:900; box-shadow:0 3px 10px #49344312; transition:background .1s ease,box-shadow .1s ease,left .22s ease,top .22s ease; touch-action:none; }
+.games-view .word-letter.is-picked { background:#ed91ad; border-color:#d97b98; color:#3d2733; box-shadow:0 0 0 4px #ed91ad33,0 4px 12px #49344320; }
+.word-wheel-line { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; overflow:visible; }
+.word-wheel-core { position:absolute; z-index:1; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; justify-content:center; width:26%; aspect-ratio:1/1; border-radius:50%; background:#f4edf5; color:#8a6c93; }
+.word-wheel-core span { font-size:1.2rem; font-weight:900; line-height:1; }
+.word-wheel-core small { font-size:.55rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.word-wheel.is-shaking { animation:word-wheel-shake .42s ease; }
+@keyframes word-wheel-shake {
+  0%,100% { transform:translateX(0); }
+  15% { transform:translateX(-7px) rotate(-1deg); }
+  30% { transform:translateX(6px) rotate(1deg); }
+  45% { transform:translateX(-5px); }
+  60% { transform:translateX(4px); }
+  75% { transform:translateX(-2px); }
+}
+.word-feedback { min-height:1.7em; display:flex; justify-content:center; align-items:center; margin:2px 0 4px; }
+.word-message { font-size:.78rem; font-weight:800; padding:4px 10px; border-radius:999px; }
+.word-message.is-correct { background:#e8efdf; color:#4f6a44; }
+.word-message.is-wrong { background:#fde3ec; color:#a5345c; }
+.word-message.is-info { background:#f4edf5; color:#795d88; }
+.word-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+.word-controls button { padding:10px 8px; }
+.word-type { margin:2px 0 4px; }
+.word-type label { display:block; font-size:.62rem; font-weight:800; color:#9b8b93; text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; }
+.word-type > div { display:flex; gap:6px; }
+.word-type input { flex:1; min-width:0; padding:9px 12px; border-radius:12px; border:1px solid #e4d3e3; background:#fffdfb; color:#443c42; font:inherit; font-size:.85rem; }
+.word-type input:focus-visible { outline:3px solid #8a6c93; outline-offset:2px; }
+.word-type button { padding:8px 14px; }
+.word-saving { text-align:center; font-size:.75rem; color:#8a6c93; font-weight:700; margin:6px 0!important; }
+.word-error { padding:10px 12px; margin:8px 0!important; border-radius:12px; background:#fce7ed; color:#8f3154; font-size:.78rem; overflow-wrap:anywhere; }
+.word-saved .word-wheel-preview,.word-countdown-screen .word-wheel-preview { max-width:230px; margin-top:8px; }
+
+.word-wheel-preview { position:relative; width:100%; max-width:260px; aspect-ratio:1/1; margin:10px auto; }
+.word-preview-letter { position:absolute; transform:translate(-50%,-50%); display:flex; align-items:center; justify-content:center; width:19%; aspect-ratio:1/1; border-radius:50%; border:1px solid #e4d3e3; background:#fffdfb; color:#6b5c66; font-size:.82rem; font-weight:900; }
+@media (max-width:370px) {
+  .word-wheel-card { padding:14px; }
+  .word-timer strong { font-size:1.9rem; }
+  .word-group-label { flex-basis:46px; }
+  .word-blanks { max-height:30vh; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .word-wheel.is-shaking { animation:none!important; }
+  .games-view .word-letter { transition:background .1s ease,box-shadow .1s ease; }
+  .word-progress i { transition:none!important; }
+}
