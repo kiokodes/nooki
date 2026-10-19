@@ -1,7 +1,7 @@
 // Test-only entry point. Vite's production build only includes index.html.
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { EpubReader } from '../../src/components/media/EpubReader';
+import { EpubReader } from '../../src/components/together/EpubReader';
 import type { Highlight } from '../../src/types/database';
 
 // The event log the Playwright test reads through `window.__bookLog`.
