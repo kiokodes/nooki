@@ -1,5 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+/** The Games tab is a carousel: pick the game's tab before touching its card. */
+const openGameTab = async (page, gameId) => {
+  const tab = page.locator(`[data-game-tab="${gameId}"]`);
+  await expect(tab).toBeVisible();
+  await tab.click();
+  await expect(page.locator(`article[data-game="${gameId}"]`)).toBeVisible();
+};
+
+
 // Exercise the real hook, service and UI. Only the HTTP boundary is faked here;
 // the PostgreSQL tests separately exercise the same RPCs and migrations with RLS.
 async function mockGames(page, options = {}) {
@@ -102,8 +111,8 @@ test('Dash Duel runs a complete mobile crash attempt, saves the referee result a
   await page.setViewportSize({ width: 360, height: 740 });
   const state = await mockDash(page);
   await page.goto('/tests/browser/games.html');
+  await openGameTab(page, 'dash-duel');
   const card = page.locator('article[data-game="dash-duel"]');
-  await expect(card).toBeVisible();
   await expect(card.getByRole('button', { name: /Play together/ })).toHaveCount(0);
   await card.getByRole('button', { name: 'Set a challenge →', exact: true }).click();
   await expect(page.locator('[data-dash-mode="challenge"]')).toBeVisible();
@@ -132,7 +141,7 @@ test('Dash Duel live choice appears only when partner presence is online', async
   await page.setViewportSize({ width: 360, height: 740 });
   await mockDash(page);
   await page.goto('/tests/browser/games.html?online=1');
-  await expect(page.locator('article[data-game="dash-duel"]')).toBeVisible();
+  await openGameTab(page, 'dash-duel');
   await expect(page.getByRole('button', { name: 'Play together · online →', exact: true })).toBeVisible();
 });
 
@@ -141,7 +150,8 @@ for (const width of [320, 360, 390, 480, 1024]) {
     await page.setViewportSize({ width, height: 844 });
     await mockGames(page);
     await page.goto('/tests/browser/games.html');
-    const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Sudoku', exact: true }) });
+    await openGameTab(page, 'sudoku');
+    const card = page.locator('article[data-game="sudoku"]');
     await card.getByRole('button', { name: 'Play →', exact: true }).click();
     await page.getByRole('button', { name: 'Start puzzle', exact: true }).click();
     await expect(page.locator('[data-sudoku-cell]')).toHaveCount(81);
@@ -199,8 +209,7 @@ test('Duel opens, resumes the same match, and starts a moving board', async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   const state = await mockGames(page);
   await page.goto('/tests/browser/games.html');
-  // Both duels invite you the same way, so name the card: an unscoped "Duel Ana →"
-  // matches the Snake and the Tetris card alike.
+  await openGameTab(page, 'snake');
   const duel = page.locator('article[data-game="snake"]').getByRole('button', { name: 'Duel Ana →', exact: true });
   await duel.click();
   await expect(page.locator('[data-snake-gate]')).toBeVisible();
@@ -220,6 +229,7 @@ test('Duel shows progress and prevents duplicate starts while its request is pen
   const state = await mockGames(page, { waitForStart });
   try {
     await page.goto('/tests/browser/games.html');
+    await openGameTab(page, 'snake');
     await page.locator('article[data-game="snake"]').getByRole('button', { name: 'Duel Ana →', exact: true }).click();
     const opening = page.locator('article[data-game="snake"]').getByRole('button', { name: 'Opening duel…', exact: true });
     await expect(opening).toBeVisible();
@@ -240,7 +250,8 @@ test('a missing Snake migration stays visible beside Duel through polling, and r
   await page.setViewportSize({ width: 360, height: 740 });
   const state = await mockGames(page, { legacySnake: true });
   await page.goto('/tests/browser/games.html');
-  const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Snake Duel', exact: true }) });
+  await openGameTab(page, 'snake');
+  const card = page.locator('article[data-game="snake"]');
   await card.getByRole('button', { name: 'Duel Ana →', exact: true }).click();
   await expect(card.getByRole('alert')).toContainText('202610150010_snake_duel.sql');
   const reads = state.reads;
@@ -257,11 +268,13 @@ test('a missing Snake migration stays visible beside Duel through polling, and r
 test('local Sudoku and warm-up remain playable when shared games cannot load', async ({ page }) => {
   await mockGames(page, { offline: true });
   await page.goto('/tests/browser/games.html');
-  const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Sudoku', exact: true }) });
+  await openGameTab(page, 'sudoku');
+  const card = page.locator('article[data-game="sudoku"]');
   await card.getByRole('button', { name: 'Play →', exact: true }).click();
   await page.getByRole('button', { name: 'Start puzzle', exact: true }).click();
   await expect(page.locator('[data-sudoku-board]')).toBeVisible();
   await page.getByRole('button', { name: '← All games', exact: true }).click();
+  await openGameTab(page, 'snake');
   await page.getByRole('button', { name: 'Warm-up run (not counted)', exact: true }).click();
   await expect(page.locator('.snake-board')).toBeVisible();
 });

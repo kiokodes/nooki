@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
+import { openGameTab } from './helpers/gameLibrary.mjs';
 
 /**
  * The Snake duel as the couple meets it: the card in the library, the gate that spells out
@@ -53,7 +54,8 @@ test('snake UI: the gate, a playable board, the leave question, warm-ups and the
 
     // --- The library offers the duel, and a warm-up that never leaves the phone --------
     await render(React.createElement(GamesView, { games: games(), userId: 'a', partnerName: 'Bob' }));
-    assert(document.body.textContent.includes('Snake Duel'));
+    assert(document.body.textContent.includes('Snake Duel'), 'the game rail names the duel');
+    await openGameTab(document, 'snake', act);
     assert(document.body.textContent.includes('One run each, highest score wins'), 'the rule is on the card');
     await act(async () => button('Duel Bob →').click());
     assert.deepEqual(calls.pop(), ['start', 'snake', 3]);

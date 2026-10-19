@@ -110,6 +110,14 @@ const PRESETS: Preset[] = [
 ];
 
 type PreviewTab = 'home' | 'chat' | 'games';
+type PreviewGame = 'snake' | 'tetris' | 'word';
+
+/** The three duels played out in the Games tab of this page, in the app's rail order. */
+const PREVIEW_GAMES: { id: PreviewGame; icon: string; name: string }[] = [
+  { id: 'snake', icon: '🐍', name: 'Snake Duel' },
+  { id: 'tetris', icon: '🧱', name: 'Tetris Duel' },
+  { id: 'word', icon: '🔤', name: 'Word Wheel' },
+];
 
 interface PreviewMessage extends ChatEntry {
   /** The name shown nowhere but useful when reading this file. */
@@ -239,7 +247,7 @@ export const AppPreview = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<PreviewTab>('home');
   // Which duel the Games tab is showing: the preview has both, one at a time.
-  const [previewGame, setPreviewGame] = useState<'snake' | 'tetris' | 'word'>('tetris');
+  const [previewGame, setPreviewGame] = useState<PreviewGame>('tetris');
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -567,35 +575,35 @@ export const AppPreview = () => {
                 />
                 <LastDuelRow name="Tetris Duel" outcome="You won · You 4100 — 900 Ana →" onOpen={() => {}} />
                 <ChessDuel partnerName={partner.name} />
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', marginTop: '12px' }}>
-                  {(['snake', 'tetris', 'word'] as const).map((game) => (
-                    <button
-                      key={game}
-                      type="button"
-                      aria-pressed={previewGame === game}
-                      onClick={() => setPreviewGame(game)}
-                      data-preview-game={game}
-                      style={{
-                        font: 'inherit',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        border: 'none',
-                        borderRadius: '14px',
-                        padding: '9px 14px',
-                        cursor: 'pointer',
-                        backgroundColor: previewGame === game ? tokens.colors.primaryPink : tokens.colors.accentLavenderSoft,
-                        color: tokens.colors.textPrimary,
-                      }}
-                    >
-                      {game === 'tetris' ? '🧱 Tetris Duel' : game === 'word' ? '🔤 Word Wheel' : '🐍 Snake Duel'}
-                    </button>
-                  ))}
-                </div>
-                {previewGame === 'tetris'
-                  ? <PreviewTetris partnerName={partner.name} />
-                  : previewGame === 'word'
-                    ? <PreviewWordWheel userId={profile.id} partnerId={partner.id} partnerName={partner.name} />
-                    : <PreviewSnake partnerName={partner.name} />}
+                {/* The same rail the app uses: game titles on top, one board under them.
+                    A toggle rather than a router — the preview is a page, not an app. */}
+                <section className="game-library" aria-label="Game library" style={{ marginTop: '12px' }}>
+                  <div className="game-rail" role="tablist" aria-label="Choose a game">
+                    {PREVIEW_GAMES.map((game) => (
+                      <button
+                        key={game.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={previewGame === game.id}
+                        onClick={() => setPreviewGame(game.id)}
+                        data-preview-game={game.id}
+                        className="game-rail-tab"
+                      >
+                        <span className="game-rail-icon" aria-hidden="true">{game.icon}</span>
+                        <span>{game.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="game-panel-track">
+                    <div className="game-panel" key={previewGame}>
+                      {previewGame === 'tetris'
+                        ? <PreviewTetris partnerName={partner.name} />
+                        : previewGame === 'word'
+                          ? <PreviewWordWheel userId={profile.id} partnerId={partner.id} partnerName={partner.name} />
+                          : <PreviewSnake partnerName={partner.name} />}
+                    </div>
+                  </div>
+                </section>
               </section>
             ) : tab === 'home' ? (
               <HomeView

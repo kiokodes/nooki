@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
+import { openGameTab } from './helpers/gameLibrary.mjs';
 
 test('Dash Duel offers async, presence-gated live and local free modes with accessible controls', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
@@ -34,6 +35,7 @@ test('Dash Duel offers async, presence-gated live and local free modes with acce
     const button = (name) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === name);
 
     await render(false);
+    await openGameTab(document, 'dash-duel', act);
     assert(document.querySelector('[data-game="dash-duel"]'));
     assert.equal(button('Play together · online →'), undefined, 'the live choice is absent while the partner is offline');
     assert(button('Set a challenge →'));

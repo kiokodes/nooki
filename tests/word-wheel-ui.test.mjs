@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
+import { openGameTab } from './helpers/gameLibrary.mjs';
 
 test('Word Wheel UI: library settings, lobby handshake, blank-filling board and result reveal', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
@@ -30,6 +31,8 @@ test('Word Wheel UI: library settings, lobby handshake, blank-filling board and 
     const render = (node) => act(async () => root.render(node));
 
     await render(React.createElement(GamesView, { games, userId: 'a', partnerName: 'Bob' }));
+    assert(document.querySelector('[data-game-tab="word-wheel"]'), 'Word Wheel is in the games rail');
+    await openGameTab(document, 'word-wheel', act);
     const card = document.querySelector('[data-game="word-wheel"]');
     assert(card, 'Word Wheel is in the games library');
     await act(async () => [...card.querySelectorAll('button')].find((item) => item.textContent.trim() === 'Hard').click());

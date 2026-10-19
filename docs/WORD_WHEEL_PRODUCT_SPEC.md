@@ -387,8 +387,10 @@ and do not alter the submitted score.
 
 ### 8.4 Games-tab integration
 
-- `GAMES` gains the `word-wheel` card: difficulty picker, duration picker, and a button that
-  calls `startWordRound(level, seconds)`.
+- `GAMES` gains the `word-wheel` entry. The Games tab is a carousel (`GameLibrary`): every game
+  is a chip in a horizontally scrolling rail, and only the chosen game's panel — description,
+  settings and start button — is on the page. Word Wheel's panel carries the difficulty picker,
+  the duration picker, and a button that calls `startWordRound(level, seconds)`.
 - Word rounds ride in `games_state()['matches']` as `game: 'word-wheel'` with a `word` payload,
   so the existing Ongoing games swipe card, badge and Last duel row keep working.
 - `needsMyMove` shows the badge when the player still has to ready up, or is in a live round

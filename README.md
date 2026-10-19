@@ -1309,6 +1309,12 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
   fill the blanks and the seven-letter grand prize has its own row. Most words wins; a tie
   goes to the earlier time of the last found word. Two hints each, and shuffling only
   reorders the wheel. Leaving does not pause the clock.
+- **The library is a carousel, not a scroll.** The game titles sit in a rail at the top
+  (Rock Paper Scissors → Snake → Chess → Sudoku → Tetris → Connect Four → Dash → Word
+  Wheel) and only the chosen game's rules, settings and start button sit under it. Tap a
+  title, use the arrow keys, or swipe the card sideways to walk the rail; a swipe that
+  ends on a button is never mistaken for a tap on it. Adding a game means adding one entry
+  to `GAMES` and one panel — the rail, the focus order and the swipe come for free.
 - An unfinished match resumes when either partner opens the same game; the live matches
   stand in the Games tab's swipeable **Ongoing games** card — one card's height however
   many are open. Finished duels stay available through the **Last duel** row beneath it,
