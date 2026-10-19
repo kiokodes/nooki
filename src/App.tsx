@@ -32,9 +32,7 @@ import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
 import { useVisits } from './hooks/useVisits';
-import { useVisitPlanning } from './hooks/useVisitPlanning';
 import { useTogetherTime } from './hooks/useTogetherTime';
-import { useVisitMemories } from './hooks/useVisitMemories';
 import { useSomedayList } from './hooks/useSomedayList';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
@@ -248,16 +246,14 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     partnerId: partner?.id ?? null,
   });
 
-  // Visits for the Together tab: countdown, shared plan, wishes and checklist.
+  // Visits for the Together tab: the next-visit countdown.
   const visits = useVisits(couple?.id ?? null, currentUser?.id ?? null);
-  const visitPlanning = useVisitPlanning(couple?.id ?? null, visits.visit?.id ?? null, currentUser?.id ?? null);
 
-  // Shared ideas can be private, voted on, and attached to a day in the next visit.
+  // Shared ideas can be private and voted on.
   const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
 
-  // Suggested-then-agreed date nights and the photo/one-line memory timeline.
+  // Suggested-then-agreed date nights.
   const togetherTime = useTogetherTime(couple?.id ?? null, currentUser?.id ?? null);
-  const memories = useVisitMemories(couple?.id ?? null, currentUser?.id ?? null);
 
   // This device's notification switch, and the deep link a tapped notification carries.
   // App-level like the chat: the home-screen badge is cleared from here, and a
@@ -762,11 +758,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
           <TogetherView
             state={books}
             userId={currentUser.id}
-            userName={profile.name}
-            partnerId={partner.id}
             partnerName={partner.name}
             visit={visits.visit}
-            visits={visits.visits}
             onPlanVisit={() => setShowVisitPlanning(true)}
             onViewVisitPlans={() => setShowVisitPlanning(true)}
             onOpenReader={(bookId) => openReader(bookId)}
@@ -777,15 +770,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
             onUpdateSomedayItem={somedayList.updateItem}
             onToggleSomedayWant={somedayList.toggleWant}
             onDeleteSomedayItem={somedayList.deleteItem}
-            onAttachSomedayItemToVisit={somedayList.attachToVisit}
-            visitWishes={visitPlanning.wishes}
-            visitChecklist={visitPlanning.checklist}
-            visitPlanningError={visitPlanning.error}
-            visitPlanningSaving={visitPlanning.saving}
-            onSaveVisitWish={visitPlanning.saveWish}
-            onAddVisitChecklistItem={visitPlanning.addChecklistItem}
-            onUpdateVisitChecklistItem={visitPlanning.updateChecklistItem}
-            onDeleteVisitChecklistItem={visitPlanning.deleteChecklistItem}
             togetherTimeSessions={togetherTime.sessions}
             togetherTimeError={togetherTime.error}
             togetherTimeSaving={togetherTime.saving}
@@ -802,11 +786,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
                 setActiveTab('games');
               }
             }}
-            memories={memories.entries}
-            memoriesLoading={memories.loading}
-            memoriesError={memories.error}
-            memoriesSaving={memories.saving}
-            onSaveVisitMemory={memories.save}
             initialSessionId={openTogetherSessionId}
             onClearInitialSession={() => setOpenTogetherSessionId(null)}
             remindersEnabled={push.enabled}

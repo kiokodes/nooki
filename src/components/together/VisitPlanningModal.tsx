@@ -469,9 +469,8 @@ export const VisitPlanningModal: React.FC<VisitPlanningModalProps> = ({
                     color: tokens.colors.textSecondary,
                   }}
                 >
-                  Take this visit off the calendar — no hard feelings. Someday ideas pinned
-                  to it go back to your someday list; the wishes and checklist for this
-                  visit will be removed.
+                  Take this visit off the calendar — no hard feelings. Any someday ideas
+                  pinned to it go back to your someday list.
                 </p>
                 {confirmingClear ? (
                   <div data-clear-visit-confirm style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>

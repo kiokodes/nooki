@@ -5,7 +5,6 @@ import {
   BookOpen,
   CalendarDays,
   CalendarHeart,
-  Camera,
   Check,
   CheckCircle2,
   Clock3,
@@ -22,7 +21,6 @@ import {
 } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { MAX_BOOKS_ON_SHELF, SHELF_FULL_HELP } from '../../lib/booksService';
-import { VISIT_MEMORY_NOTE_MAX } from '../../lib/visitMemoryService';
 import { GAMES } from '../../lib/gamesService';
 import type { BooksState } from '../../hooks/useBooks';
 import type {
@@ -31,19 +29,13 @@ import type {
   TogetherActivityType,
   TogetherTimeSession,
   Visit,
-  VisitChecklistItem,
-  VisitMemoryEntry,
-  VisitWish,
 } from '../../types/database';
 
 interface TogetherViewProps {
   state: BooksState;
   userId: string;
-  userName: string;
-  partnerId?: string;
   partnerName: string;
   visit?: Visit | null;
-  visits?: Visit[];
   onPlanVisit?: () => void;
   onViewVisitPlans?: () => void;
   onOpenReader: (bookId: string) => void;
@@ -54,15 +46,6 @@ interface TogetherViewProps {
   onToggleSomedayWant?: (item: SomedayItem) => Promise<void>;
   onDeleteSomedayItem?: (item: SomedayItem) => Promise<void>;
   somedaySaving?: boolean;
-  onAttachSomedayItemToVisit?: (item: SomedayItem, visitId: string | null, visitDate?: string | null) => Promise<void>;
-  visitWishes?: VisitWish[];
-  visitChecklist?: VisitChecklistItem[];
-  visitPlanningError?: string | null;
-  visitPlanningSaving?: boolean;
-  onSaveVisitWish?: (wish: string) => Promise<void>;
-  onAddVisitChecklistItem?: (text: string, assignedTo: string) => Promise<void>;
-  onUpdateVisitChecklistItem?: (id: string, updates: Partial<Pick<VisitChecklistItem, 'completed' | 'assigned_to' | 'text'>>) => Promise<void>;
-  onDeleteVisitChecklistItem?: (id: string) => Promise<void>;
   togetherTimeSessions?: TogetherTimeSession[];
   togetherTimeError?: string | null;
   togetherTimeSaving?: boolean;
@@ -74,11 +57,6 @@ interface TogetherViewProps {
   onTalkAboutTogetherTime?: (session: TogetherTimeSession) => Promise<void> | void;
   onUpdateTogetherTime?: (session: TogetherTimeSession, status: 'done' | 'cancelled') => Promise<void>;
   onOpenActivity?: (session: TogetherTimeSession) => void;
-  memories?: VisitMemoryEntry[];
-  memoriesLoading?: boolean;
-  memoriesError?: string | null;
-  memoriesSaving?: boolean;
-  onSaveVisitMemory?: (visitId: string, file: Blob | null, note: string) => Promise<unknown>;
   initialSessionId?: string | null;
   onClearInitialSession?: () => void;
   remindersEnabled?: boolean;
@@ -146,17 +124,6 @@ function dateAtNoon(date: string): Date {
 function formatDate(date: string, options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }): string {
   const parsed = dateAtNoon(date);
   return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString(undefined, options);
-}
-
-function daysInVisit(visit: Visit): string[] {
-  const start = dateAtNoon(visit.start_date);
-  const end = dateAtNoon(visit.end_date || visit.start_date);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [visit.start_date];
-  const result: string[] = [];
-  for (const cursor = new Date(start); cursor <= end && result.length < 31; cursor.setDate(cursor.getDate() + 1)) {
-    result.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`);
-  }
-  return result.length ? result : [visit.start_date];
 }
 
 function formatVisitTime(visit: Visit): string {
@@ -271,206 +238,6 @@ function VisitHero({ visit, onPlanVisit, onViewPlans }: { visit: Visit | null; o
         {visit.location && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={14} />{visit.location}</span>}
         {visit.is_tentative && <span style={{ padding: '3px 8px', borderRadius: tokens.radii.pill, color: tokens.colors.accentLavenderDeep, background: tokens.colors.accentLavenderSoft, fontSize: '0.68rem' }}>Hopeful plan</span>}
       </div>
-    </SectionCard>
-  );
-}
-
-function VisitWishPanel({ visit, wishes, userId, userName, partnerName, saving, onSave }: {
-  visit: Visit;
-  wishes: VisitWish[];
-  userId: string;
-  userName: string;
-  partnerName: string;
-  saving: boolean;
-  onSave?: (wish: string) => Promise<void>;
-}) {
-  const ownWish = wishes.find((wish) => wish.user_id === userId) ?? null;
-  const revealed = wishes.length >= 2;
-  const [text, setText] = useState(ownWish?.wish ?? '');
-  const [editing, setEditing] = useState(!ownWish);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    setText(ownWish?.wish ?? '');
-    setEditing(!ownWish);
-  }, [visit.id, ownWish?.wish, ownWish?.id]);
-  const submit = async () => {
-    if (!onSave) return;
-    setError(null);
-    try { await onSave(text); setEditing(false); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Your answer could not be saved.'); }
-  };
-  return (
-    <SectionCard data-visit-wishes style={{ padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div style={{ width: '34px', height: '34px', display: 'grid', placeItems: 'center', borderRadius: tokens.radii.full, background: tokens.colors.accentLavenderSoft, color: tokens.colors.accentLavenderDeep }}><Heart size={17} /></div>
-        <div>
-          <h2 style={{ margin: 0, color: tokens.colors.textPrimary, fontSize: '0.91rem', fontWeight: 900 }}>One thing I want from this visit</h2>
-          <p style={{ margin: '2px 0 0', color: tokens.colors.textMuted, fontSize: '0.72rem' }}>Your answers stay private until you have both replied.</p>
-        </div>
-      </div>
-      {revealed ? (
-        <div data-wishes-revealed style={{ display: 'grid', gap: '8px', marginTop: '13px' }}>
-          {wishes.map((wish) => (
-            <div key={wish.id} style={{ padding: '11px 12px', borderRadius: tokens.radii.md, background: tokens.colors.bgSurfaceSubtle }}>
-              <span style={{ color: tokens.colors.primaryPinkDeep, fontSize: '0.68rem', fontWeight: 900 }}>{wish.user_id === userId ? userName : partnerName}</span>
-              <p style={{ margin: '4px 0 0', color: tokens.colors.textPrimary, fontSize: '0.85rem', lineHeight: 1.45 }}>{wish.wish}</p>
-            </div>
-          ))}
-          <p style={{ margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: '5px', color: tokens.colors.primaryGreenDeep, fontSize: '0.72rem', fontWeight: 800 }}><CheckCircle2 size={14} />You shared your wishes together.</p>
-        </div>
-      ) : ownWish && !editing ? (
-        <div style={{ marginTop: '12px', padding: '11px 12px', borderRadius: tokens.radii.md, background: tokens.colors.accentLavenderSoft }}>
-          <p style={{ margin: 0, color: tokens.colors.accentLavenderDeep, fontSize: '0.76rem', fontWeight: 800 }}>Your answer is tucked away. It will reveal when {partnerName} shares theirs.</p>
-          <button type="button" onClick={() => setEditing(true)} style={{ marginTop: '8px', padding: 0, border: 0, background: 'none', color: tokens.colors.textSecondary, fontFamily: tokens.typography.fontFamily, fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>Edit my answer</button>
-        </div>
-      ) : (
-        <div style={{ marginTop: '12px', display: 'grid', gap: '8px' }}>
-          <textarea aria-label="One thing I want from this visit" maxLength={240} rows={2} value={text} onChange={(event) => setText(event.target.value)} placeholder="A slow morning, a new restaurant, more time outside…" style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.45 }} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <span style={{ color: tokens.colors.textMuted, fontSize: '0.68rem' }}>{text.length}/240 · only you can see this for now</span>
-            <button type="button" disabled={saving || !text.trim()} onClick={() => void submit()} style={{ ...buttonStyle, minHeight: '36px', padding: '8px 13px', fontSize: '0.72rem', opacity: saving || !text.trim() ? 0.55 : 1 }}>{saving ? 'Saving…' : ownWish ? 'Update my answer' : 'Tuck it away'} <LockKeyhole size={13} /></button>
-          </div>
-          {error && <p role="alert" style={{ margin: 0, color: tokens.colors.primaryPinkDeep, fontSize: '0.72rem' }}>{error}</p>}
-        </div>
-      )}
-    </SectionCard>
-  );
-}
-
-function VisitDayPlan({ visit, items, somedayItems, onAttach }: {
-  visit: Visit;
-  items: SomedayItem[];
-  somedayItems: SomedayItem[];
-  onAttach?: (item: SomedayItem, visitId: string | null, visitDate?: string | null) => Promise<void>;
-}) {
-  const days = useMemo(() => daysInVisit(visit), [visit.start_date, visit.end_date, visit.id]);
-  const [selectedIdea, setSelectedIdea] = useState('');
-  const [savingIdea, setSavingIdea] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const availableIdeas = somedayItems.filter((item) => item.visibility === 'open' && !item.visit_id && !item.completed);
-  const addIdea = async (date: string) => {
-    const item = availableIdeas.find((idea) => idea.id === selectedIdea);
-    if (!item || !onAttach) return;
-    setSavingIdea(item.id); setError(null);
-    try { await onAttach(item, visit.id, date); setSelectedIdea(''); }
-    catch (err) { setError(err instanceof Error ? err.message : 'This idea could not be added to the plan.'); }
-    finally { setSavingIdea(null); }
-  };
-  const removeIdea = async (item: SomedayItem) => {
-    if (!onAttach) return;
-    setError(null);
-    try { await onAttach(item, null); }
-    catch (err) { setError(err instanceof Error ? err.message : 'This idea could not be removed from the visit.'); }
-  };
-  const linked = items.filter((item) => item.visit_id === visit.id);
-  return (
-    <SectionCard data-visit-itinerary style={{ padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
-        <div>
-          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '7px', color: tokens.colors.textPrimary, fontSize: '0.94rem', fontWeight: 900 }}><CalendarDays size={16} color={tokens.colors.primaryPinkDeep} />Plan by day</h2>
-          <p style={{ margin: '3px 0 0', color: tokens.colors.textMuted, fontSize: '0.72rem' }}>Bring your someday ideas into the visit.</p>
-        </div>
-      </div>
-      <div style={{ display: 'grid', gap: '10px' }}>
-        {days.map((date, index) => {
-          const dayItems = linked.filter((item) => (item.visit_date || visit.start_date) === date);
-          return (
-            <div key={date} data-visit-day={date} style={{ padding: '11px', border: `1px solid ${tokens.colors.borderSubtle}`, borderRadius: tokens.radii.md, background: tokens.colors.bgSurfaceSubtle }}>
-              <p style={{ margin: 0, color: tokens.colors.primaryPinkDeep, fontSize: '0.72rem', fontWeight: 900 }}>{index === 0 ? 'Day 1 · ' : `Day ${index + 1} · `}{formatDate(date)}</p>
-              {dayItems.length > 0 ? (
-                <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: '6px' }}>
-                  {dayItems.map((item) => (
-                    <li key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', color: tokens.colors.textPrimary, fontSize: '0.79rem' }}>
-                      <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>• {item.text}</span>
-                      <button type="button" aria-label={`Remove ${item.text} from visit`} onClick={() => { void removeIdea(item); }} style={{ border: 0, padding: '4px 6px', background: 'transparent', color: tokens.colors.textMuted, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer' }}>Remove</button>
-                    </li>
-                  ))}
-                </ul>
-              ) : <p style={{ margin: '7px 0 0', color: tokens.colors.textMuted, fontSize: '0.73rem' }}>Keep this day open for now.</p>}
-              {availableIdeas.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '9px' }}>
-                  <select aria-label={`Choose a someday idea for ${formatDate(date)}`} value={selectedIdea} onChange={(event) => setSelectedIdea(event.target.value)} style={{ ...fieldStyle, flex: 1, minWidth: 0, padding: '8px 9px', fontSize: '0.72rem' }}>
-                    <option value="">Add a someday idea…</option>
-                    {availableIdeas.map((idea) => <option key={idea.id} value={idea.id}>{idea.text}</option>)}
-                  </select>
-                  <button type="button" disabled={!selectedIdea || savingIdea !== null} aria-label={`Add idea to ${formatDate(date)}`} onClick={() => void addIdea(date)} style={{ ...buttonStyle, minHeight: '36px', width: '38px', padding: 0, opacity: !selectedIdea ? 0.5 : 1 }}><Plus size={16} /></button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {error && <p role="alert" style={{ margin: '8px 0 0', color: tokens.colors.primaryPinkDeep, fontSize: '0.69rem' }}>{error}</p>}
-    </SectionCard>
-  );
-}
-
-function VisitChecklist({ items, userId, userName, partnerId, partnerName, saving, onAdd, onUpdate, onDelete }: {
-  items: VisitChecklistItem[];
-  userId: string;
-  userName: string;
-  partnerId?: string;
-  partnerName: string;
-  saving: boolean;
-  onAdd?: (text: string, assignedTo: string) => Promise<void>;
-  onUpdate?: (id: string, updates: Partial<Pick<VisitChecklistItem, 'completed' | 'assigned_to' | 'text'>>) => Promise<void>;
-  onDelete?: (id: string) => Promise<void>;
-}) {
-  const [text, setText] = useState('');
-  const [owner, setOwner] = useState(userId);
-  const [error, setError] = useState<string | null>(null);
-  const add = async (value = text) => {
-    if (!onAdd || !value.trim()) return;
-    setError(null);
-    try { await onAdd(value.trim(), owner || userId); setText(''); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Checklist item could not be added.'); }
-  };
-  const update = async (id: string, updates: Partial<Pick<VisitChecklistItem, 'completed' | 'assigned_to' | 'text'>>) => {
-    if (!onUpdate) return;
-    setError(null);
-    try { await onUpdate(id, updates); }
-    catch (err) { setError(err instanceof Error ? err.message : 'The checklist item could not be updated.'); }
-  };
-  const remove = async (id: string) => {
-    if (!onDelete) return;
-    setError(null);
-    try { await onDelete(id); }
-    catch (err) { setError(err instanceof Error ? err.message : 'The checklist item could not be removed.'); }
-  };
-  return (
-    <SectionCard data-visit-checklist style={{ padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '11px' }}>
-        <CheckCircle2 size={17} color={tokens.colors.primaryGreenDeep} />
-        <div><h2 style={{ margin: 0, color: tokens.colors.textPrimary, fontSize: '0.94rem', fontWeight: 900 }}>Shared checklist</h2><p style={{ margin: '2px 0 0', color: tokens.colors.textMuted, fontSize: '0.72rem' }}>Small things, with one clear owner.</p></div>
-      </div>
-      {items.length > 0 ? (
-        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: '7px' }}>
-          {items.map((item) => (
-            <li key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 9px', borderRadius: tokens.radii.md, background: tokens.colors.bgSurfaceSubtle }}>
-              <input type="checkbox" aria-label={`Mark ${item.text} ${item.completed ? 'not done' : 'done'}`} checked={item.completed} onChange={(event) => { void update(item.id, { completed: event.target.checked }); }} style={{ accentColor: tokens.colors.primaryGreenDeep, width: '17px', height: '17px', flexShrink: 0 }} />
-              <span style={{ flex: 1, minWidth: 0, color: item.completed ? tokens.colors.textMuted : tokens.colors.textPrimary, textDecoration: item.completed ? 'line-through' : 'none', fontSize: '0.77rem', overflowWrap: 'anywhere' }}>{item.text}</span>
-              <select aria-label={`Owner of ${item.text}`} value={item.assigned_to} onChange={(event) => { void update(item.id, { assigned_to: event.target.value }); }} style={{ maxWidth: '90px', border: 0, background: 'transparent', color: tokens.colors.textSecondary, fontFamily: tokens.typography.fontFamily, fontSize: '0.66rem', fontWeight: 800 }}>
-                <option value={userId}>{userName}</option>
-                {partnerId && <option value={partnerId}>{partnerName}</option>}
-              </select>
-              <button type="button" aria-label={`Delete ${item.text}`} onClick={() => { void remove(item.id); }} style={{ border: 0, padding: '3px', background: 'transparent', color: tokens.colors.textMuted, cursor: 'pointer', lineHeight: 0 }}><Trash2 size={13} /></button>
-            </li>
-          ))}
-        </ul>
-      ) : <p style={{ margin: '0 0 10px', color: tokens.colors.textMuted, fontSize: '0.75rem' }}>Tickets, a gift, time off—add the little things here.</p>}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '10px 0' }}>
-        {['Tickets booked', 'Gift bought', 'Time off approved'].map((suggestion) => (
-          <button type="button" key={suggestion} onClick={() => { setText(suggestion); void add(suggestion); }} style={{ padding: '6px 9px', border: `1px solid ${tokens.colors.borderSoft}`, borderRadius: tokens.radii.pill, background: tokens.colors.bgSurface, color: tokens.colors.textSecondary, fontFamily: tokens.typography.fontFamily, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer' }}>{suggestion}</button>
-        ))}
-      </div>
-      <form onSubmit={(event) => { event.preventDefault(); void add(); }} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-        <input aria-label="New checklist item" maxLength={120} value={text} onChange={(event) => setText(event.target.value)} placeholder="Add a prep item" style={{ ...fieldStyle, flex: 1, padding: '9px 10px', fontSize: '0.74rem' }} />
-        <select aria-label="Assign checklist item to" value={owner} onChange={(event) => setOwner(event.target.value)} style={{ maxWidth: '82px', padding: '8px 5px', border: `1px solid ${tokens.colors.borderSoft}`, borderRadius: tokens.radii.md, background: tokens.colors.bgSurface, fontFamily: tokens.typography.fontFamily, fontSize: '0.65rem' }}>
-          <option value={userId}>{userName}</option>{partnerId && <option value={partnerId}>{partnerName}</option>}
-        </select>
-        <button type="submit" disabled={saving || !text.trim()} aria-label="Add checklist item" style={{ ...buttonStyle, width: '38px', minHeight: '38px', padding: 0, opacity: saving || !text.trim() ? 0.5 : 1 }}><Plus size={16} /></button>
-      </form>
-      {error && <p role="alert" style={{ margin: '7px 0 0', color: tokens.colors.primaryPinkDeep, fontSize: '0.7rem' }}>{error}</p>}
     </SectionCard>
   );
 }
@@ -904,110 +671,12 @@ function SomedaySection({ items = [], userId, saving = false, onAdd, onUpdate, o
   );
 }
 
-function VisitMemoryCard({ visit, entries, userId, userName, partnerName, saving, onSave }: {
-  visit: Visit;
-  entries: VisitMemoryEntry[];
-  userId: string;
-  userName: string;
-  partnerName: string;
-  saving?: boolean;
-  onSave?: (visitId: string, file: Blob | null, note: string) => Promise<unknown>;
-}) {
-  const mine = entries.find((entry) => entry.user_id === userId) ?? null;
-  const partnerEntry = entries.find((entry) => entry.user_id !== userId) ?? null;
-  const [file, setFile] = useState<File | null>(null);
-  const [note, setNote] = useState(mine?.note ?? '');
-  const [editing, setEditing] = useState(!mine);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => { setNote(mine?.note ?? ''); setEditing(!mine); }, [mine?.id, mine?.note, visit.id]);
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!onSave) return;
-    setError(null);
-    try { await onSave(visit.id, file, note); setFile(null); setEditing(false); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Your memory could not be saved.'); }
-  };
-  const renderMemory = (entry: VisitMemoryEntry | null, label: string, fallback: string) => entry ? (
-    <div style={{ display: 'grid', gridTemplateColumns: '64px minmax(0, 1fr)', gap: '9px', alignItems: 'center', padding: '8px', background: tokens.colors.bgSurfaceSubtle, borderRadius: tokens.radii.md }}>
-      {entry.photo_url ? <img src={entry.photo_url} alt={`${label}'s visit memory`} style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: tokens.radii.sm }} /> : <div style={{ width: '64px', height: '64px', display: 'grid', placeItems: 'center', borderRadius: tokens.radii.sm, background: tokens.colors.borderSubtle, color: tokens.colors.textMuted }}><Camera size={20} /></div>}
-      <div><p style={{ margin: 0, color: tokens.colors.primaryPinkDeep, fontSize: '0.65rem', fontWeight: 900 }}>{label}</p><p style={{ margin: '4px 0 0', color: tokens.colors.textPrimary, fontSize: '0.75rem', lineHeight: 1.4 }}>{entry.note}</p></div>
-    </div>
-  ) : <p style={{ margin: 0, padding: '8px 9px', borderRadius: tokens.radii.md, background: tokens.colors.bgSurfaceSubtle, color: tokens.colors.textMuted, fontSize: '0.7rem' }}>{fallback}</p>;
-  return (
-    <SectionCard data-visit-memory={visit.id} style={{ padding: 13 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
-        <div><p style={{ margin: 0, color: tokens.colors.primaryPinkDeep, fontSize: '0.64rem', fontWeight: 900, textTransform: 'uppercase' }}>Visit memory</p><p style={{ margin: '2px 0 0', color: tokens.colors.textPrimary, fontSize: '0.78rem', fontWeight: 800 }}>{formatVisitTime(visit)}</p></div>
-        {visit.location && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: tokens.colors.textMuted, fontSize: '0.65rem' }}><MapPin size={11} />{visit.location}</span>}
-      </div>
-      <div style={{ display: 'grid', gap: '6px' }}>
-        {renderMemory(mine, userName, 'Your photo and best moment are waiting here.')}
-        {renderMemory(partnerEntry, partnerName, `Waiting for ${partnerName} to add a photo and a line.`)}
-      </div>
-      {editing ? (
-        <form onSubmit={(event) => { void save(event); }} style={{ marginTop: '9px', display: 'grid', gap: '7px' }}>
-          <label style={{ display: 'grid', gap: '4px', color: tokens.colors.textSecondary, fontSize: '0.68rem', fontWeight: 800 }}>
-            {mine ? 'Change your photo' : 'Add one photo'}
-            <input type="file" accept="image/*" aria-label={`Photo for ${formatVisitTime(visit)}`} onChange={(event) => setFile(event.currentTarget.files?.[0] ?? null)} style={{ ...fieldStyle, padding: '7px', fontSize: '0.69rem' }} />
-          </label>
-          <label style={{ display: 'grid', gap: '4px', color: tokens.colors.textSecondary, fontSize: '0.68rem', fontWeight: 800 }}>
-            {mine ? 'Your best moment' : 'One line about your best moment'}
-            <input type="text" maxLength={VISIT_MEMORY_NOTE_MAX} required value={note} onChange={(event) => setNote(event.target.value)} placeholder="The laugh we couldn’t stop sharing…" style={{ ...fieldStyle, padding: '9px 10px', fontSize: '0.74rem' }} />
-          </label>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '7px' }}>
-            <span style={{ color: tokens.colors.textMuted, fontSize: '0.64rem' }}>{note.length}/{VISIT_MEMORY_NOTE_MAX} · just one line</span>
-            <button type="submit" disabled={saving || !note.trim() || (!file && !mine)} style={{ ...buttonStyle, minHeight: '35px', padding: '7px 11px', fontSize: '0.69rem', opacity: saving || !note.trim() || (!file && !mine) ? 0.5 : 1 }}>{saving ? 'Saving…' : mine ? 'Save changes' : 'Add to timeline'} <Check size={13} /></button>
-          </div>
-          {mine && <button type="button" onClick={() => { setEditing(false); setFile(null); }} style={{ border: 0, background: 'none', color: tokens.colors.textMuted, fontSize: '0.67rem', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>}
-          {error && <p role="alert" style={{ margin: 0, color: tokens.colors.primaryPinkDeep, fontSize: '0.68rem' }}>{error}</p>}
-        </form>
-      ) : (
-        <button type="button" onClick={() => setEditing(true)} style={{ marginTop: '7px', border: 0, padding: 0, background: 'none', color: tokens.colors.textMuted, fontFamily: tokens.typography.fontFamily, fontSize: '0.66rem', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>Edit your memory</button>
-      )}
-    </SectionCard>
-  );
-}
-
-function MemoriesSection({ visits = [], entries = [], loading, saving, error, userId, userName, partnerName, onSave }: {
-  visits?: Visit[];
-  entries?: VisitMemoryEntry[];
-  loading?: boolean;
-  saving?: boolean;
-  error?: string | null;
-  userId: string;
-  userName: string;
-  partnerName: string;
-  onSave?: (visitId: string, file: Blob | null, note: string) => Promise<unknown>;
-}) {
-  const today = new Date();
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const pastVisits = visits.filter((visit) => (visit.end_date || visit.start_date) < todayKey).sort((a, b) => (b.end_date || b.start_date).localeCompare(a.end_date || a.start_date));
-  const entriesByVisit = new Map<string, VisitMemoryEntry[]>();
-  for (const entry of entries) entriesByVisit.set(entry.visit_id, [...(entriesByVisit.get(entry.visit_id) || []), entry]);
-  return (
-    <section data-section="memories" style={{ display: 'grid', gap: '10px' }}>
-      <SectionHeading icon={<Camera size={17} />} title="Memories" subtitle="Keep a small piece of each visit, together." />
-      {error && <p role="alert" style={{ margin: 0, padding: '10px 12px', borderRadius: tokens.radii.md, background: tokens.colors.primaryPinkSoft, color: tokens.colors.primaryPinkDeep, fontSize: '0.74rem', fontWeight: 700 }}>{error}</p>}
-      {loading && <p style={{ margin: 0, color: tokens.colors.textMuted, fontSize: '0.74rem' }}>Gathering your memories…</p>}
-      {pastVisits.length === 0 ? (
-        <SectionCard data-memory-empty style={{ padding: '18px', textAlign: 'center' }}><Camera size={22} color={tokens.colors.accentLavenderDeep} /><p style={{ margin: '6px 0 0', color: tokens.colors.textSecondary, fontSize: '0.75rem', lineHeight: 1.45 }}>After your next visit, add a photo and a line each. Your timeline starts there.</p></SectionCard>
-      ) : (
-        <div data-memory-timeline style={{ display: 'grid', gap: '8px' }}>
-          {pastVisits.map((visit) => <VisitMemoryCard key={visit.id} visit={visit} entries={entriesByVisit.get(visit.id) || []} userId={userId} userName={userName} partnerName={partnerName} saving={saving} onSave={onSave} />)}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/** The Together tab: visits, scheduled shared activities, matched ideas, and memories. */
+/** The Together tab: the next visit countdown, agreed shared activities, and matched ideas. */
 export const TogetherView: React.FC<TogetherViewProps> = ({
   state,
   userId,
-  userName,
-  partnerId,
   partnerName,
   visit = null,
-  visits = [],
   onPlanVisit = () => {},
   onViewVisitPlans = onPlanVisit,
   onOpenReader,
@@ -1018,15 +687,6 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
   onUpdateSomedayItem,
   onToggleSomedayWant,
   onDeleteSomedayItem,
-  onAttachSomedayItemToVisit,
-  visitWishes = [],
-  visitChecklist = [],
-  visitPlanningError = null,
-  visitPlanningSaving = false,
-  onSaveVisitWish,
-  onAddVisitChecklistItem,
-  onUpdateVisitChecklistItem,
-  onDeleteVisitChecklistItem,
   togetherTimeSessions = [],
   togetherTimeError = null,
   togetherTimeSaving = false,
@@ -1037,11 +697,6 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
   onTalkAboutTogetherTime,
   onUpdateTogetherTime,
   onOpenActivity,
-  memories = [],
-  memoriesLoading = false,
-  memoriesError = null,
-  memoriesSaving = false,
-  onSaveVisitMemory,
   initialSessionId = null,
   onClearInitialSession,
   remindersEnabled,
@@ -1063,18 +718,12 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
     <div data-view="together" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 14px 22px', display: 'grid', alignContent: 'start', gap: '20px', overscrollBehavior: 'contain' }}>
       <div style={{ display: 'grid', gap: '6px', margin: '2px 2px 0' }}>
         <p style={{ margin: 0, color: tokens.colors.primaryPinkDeep, fontSize: '0.65rem', letterSpacing: '0.1em', fontWeight: 900, textTransform: 'uppercase' }}>Your shared space</p>
-        <p style={{ margin: 0, color: tokens.colors.textSecondary, fontSize: '0.76rem' }}>A little planning, a little play, and things to remember.</p>
+        <p style={{ margin: 0, color: tokens.colors.textSecondary, fontSize: '0.76rem' }}>A little planning, a little play.</p>
       </div>
 
       <section data-section="visit" style={{ display: 'grid', gap: '9px' }}>
-        <SectionHeading icon={<Heart size={17} />} title="Next visit" subtitle="Keep the countdown—and make the plan useful." />
+        <SectionHeading icon={<Heart size={17} />} title="Next visit" subtitle="Keep the countdown going." />
         <VisitHero visit={visit} onPlanVisit={onPlanVisit} onViewPlans={onViewVisitPlans} />
-        {visit && <>
-          <VisitWishPanel visit={visit} wishes={visitWishes} userId={userId} userName={userName} partnerName={partnerName} saving={visitPlanningSaving} onSave={onSaveVisitWish} />
-          <VisitDayPlan visit={visit} items={somedayItems} somedayItems={somedayItems} onAttach={onAttachSomedayItemToVisit} />
-          <VisitChecklist items={visitChecklist} userId={userId} userName={userName} partnerId={partnerId} partnerName={partnerName} saving={visitPlanningSaving} onAdd={onAddVisitChecklistItem} onUpdate={onUpdateVisitChecklistItem} onDelete={onDeleteVisitChecklistItem} />
-        </>}
-        {visitPlanningError && <p role="alert" style={{ margin: 0, padding: '9px 11px', borderRadius: tokens.radii.md, background: tokens.colors.primaryPinkSoft, color: tokens.colors.primaryPinkDeep, fontSize: '0.71rem' }}>{visitPlanningError}</p>}
       </section>
 
       <TogetherTimeSection
@@ -1105,8 +754,6 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
         onDelete={onDeleteSomedayItem}
       />
       {somedayError && <p role="alert" style={{ margin: '-12px 0 0', color: tokens.colors.primaryPinkDeep, fontSize: '0.7rem' }}>{somedayError}</p>}
-
-      <MemoriesSection visits={visits} entries={memories} loading={memoriesLoading} saving={memoriesSaving} error={memoriesError} userId={userId} userName={userName} partnerName={partnerName} onSave={onSaveVisitMemory} />
     </div>
   );
 };

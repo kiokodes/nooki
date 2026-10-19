@@ -1200,18 +1200,9 @@ Use your actual accounts; there is no automatic user creation.
       private idea. The author can still edit its note and sharing setting.
 - [ ] Each partner's **I want this** vote is private; the same open idea shows **It’s a
       match** only after both partners vote yes. Manual reordering is not offered in the UI.
-- [ ] A visit with no day plan lets either partner choose an open Someday idea for a
-      specific day; removing it returns the same idea to the unplanned list.
-- [ ] Both partners can write one visit wish, and neither answer is visible until both
-      have submitted. The second submission reveals both wishes on each phone.
-- [ ] The shared checklist lets either partner add an item, assign one owner and check it
-      off; an account outside the couple cannot read the list.
 - [ ] **Clear this visit** in the edit sheet asks "Clear this visit for both of you?" first;
-      confirming removes the countdown on both phones, ideas pinned to the visit reappear
-      on the someday list, and past visits keep their memories. "Keep it" changes nothing.
-- [ ] After a past visit, each partner can add one photo and one short best-moment line.
-      Both contributions appear in the memory timeline and each partner can edit only
-      their own entry.
+      confirming removes the countdown on both phones and ideas pinned to the visit reappear
+      on the someday list. "Keep it" changes nothing.
 - [ ] Device A proposing a Together time shows it on device B as a suggestion, not a plan;
       A has no way to agree to its own suggestion, **Talk about it** posts the activity and
       time into the chat and opens it, and B can **Suggest another time** (flipping who
@@ -1265,11 +1256,11 @@ this repository's own `send-push` Edge Function — no notification service, SDK
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
 tab, and an unread count on the installed app's icon. Together hosts **Next visit** (a
-countdown, private-until-both-answered wishes, a day-by-day plan and an owner-assigned
-checklist), **Together time** (shared books or games at a time one partner suggests and
+countdown to the next shared date), **Together time** (shared books or games at a time one
+partner suggests and
 the other agrees to, with a due-time reminder once it is locked in,
-plus Read together), **Someday** (private or shared ideas with quiet yes-votes and mutual
-matches), and a timeline of visit memories from both partners. Shared books still include
+plus Read together), and **Someday** (private or shared ideas with quiet yes-votes and mutual
+matches). Shared books still include
 one EPUB or PDF in play per couple, a full-screen reader, saved places, "Jump to {partner}",
 two-colour highlights, and the highlight → chat → back-to-the-passage loop; synced music
 and scrapbooks are still to come. Games includes
@@ -1586,19 +1577,12 @@ get the same tables and functions from `schema.sql`.
   countdown once a visit is saved. Plans change, so the edit sheet also has **Clear this
   visit**: after an in-place "Clear this visit for both of you?" the visit comes off the
   calendar on both phones and the empty state returns. Someday ideas pinned to the visit go
-  back to the unplanned list (the database unlinks them); that visit's wishes and checklist
-  are removed with it. Past visits — and their memories — are not affected.
-- Each partner writes **One thing I want from this visit**. Their wish rows are private to
-  their author until both partners have replied; the second answer makes both visible at
-  once. Realtime refreshes the reveal on each phone.
-- The visit plan is grouped day by day. Each day can pull in an open Someday idea (the
-  existing idea row is linked, not copied), or leave the day open. A trigger checks that
-  the chosen date falls inside the visit. Taking an idea off the plan returns it to the
-  unplanned list; deleting a visit still preserves its ideas.
-- A short shared checklist gives every item one owner (either partner) and lets both check
-  it off. The database checks that the owner belongs to the couple.
+  back to the unplanned list (the database unlinks them rather than deleting them).
+  The wish, day-by-day plan, checklist and memories sections that used to sit under the
+  countdown were removed from the tab; their tables stay in the schema (and under RLS),
+  so no existing data was deleted — the client simply no longer reads or writes them.
 
-### Together time and memories
+### Together time
 
 - Suggest a time for **Read together**, **Word Wheel** or another game. Nobody can fix a
   time on the other person: a Together time starts as one partner's suggestion and only
@@ -1613,10 +1597,6 @@ get the same tables and functions from `schema.sql`.
   reminder opens the exact activity from a single tap. Read together now lives inside
   Together time. The card summarizes joint progress in words without putting two
   percentages side by side.
-- After a visit ends, each partner can add one private-bucket photo and one short line about
-  the best moment. Contributions build the visit timeline; both can see the memories, while
-  each partner can edit only their own entry. The prompt appears in the Together tab after
-  the visit, including when the other person has already contributed.
 - Scheduled notifications require the deployed `send-push` Edge Function, enabled
   `pg_cron` and `pg_net`, and two Supabase Vault secrets named `nooki_send_push_url` and
   `nooki_push_webhook_secret`. The first is the HTTPS function URL; the second must match
@@ -1635,19 +1615,16 @@ get the same tables and functions from `schema.sql`.
 ### Data and privacy
 
 The tables are couple-scoped with row-level security, and the database—not the interface—
-keeps visit wishes hidden until both reply, hides private ideas, validates checklist owners
-and visit days, and checks that a memory belongs to the author and has ended its visit.
-Memory images use a private storage bucket with short-lived signed URLs. Realtime keeps the
-shared plan, matches, sessions and timeline in step.
+hides private ideas and holds the Together-time agreement line. Realtime keeps the
+countdown, matches and sessions in step.
 
 Local coverage: `node --test --test-force-exit tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs tests/together-restructure.test.mjs tests/together-time-agreement.test.mjs tests/together-hooks.test.mjs tests/together-tab.test.mjs`. The force-exit flag closes the existing Supabase/Vite test handles after all assertions finish.
 
-Before release, use two real paired accounts: submit private visit wishes on both phones
-and confirm they reveal together; put an open idea into one visit day; assign and complete
-checklist items; vote yes on the same open idea from both accounts; propose a Together time
+Before release, use two real paired accounts: set a next visit, then clear it and confirm
+the countdown disappears on both phones; vote yes on the same open idea from both accounts;
+propose a Together time
 from one phone, talk it over in the chat, agree to it from the other and tap its push
-notification; then add one photo and one best-moment line from each partner
-after a visit. Check that private ideas and an unanswered wish stay hidden from the partner,
+notification. Check that private ideas stay hidden from the partner,
 and a third account sees none of the couple's data.
 
 ## Everyday status + mood (Home)

@@ -377,30 +377,6 @@ export interface Visit {
   updated_at: string;
 }
 
-/** One partner's private wish for a visit. The RLS policy reveals rows only after both answer. */
-export interface VisitWish {
-  id: string;
-  couple_id: string;
-  visit_id: string;
-  user_id: string;
-  wish: string;
-  created_at: string;
-  updated_at: string;
-}
-
-/** One short prep task for a visit, assigned to one partner. */
-export interface VisitChecklistItem {
-  id: string;
-  couple_id: string;
-  visit_id: string;
-  text: string;
-  assigned_to: string;
-  completed: boolean;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export type TogetherActivityType = 'book' | 'game';
 export type TogetherDateStatus = 'proposed' | 'scheduled' | 'done' | 'cancelled';
 
@@ -427,20 +403,6 @@ export interface TogetherTimeSession {
   reminder_sent_at: string | null;
   created_at: string;
   updated_at: string;
-}
-
-/** One partner's photo and best-moment line for a completed visit. */
-export interface VisitMemoryEntry {
-  id: string;
-  couple_id: string;
-  visit_id: string;
-  user_id: string;
-  photo_path: string;
-  note: string;
-  created_at: string;
-  updated_at: string;
-  /** Short-lived URL; created by the client for display, never persisted. */
-  photo_url?: string | null;
 }
 
 /* ---------------------------------------------------------------------------

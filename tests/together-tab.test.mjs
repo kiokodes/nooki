@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 
-// Together's visit planning, Together-time scheduler, private/matched ideas, memories,
+// Together's next-visit countdown, Together-time scheduler, private/matched ideas,
 // and the book shelf's joint-progress copy are exercised through the real component.
-test('Together tab: private wishes reveal together, plans are actionable, and memories/sessions open from one tap', async () => {
+test('Together tab: the countdown leads, ideas match quietly, and sessions open from one tap', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
   for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'MouseEvent', 'File', 'FileReader']) {
     globalThis[key] = dom.window[key];
@@ -28,9 +28,6 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
       id: 'v1', couple_id: 'c1', start_date: '2099-01-10', end_date: '2099-01-11',
       location: 'Lagos', timezone: 'Africa/Lagos', is_tentative: false,
       created_by: 'me', created_at: '', updated_at: '',
-    };
-    const pastVisit = {
-      ...visit, id: 'v-old', start_date: '2020-05-01', end_date: '2020-05-02', location: 'Abuja',
     };
     const idea = (id, text, overrides = {}) => ({
       id, couple_id: 'c1', text, details: null, sort_order: 0, visibility: 'open',
@@ -65,18 +62,12 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     const openReader = (id) => calls.push(['reader', id]);
     const onOpenActivity = (value) => calls.push(['openActivity', value.id]);
     const defaults = {
-      state, userId: 'me', userName: 'Alice', partnerId: 'partner', partnerName: 'Ana', timezone: 'Africa/Lagos',
-      visit, visits: [visit, pastVisit], onOpenReader: openReader,
+      state, userId: 'me', partnerName: 'Ana', timezone: 'Africa/Lagos',
+      visit, onOpenReader: openReader,
       somedayItems: [sharedMatch, privateIdea],
-      visitWishes: [{ id: 'wish-me', couple_id: 'c1', visit_id: 'v1', user_id: 'me', wish: 'A private answer', created_at: '', updated_at: '' }],
-      visitChecklist: [], togetherTimeSessions: [session], memories: [],
+      togetherTimeSessions: [session],
       remindersEnabled: false,
       onPlanVisit: () => calls.push(['planVisit']),
-      onSaveVisitWish: async (text) => calls.push(['saveWish', text]),
-      onAddVisitChecklistItem: async (text, owner) => calls.push(['addChecklist', text, owner]),
-      onUpdateVisitChecklistItem: async (id, update) => calls.push(['updateChecklist', id, update]),
-      onDeleteVisitChecklistItem: async (id) => calls.push(['deleteChecklist', id]),
-      onAttachSomedayItemToVisit: async (...args) => calls.push(['attach', args[0].id, args[1], args[2] ?? null]),
       onAddSomedayItem: async (...args) => calls.push(['addSomeday', ...args]),
       onUpdateSomedayItem: async (...args) => calls.push(['updateSomeday', args[0].id, args[3]]),
       onToggleSomedayWant: async (item) => calls.push(['want', item.id]),
@@ -87,7 +78,6 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
       onTalkAboutTogetherTime: async (item) => calls.push(['talk', item.id]),
       onUpdateTogetherTime: async (item, status) => calls.push(['updateSession', item.id, status]),
       onOpenActivity,
-      onSaveVisitMemory: async (...args) => calls.push(['memory', ...args]),
       onClearInitialSession: () => calls.push(['clearDeepLink']),
     };
     const render = (overrides = {}) => act(async () => root.render(React.createElement(TogetherView, { ...defaults, ...overrides })));
@@ -102,42 +92,17 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     const click = async (element) => act(async () => element.click());
     const body = () => document.body.textContent.replace(/\u2019/g, "'");
 
-    // The countdown and day-by-day plan sit first; a submitted wish itself is not shown.
+    // The countdown sits first. The retired sections — visit wishes, the day-by-day
+    // plan, the shared checklist and memories — are gone from the tab.
     await render();
     assert(document.querySelector('[data-visit-card="upcoming"]'));
-    assert(document.querySelector('[data-visit-day="2099-01-10"]'));
-    assert(document.querySelector('[data-visit-day="2099-01-11"]'));
-    assert(body().includes('Your answer is tucked away'));
-    assert(!body().includes('A private answer'), 'an unanswered partner cannot see the submitted text');
-    assert(body().includes('Shared checklist'));
-    assert(body().includes('Tickets booked'));
-
-    // An open someday idea can be placed on a specific visit day; a private one is never offered.
-    const daySelect = document.querySelector('[aria-label="Choose a someday idea for Sun, Jan 10"]')
-      || document.querySelector('[aria-label^="Choose a someday idea for"]');
-    assert(daySelect);
-    assert([...daySelect.options].some((option) => option.textContent === 'Try the night market'));
-    assert(![...daySelect.options].some((option) => option.textContent === 'A surprise for later'));
-    await setValue(daySelect, 'idea-match');
-    const addIdeaButton = document.querySelector('[aria-label^="Add idea to"]');
-    await click(addIdeaButton);
-    assert.deepEqual(calls.pop(), ['attach', 'idea-match', 'v1', '2099-01-10']);
-
-    // Checklist rows have one owner; both partners can be chosen when adding an item.
-    await setValue(document.querySelector('[aria-label="New checklist item"]'), 'Book the train');
-    await setValue(document.querySelector('[aria-label="Assign checklist item to"]'), 'partner');
-    const checklistForm = document.querySelector('[data-visit-checklist] form');
-    await act(async () => checklistForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
-    assert.deepEqual(calls.pop(), ['addChecklist', 'Book the train', 'partner']);
-
-    // After both wishes exist, both texts are revealed together.
-    await render({ visitWishes: [
-      ...defaults.visitWishes,
-      { id: 'wish-partner', couple_id: 'c1', visit_id: 'v1', user_id: 'partner', wish: 'A quiet breakfast', created_at: '', updated_at: '' },
-    ] });
-    assert(document.querySelector('[data-wishes-revealed]'));
-    assert(body().includes('A private answer'));
-    assert(body().includes('A quiet breakfast'));
+    assert(!document.querySelector('[data-visit-wishes]'));
+    assert(!document.querySelector('[data-visit-itinerary]'));
+    assert(!document.querySelector('[data-visit-checklist]'));
+    assert(!document.querySelector('[data-section="memories"]'));
+    assert(!body().includes('One thing I want from this visit'));
+    assert(!body().includes('Plan by day'));
+    assert(!body().includes('Shared checklist'));
 
     // A matched idea is explicit; single-vote ideas do not announce the other person's yes.
     assert.equal(document.querySelectorAll('[data-someday-match]').length, 1);
@@ -219,19 +184,13 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     assert(!myCard.querySelector('[data-agree-together-time]'));
     assert(myCard.querySelector('[data-talk-about-together-time="session-mine"]'));
 
-    // Every completed visit prompts for the user's contribution and shows the shared timeline lane.
-    const memoriesSection = document.querySelector('[data-section="memories"]');
-    assert(memoriesSection.querySelector('[data-visit-memory="v-old"]'));
-    assert(memoriesSection.textContent.includes('Add one photo'));
-    assert(memoriesSection.textContent.includes('Waiting for Ana'));
-
     // A cold push can open the precise activity once the shared schedule has loaded.
     calls.length = 0;
     await render({ initialSessionId: 'session-1' });
     assert.deepEqual(calls, [['openActivity', 'session-1'], ['clearDeepLink']]);
 
     // With no upcoming visit, choosing a date is the dominant empty-state action.
-    await render({ visit: null, visitWishes: [], visitChecklist: [] });
+    await render({ visit: null });
     const emptyVisit = document.querySelector('[data-visit-card="empty"]');
     assert(emptyVisit);
     assert(emptyVisit.textContent.includes('Pick your next visit date'));
