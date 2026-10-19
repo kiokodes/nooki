@@ -1066,6 +1066,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
                 // The modal shows the save error beside the form.
               }
             }}
+            onClearVisit={async () => {
+              // Let a failed clear throw, so the modal can show it and stay open.
+              if (visits.visit) await visits.deleteVisit(visits.visit.id);
+            }}
             existingVisit={visits.visit}
             userTimezone={profile?.timezone || 'UTC'}
             partnerName={partner.name}

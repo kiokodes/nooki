@@ -325,3 +325,79 @@ test('chat tab: a shared highlight quotes the passage and jumps back into the bo
     dom.window.close();
   }
 });
+
+test('visit planning modal: an existing visit can be cleared when plans change', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
+  for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'Event', 'MouseEvent']) {
+    globalThis[key] = dom.window[key];
+  }
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const { default: React, act } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false, ws: false },
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://test-project.supabase.co'),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('sb_publishable_test_only'),
+    },
+  });
+  const root = createRoot(document.getElementById('root'));
+  try {
+    const { VisitPlanningModal } = await server.ssrLoadModule('/src/components/together/VisitPlanningModal.tsx');
+    const calls = [];
+    const existingVisit = {
+      id: 'v1', start_date: '2099-01-10', end_date: '2099-01-11',
+      location: 'Lagos', timezone: 'Africa/Lagos', is_tentative: false,
+    };
+    const defaults = {
+      isOpen: true,
+      onClose: () => calls.push(['close']),
+      onSave: async () => calls.push(['save']),
+      onClearVisit: async () => calls.push(['clear']),
+      existingVisit,
+      userTimezone: 'Africa/Lagos',
+      partnerName: 'Ana',
+    };
+    const render = (overrides = {}) => act(async () => root.render(React.createElement(VisitPlanningModal, { ...defaults, ...overrides })));
+    const click = async (element) => act(async () => element.click());
+
+    // Editing a visit offers a way out, and explains what survives it.
+    await render();
+    const section = document.querySelector('[data-clear-visit-section]');
+    assert(section, 'editing an existing visit shows the clear option');
+    assert(section.textContent.includes('Plans changed?'));
+    assert(section.textContent.includes('go back to your someday list'));
+
+    // Nothing is removed on the first tap: it only asks, in place.
+    await click(document.querySelector('[data-clear-visit]'));
+    assert(document.querySelector('[data-clear-visit-confirm]'));
+    assert.deepEqual(calls, []);
+    // "Keep it" backs out with the visit untouched.
+    await click(document.querySelector('[data-keep-visit]'));
+    assert(!document.querySelector('[data-clear-visit-confirm]'));
+    assert(document.querySelector('[data-clear-visit]'));
+    assert.deepEqual(calls, []);
+
+    // Confirming clears the visit and closes the modal.
+    await click(document.querySelector('[data-clear-visit]'));
+    await click(document.querySelector('[data-confirm-clear-visit]'));
+    assert.deepEqual(calls, [['clear'], ['close']]);
+
+    // A failed clear says so and keeps the modal (and the visit) in place.
+    calls.length = 0;
+    await render({ onClearVisit: async () => { throw new Error('The visit could not be cleared.'); } });
+    await click(document.querySelector('[data-clear-visit]'));
+    await click(document.querySelector('[data-confirm-clear-visit]'));
+    assert(!calls.some((call) => call[0] === 'close'));
+    assert(document.querySelector('[role="alert"]').textContent.includes('could not be cleared'));
+    assert(document.querySelector('[data-clear-visit]'), 'the clear option is offered again after a failure');
+
+    // Planning a brand-new visit has nothing to clear.
+    await render({ existingVisit: null });
+    assert(!document.querySelector('[data-clear-visit-section]'));
+  } finally {
+    await act(() => root.unmount());
+    await server.close();
+    dom.window.close();
+  }
+});

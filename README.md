@@ -1206,6 +1206,9 @@ Use your actual accounts; there is no automatic user creation.
       have submitted. The second submission reveals both wishes on each phone.
 - [ ] The shared checklist lets either partner add an item, assign one owner and check it
       off; an account outside the couple cannot read the list.
+- [ ] **Clear this visit** in the edit sheet asks "Clear this visit for both of you?" first;
+      confirming removes the countdown on both phones, ideas pinned to the visit reappear
+      on the someday list, and past visits keep their memories. "Keep it" changes nothing.
 - [ ] After a past visit, each partner can add one photo and one short best-moment line.
       Both contributions appear in the memory timeline and each partner can edit only
       their own entry.
@@ -1580,7 +1583,11 @@ get the same tables and functions from `schema.sql`.
 
 - With no visit set, **Pick your next visit date** is the most prominent card. The existing
   visit planner still stores the shared date, location and timezone; the card keeps its
-  countdown once a visit is saved.
+  countdown once a visit is saved. Plans change, so the edit sheet also has **Clear this
+  visit**: after an in-place "Clear this visit for both of you?" the visit comes off the
+  calendar on both phones and the empty state returns. Someday ideas pinned to the visit go
+  back to the unplanned list (the database unlinks them); that visit's wishes and checklist
+  are removed with it. Past visits — and their memories — are not affected.
 - Each partner writes **One thing I want from this visit**. Their wish rows are private to
   their author until both partners have replied; the second answer makes both visible at
   once. Realtime refreshes the reveal on each phone.

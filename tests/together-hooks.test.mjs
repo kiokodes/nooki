@@ -38,6 +38,7 @@ test('Together hooks: wishes, checklist, scheduled time and private visit-memory
     supabase.removeChannel = async () => {};
 
     const auth = await server.ssrLoadModule('/src/lib/authService.ts');
+    const { useVisits } = await server.ssrLoadModule('/src/hooks/useVisits.ts');
     const { useVisitPlanning } = await server.ssrLoadModule('/src/hooks/useVisitPlanning.ts');
     const { useTogetherTime } = await server.ssrLoadModule('/src/hooks/useTogetherTime.ts');
     const { useVisitMemories } = await server.ssrLoadModule('/src/hooks/useVisitMemories.ts');
@@ -64,6 +65,7 @@ test('Together hooks: wishes, checklist, scheduled time and private visit-memory
     let latest;
     function Harness() {
       latest = {
+        visits: useVisits(couple.id, activeUserId),
         planning: useVisitPlanning(couple.id, upcoming.id, activeUserId),
         togetherTime: useTogetherTime(couple.id, activeUserId),
         memories: useVisitMemories(couple.id, activeUserId),
@@ -141,6 +143,18 @@ test('Together hooks: wishes, checklist, scheduled time and private visit-memory
     assert.equal(storedFiles.length, 2);
     assert(storedFiles[1].path.includes(`/${bob.id}/${past.id}/`));
     assert.equal(partnerMemory.user_id, bob.id);
+
+    // Plans change: Bob can clear the upcoming visit Alice planned. It comes off
+    // the calendar for the couple; the past visit (and its memories) stay put.
+    await act(async () => latest.visits.refresh());
+    assert.equal(latest.visits.visits.length, 2);
+    assert.equal(latest.visits.visit.id, upcoming.id);
+    await act(async () => latest.visits.deleteVisit(upcoming.id));
+    assert.equal(latest.visits.visits.length, 1);
+    assert.equal(latest.visits.visits[0].id, past.id);
+    assert.equal(latest.visits.visit, null, 'no next visit is counting down once it is cleared');
+    await act(async () => latest.memories.refresh());
+    assert.equal(latest.memories.entries.length, 2, 'clearing a future visit keeps past memories');
   } finally {
     await act(async () => root.unmount());
     await backend?.close();
