@@ -26,11 +26,9 @@ import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
 import { TogetherView } from './components/together/TogetherView';
-import { ReaderView, type ShareHighlightInput } from './components/together/ReaderView';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
-import { useBooks } from './hooks/useBooks';
 import { useVisits } from './hooks/useVisits';
 import { useTogetherTime } from './hooks/useTogetherTime';
 import { useSomedayList } from './hooks/useSomedayList';
@@ -87,7 +85,7 @@ const TABS: TabConfig[] = [
     key: 'together',
     label: 'Together',
     icon: ImageIcon,
-    comingSoonSubtitle: 'Shared books, visits & someday list',
+    comingSoonSubtitle: 'Visits, games & someday list',
     accentColor: tokens.colors.primaryGreenDeep,
     accentSoft: tokens.colors.primaryGreenSoft,
   },
@@ -237,15 +235,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     userId: currentUser?.id ?? null,
   });
 
-  // The Together tab's "Read together" shelf: one book in play, both partners' places in
-  // it, and the highlights that reach the chat. App-level for the same reason as the
-  // chat — a partner's highlight lands while this phone is somewhere else.
-  const books = useBooks({
-    coupleId: couple?.id ?? null,
-    userId: currentUser?.id ?? null,
-    partnerId: partner?.id ?? null,
-  });
-
   // Visits for the Together tab: the next-visit countdown.
   const visits = useVisits(couple?.id ?? null, currentUser?.id ?? null);
 
@@ -271,22 +260,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
   // No loaded question (including an empty/exhausted pool) means nothing is pending.
   const pendingDailyDecision = dailyDecision.question !== null && dailyDecision.my_choice === null;
 
-  // The full-screen reader is a layer over whatever tab is open (Chat jumps come
-  // straight here too). Tagged with the couple so nothing outlives the account.
-  const [readerStored, setReaderStored] = useState<{
-    coupleId: string;
-    bookId: string;
-    jump: 'partner' | { location: string } | null;
-    nonce: number;
-  } | null>(null);
-  const readerNonce = useRef(0);
-
-  const openReader = useCallback((bookId: string, jump: 'partner' | { location: string } | null = null) => {
-    if (!couple) return;
-    readerNonce.current += 1;
-    setReaderStored({ coupleId: couple.id, bookId, jump, nonce: readerNonce.current });
-  }, [couple]);
-
   // Same list, looked up the way the chat needs it: which question did this session ask?
   const questionBySessionId = useMemo(
     () => Object.fromEntries(
@@ -299,29 +272,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     ),
     [discuss.sessions],
   );
-
-  // What each shared highlight quoted, for the chat's quote cards. The quote comes
-  // from the highlight row — even after the book is deleted (book_id then reads null)
-  // so the words stay in the chat and only the jump away is gone.
-  const highlightById = useMemo(() => {
-    const titleByBookId = Object.fromEntries(books.books.map((book) => [book.id, book.title]));
-    return Object.fromEntries(books.highlights.map((highlight) => [highlight.id, {
-      quote_text: highlight.quote_text,
-      book_id: highlight.book_id,
-      book_title: highlight.book_id ? titleByBookId[highlight.book_id] ?? null : null,
-    }]));
-  }, [books.books, books.highlights]);
-
-  // The quote card on a bubble: open the reader and jump to the passage. A deleted
-  // book's card is disabled in the chat, so this only ever runs for a live one.
-  const handleOpenHighlight = useCallback((highlightId: string) => {
-    if (!couple) return;
-    const highlight = books.highlights.find((item) => item.id === highlightId);
-    if (!highlight?.book_id) return;
-    const book = books.books.find((item) => item.id === highlight.book_id);
-    if (!book) return;
-    openReader(book.id, { location: highlight.location });
-  }, [books.books, books.highlights, couple, openReader]);
 
   // "Say more" under the revealed answers: switch to the chat with the question attached.
   const handleSayMore = useCallback((detail: SessionDetail) => {
@@ -385,33 +335,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     setActiveTab('discuss');
   }, [couple]);
 
-  // Highlight & share: the margin note first, then the chat message that quotes it.
-  // With no comment the message carries the quote itself, so the transcript always
-  // holds the words even if the book later goes away. If the chat copy fails after
-  // the highlight landed, that is not worth retrying a highlight for: the passage is
-  // saved and painted, and useChat has already recorded the failed message in the
-  // transcript ("Not sent — tap to retry").
-  const addHighlight = books.addHighlight;
-  const handleShareHighlight = useCallback(async (bookId: string, input: ShareHighlightInput, comment: string) => {
-    const highlight = await addHighlight({
-      bookId,
-      location: input.location,
-      quoteText: input.quoteText,
-      rects: input.rects,
-    });
-    try {
-      await sendChatMessage(comment.trim() || input.quoteText.trim(), 'text', null, null, highlight.id);
-    } catch {
-      // Saved already; the transcript keeps the failure visible on the Chat tab.
-    }
-  }, [addHighlight, sendChatMessage]);
-
   // Valid only while the couple that made them is the one on this phone.
   const chatContext = chatContextStored && couple?.id === chatContextStored.coupleId
     ? { sessionId: chatContextStored.sessionId, questionText: chatContextStored.questionText }
-    : null;
-  const readerTarget = readerStored && couple?.id === readerStored.coupleId
-    ? readerStored
     : null;
   const focusSession = focusSessionStored && couple?.id === focusSessionStored.coupleId
     ? { id: focusSessionStored.id, nonce: focusSessionStored.nonce }
@@ -703,8 +629,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
         />
 
         {/* Chat tab: the couple's live conversation.
-            Together tab: shared books, visits & someday list, with the full-screen
-            reader opening over whatever tab is active.
+            Together tab: visits, together time and the someday list.
             Home tab: Today card, today's shared decision and the reserved animated scene area.
             Discuss tab: the question engine over the imported library.
             Games tab: mini-games and chibi room decoration.
@@ -756,13 +681,11 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
           />
         ) : activeTab === 'together' ? (
           <TogetherView
-            state={books}
             userId={currentUser.id}
             partnerName={partner.name}
             visit={visits.visit}
             onPlanVisit={() => setShowVisitPlanning(true)}
             onViewVisitPlans={() => setShowVisitPlanning(true)}
-            onOpenReader={(bookId) => openReader(bookId)}
             somedayItems={somedayList.items}
             somedayError={somedayList.error}
             somedaySaving={somedayList.saving}
@@ -780,11 +703,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
             onTalkAboutTogetherTime={handleTalkAboutTogetherTime}
             onUpdateTogetherTime={(session: TogetherTimeSession, status: 'done' | 'cancelled') => status === 'done' ? togetherTime.complete(session) : togetherTime.cancel(session)}
             onOpenActivity={(session) => {
-              if (session.activity_type === 'book') openReader(session.activity_id);
-              else {
-                setScheduledGame(session.activity_id as GameId);
-                setActiveTab('games');
-              }
+              if (session.activity_type !== 'game') return;
+              setScheduledGame(session.activity_id as GameId);
+              setActiveTab('games');
             }}
             initialSessionId={openTogetherSessionId}
             onClearInitialSession={() => setOpenTogetherSessionId(null)}
@@ -810,8 +731,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
             questionContext={chatContext}
             onClearQuestionContext={() => setChatContextStored(null)}
             onOpenQuestion={handleOpenQuestion}
-            highlightById={highlightById}
-            onOpenHighlight={handleOpenHighlight}
           />
         )}
 
@@ -997,30 +916,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
             onClose={() => setShowDailyDecision(false)}
           />
         )}
-
-        {/* The full-screen reader over whatever tab is open (Chat jumps land here). */}
-        {readerTarget && (() => {
-          const book = books.books.find((item) => item.id === readerTarget.bookId);
-          if (!book) return null;
-          return (
-            <ReaderView
-              key={`${book.id}-${readerTarget.nonce}`}
-              book={book}
-              userId={currentUser.id}
-              userName={profile.name}
-              partnerName={partner.name}
-              myProgress={books.progress.find((item) => item.book_id === book.id && item.user_id === currentUser.id) ?? null}
-              partnerProgress={books.progress.find((item) => item.book_id === book.id && item.user_id !== currentUser.id) ?? null}
-              highlights={books.highlights.filter((item) => item.book_id === book.id)}
-              initialJump={readerTarget.jump}
-              onSaveProgress={(location, percent) => { void books.saveProgress(book.id, location, percent).catch(() => {}); }}
-              onShareHighlight={(input, comment) => handleShareHighlight(book.id, input, comment)}
-              onLeave={async () => { await books.leave(book.id); }}
-              onFinish={async () => { await books.finish(book.id); }}
-              onClose={() => setReaderStored(null)}
-            />
-          );
-        })()}
 
         {/* Visit Planning Modal for Together tab */}
         {showVisitPlanning && couple && (

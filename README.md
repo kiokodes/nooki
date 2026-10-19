@@ -89,7 +89,9 @@ apply and verify the database migrations separately.
    clocks), then `202610190004_together_tab_restructure.sql` (visit wishes, day-by-day plans,
    private/matched Someday ideas, scheduled Together time and visit memories), then
    `202610190005_together_time_agreement.sql` (a Together time is a suggestion until the
-   other partner agrees to it; dates already scheduled stay scheduled). Finally run
+   other partner agrees to it; dates already scheduled stay scheduled), then
+   `202610190006_remove_shared_books.sql` (removes Read together: the shelf, the reader,
+   book files, highlights and any Together time that was a book). Finally run
    `supabase/seed/word_puzzles.sql` once to install the pregenerated puzzle bank.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
@@ -147,11 +149,11 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 ### Brand-new, empty Supabase project only
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
-(including `couple_events`, `messages`, the Discuss and shared-books tables, visit wishes,
+(including `couple_events`, `messages`, the Discuss tables, visit wishes,
 checklists, Someday votes, Together-time sessions, visit memories, `push_subscriptions` and
 `miss_you_taps`), location columns and generated marketplace key, RLS policies, RPCs,
-triggers, Realtime publication membership and the private `shared-books` and
-`visit-memories` storage buckets; it does not populate user/couple records, and it contains
+triggers, Realtime publication membership and the private `visit-memories` storage bucket.
+Read together is not part of the end state. It does not populate user/couple records, and it contains
 no Discuss or Daily Decisions questions — upload those separately. Push delivery still
 needs the `send-push` Edge Function and VAPID secrets; chat notifications need the
 `messages` Database Webhook. Scheduled Together-time reminders also need `pg_cron`,
@@ -894,11 +896,12 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
 
-All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
-migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
-the rest preserve existing data.
+All migrations are idempotent and safe to rerun. Take a snapshot first: the Games
+retirement migration deletes daily-game and Tic Tac Toe match history, and
+`202610190006_remove_shared_books.sql` deletes shared books, their files and any
+Together time that was a book. The rest preserve existing data.
 
 `supabase/verify.sql` is read-only and must print **PASS**. It checks the pairing RPCs,
 RLS on every table, the anniversary-lock trigger, the `couple_events` calendar, the repeat
@@ -1174,28 +1177,8 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] A third account cannot read either partner's responses, and an app user cannot write
       prompt rows or update/delete responses directly.
 - [ ] A third account cannot read the couple's sessions, answers or comments.
-- [ ] **Read together** appears inside Together time with its upload control and the
-      "DRM-free EPUB or PDF only" note; a picked file appears on the shared shelf.
-- [ ] A second upload while a book is reading says "Leave or delete current book first."
-      and the same rule holds even if the request is forced through.
-- [ ] The reading card shows the title and a joint-place summary without comparing
-      percentages; the reader opens full-screen, resumes this phone's place, and saves
-      progress a few seconds after page turns (not on every turn).
-- [ ] Tap the middle of the page to hide and show the bars; tap the edges or swipe to
-      turn pages.
-- [ ] Selecting text opens the comment box; **Highlight & share** paints the passage in
-      this phone's colour and sends the quote (and comment) to the chat on both devices.
-- [ ] Tapping the quote card in the chat opens the reader at the passage on both devices.
-- [ ] Both devices see both people's highlights in the book, each in their own colour.
-- [ ] "Jump to {partner}" lands on the partner's saved place, and their percentage on
-      the bottom bar moves live while they read.
-- [ ] Leave pauses the book and the card offers Continue reading again; Mark as finished
-      keeps it with a Finished badge; Delete asks first, removes the file and row, and the
-      quote in the chat keeps its words with the jump disabled ("Book deleted").
-- [ ] A scanned PDF says it has no selectable text and simply cannot highlight — reading
-      and jumping still work.
-- [ ] A third account cannot read the couple's books, bookmarks or highlights, and no
-      book file is reachable without the couple's own signed URL.
+- [ ] The Together tab has no **Read together** shelf, no book upload and no full-screen
+      reader. Together time offers games only — there is no "Read a book" choice.
 - [ ] Ideas can be shared or private; the other partner and a third account cannot read a
       private idea. The author can still edit its note and sharing setting.
 - [ ] Each partner's **I want this** vote is private; the same open idea shows **It’s a
@@ -1207,7 +1190,7 @@ Use your actual accounts; there is no automatic user creation.
       A has no way to agree to its own suggestion, **Talk about it** posts the activity and
       time into the chat and opens it, and B can **Suggest another time** (flipping who
       waits) or **Agree & lock it in**. Nothing reminds either phone before both agree.
-- [ ] A scheduled Together-time push opens its exact book or game from the notification;
+- [ ] A scheduled Together-time push opens its exact game from the notification;
       tapping the reminder with the app open switches tabs without a reload.
 - [ ] Couple Settings shows **Notifications**; on Android/desktop the switch turns on after
       the browser's permission prompt, and says "On this device" afterwards.
@@ -1256,13 +1239,10 @@ this repository's own `send-push` Edge Function — no notification service, SDK
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
 tab, and an unread count on the installed app's icon. Together hosts **Next visit** (a
-countdown to the next shared date), **Together time** (shared books or games at a time one
+countdown to the next shared date), **Together time** (a game at a time one
 partner suggests and
-the other agrees to, with a due-time reminder once it is locked in,
-plus Read together), and **Someday** (private or shared ideas with quiet yes-votes and mutual
-matches). Shared books still include
-one EPUB or PDF in play per couple, a full-screen reader, saved places, "Jump to {partner}",
-two-colour highlights, and the highlight → chat → back-to-the-passage loop; synced music
+the other agrees to, with a due-time reminder once it is locked in), and **Someday** (private or shared ideas with quiet yes-votes and mutual
+matches). Read together has been removed. Synced music
 and scrapbooks are still to come. Games includes
 Rock Paper Scissors, Chess, Sudoku, asynchronous Snake and Tetris Duels, and Dash Duel
 (a Lagos runner with an async course challenge, online-only live race and local free play).
@@ -1470,81 +1450,19 @@ npm run test:browser
 # PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser
 ```
 
-## Together tab: Read together (shared books)
+## Together tab: Read together (removed)
 
-The first Together feature: one book the couple reads together, EPUB first and PDF on the
-same flow. Apply **`supabase/migrations/202610150008_shared_books.sql`** to an existing
-project before shipping books, then run **`supabase/verify-books.sql`** in addition to
-the usual `verify.sql`. New projects get books from `schema.sql`. The migration is
-additive and rerunnable; it never touches a couple's existing data. It has not been
-applied to your live project by the frontend build.
-
-### The shelf, the reader and the loop
-
-- **Upload** — a file picker on the Together tab takes a **DRM-free EPUB or PDF, up to
-  40 MB**. The shelf row is created first (so a couple that already has an active book
-  is told "Leave or delete current book first." before a single byte uploads), then the
-  file goes up. On Together time the card shows the shared title and a gentle joint-place
-  summary—never separate progress percentages. A paused or finished book stays available
-  in the reader.
-- **One active book per couple**, enforced by a unique index on `couple_id` where
-  `status = 'reading'` — a second reading row cannot exist even if the app has a bug.
-  Paused (`left`) and `finished` books stay on the shelf until deleted.
-- **The reader** is full-screen over every tab: no chrome, tap the middle to show or
-  hide the bars, tap the edges or swipe to turn pages. Each partner's place is saved on
-  a debounce of a few seconds (never on every page turn) into `reading_progress`.
-- **Jump to {partner}** reads the partner's row and lands there; their percentage on
-  the bottom bar updates live through Realtime.
-- **Highlight to chat** — select text, tap highlight, and the small box asks for an
-  optional comment. That creates the `highlights` row AND sends a chat message carrying
-  the quote and comment (`messages.highlight_id`). With no comment the message carries
-  the quote itself.
-- **Chat to book** — the message card quotes the passage ("from {title}"); tapping it
-  opens the reader and jumps to the highlight's location. When the book has been
-  deleted the card keeps the quote and says **"Book deleted — the quote stays"** with
-  the jump disabled.
-- **Both partners see each other's highlights** in the book, in two fixed colours — one
-  per person (the smaller account id is rose, the other sage), so a passage always
-  reads the same on both phones.
-- **Leave / Finish / Delete** — Leave pauses (`left`) and the card offers Continue
-  reading again; Finish keeps the book with a Finished badge (Keep / Delete / Upload
-  new); Delete removes the file and the row. Deleting a book orphans its highlights on
-  purpose: `book_id` goes NULL, so the quoted words survive in the chat and only the
-  way back into the book goes away.
-
-### Storage and privacy
-
-Files live in the private **`shared-books`** bucket at
-`books/{couple_id}/{book_id}.{epub|pdf}` — the folder name IS the couple id, which is
-exactly what the storage policies check. Only the two partners can upload, read (via
-one-hour signed URLs) or delete their own book's file; the bucket is never public and
-nothing creates a shareable link. The bucket enforces a **40 MB** file-size cap, and
-the phone caches the bytes after the first open (Cache API where available), so a
-second open costs nothing on weak data.
-
-### Know these before shipping
-
-- **DRM-protected EPUBs (Kindle, most store-bought books) will not open.** The UI says
-  "DRM-free EPUB or PDF only" wherever a file is picked; support cannot fix a locked
-  file and the app never attempts to.
-- **PDF highlighting is the weaker half.** It stores the page plus the selection's
-  rectangles (fine at any zoom, but not a text anchor like an EPUB CFI), and a
-  **scanned PDF has no selectable text** — the reader says so and simply does not offer
-  highlighting there. Reading together and jumping still work.
-- **Both partners download the whole file** before anything renders. Large PDFs are
-  slow on weak data on the first open (the cache makes every later open instant).
-- **Copyright**: users upload their own copy. A book is never readable outside the
-  couple and never shareable by link. Do not add public sharing to this bucket.
-- **Mobile browsers**: `epub.js` and `react-pdf` are the two engines (they load on
-  demand, so the main bundle stays small). Both are widely used on mobile web, but
-  verify text selection, page turns and the comment box on real iOS Safari and Android
-  Chrome before release — selection behaviour is where mobile browsers differ.
-
-Before release, use two real paired accounts to upload one EPUB and one PDF, read on
-both devices at once, jump to each other, highlight with and without comments, jump
-from a chat quote back into the passage, then Leave / Finish / Delete (checking the
-chat quote after Delete). Upload a scanned PDF and confirm the no-selectable-text
-note. Finally, check a third account cannot reach any of it in its network responses.
+Read together — the shared EPUB/PDF shelf, the full-screen reader, saved places,
+highlights and the chat-to-book jump — has been removed from the Together tab.
+Apply **`supabase/migrations/202610190006_remove_shared_books.sql`** on an existing
+project. It deletes shelf rows, reading progress, highlights, and any Together time
+whose activity was a book. Hosted Supabase will not let SQL delete the private
+`shared-books` bucket; remove that bucket in Storage after the migration if a file
+is still there.
+A chat message that quoted a passage keeps the words already stored on that message;
+only the link back into a book goes away. Together time can only schedule a game.
+New projects get the same end state from `schema.sql`. Do not run `verify-books.sql`;
+that check belonged to the retired feature.
 
 ## Together tab: Our next visit & the someday list
 
@@ -1584,7 +1502,7 @@ get the same tables and functions from `schema.sql`.
 
 ### Together time
 
-- Suggest a time for **Read together**, **Word Wheel** or another game. Nobody can fix a
+- Suggest a time for **Word Wheel** or another game. Nobody can fix a
   time on the other person: a Together time starts as one partner's suggestion and only
   locks in when the other partner agrees to that exact time. While it waits, either
   partner can tap **Talk about it** (the suggestion's details land in the chat, ready to
@@ -1594,9 +1512,7 @@ get the same tables and functions from `schema.sql`.
   database's guard trigger holds the line: it refuses a directly-scheduled insert, an
   agreement from the partner who suggested the time, an "agreement" that quietly moves
   the time, and any client-written agreement stamp. Once locked in, the scheduled push
-  reminder opens the exact activity from a single tap. Read together now lives inside
-  Together time. The card summarizes joint progress in words without putting two
-  percentages side by side.
+  reminder opens that game from a single tap.
 - Scheduled notifications require the deployed `send-push` Edge Function, enabled
   `pg_cron` and `pg_net`, and two Supabase Vault secrets named `nooki_send_push_url` and
   `nooki_push_webhook_secret`. The first is the HTTPS function URL; the second must match

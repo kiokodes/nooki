@@ -102,7 +102,7 @@ export async function installTestBackend(client) {
     if (![
       'profiles', 'couples', 'couple_events', 'messages',
       'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
-      'shared_books', 'reading_progress', 'highlights', 'push_subscriptions', 'miss_you_taps',
+      'push_subscriptions', 'miss_you_taps',
       'daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses',
       'couple_photo', 'everyday_status', 'visits', 'someday_items',
       'visit_wishes', 'visit_checklist_items', 'someday_item_votes',

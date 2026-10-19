@@ -55,7 +55,7 @@ export function vapidPublicKey(): string {
 
 /**
  * Null when the app may try to subscribe. A missing or malformed key only switches the
- * feature off — the rest of Nooki (chat, Discuss, books, games) is unaffected, and the
+ * feature off — the rest of Nooki (chat, Discuss, games) is unaffected, and the
  * settings card says so rather than showing a switch that cannot work.
  */
 export function pushConfigurationError(): string | null {
