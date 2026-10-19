@@ -383,7 +383,8 @@ test('global header: live counter, presence ticker and partner clock', async () 
     // Presence survives browsing other tabs: it is owned by the app, not the Home tab.
     const togetherTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Together'));
     await act(async () => { togetherTab.click(); });
-    assert(body().includes('Read together'), 'the Together tab now opens the shared books shelf');
+    assert(body().includes('Together time'), 'the Together tab opens visits, together time and someday');
+    assert(!body().includes('Read together'), 'the shared books shelf is gone from the Together tab');
     assert(dot(), 'the header ticker stays visible on every tab');
     assert.equal(removedChannels, 0, 'the presence channel is not torn down on tab switches');
 

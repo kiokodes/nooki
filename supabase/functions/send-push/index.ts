@@ -59,7 +59,6 @@ interface MessageRecord {
   type?: string;
   session_id?: string | null;
   reply_to_id?: string | null;
-  highlight_id?: string | null;
   created_at?: string;
 }
 
@@ -74,7 +73,7 @@ interface WebhookPayload {
 interface TogetherTimeReminder {
   id: string;
   couple_id: string;
-  activity_type: 'book' | 'game';
+  activity_type: string;
   activity_id: string;
   activity_name: string;
   scheduled_at: string;

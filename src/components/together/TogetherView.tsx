@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   Bell,
-  BookOpen,
   CalendarDays,
   CalendarHeart,
   Check,
@@ -16,15 +15,11 @@ import {
   Plus,
   Sparkles,
   Trash2,
-  Upload,
   Users,
 } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
-import { MAX_BOOKS_ON_SHELF, SHELF_FULL_HELP } from '../../lib/booksService';
 import { GAMES } from '../../lib/gamesService';
-import type { BooksState } from '../../hooks/useBooks';
 import type {
-  SharedBook,
   SomedayItem,
   TogetherActivityType,
   TogetherTimeSession,
@@ -32,13 +27,11 @@ import type {
 } from '../../types/database';
 
 interface TogetherViewProps {
-  state: BooksState;
   userId: string;
   partnerName: string;
   visit?: Visit | null;
   onPlanVisit?: () => void;
   onViewVisitPlans?: () => void;
-  onOpenReader: (bookId: string) => void;
   somedayItems?: SomedayItem[];
   somedayError?: string | null;
   onAddSomedayItem?: (text: string, details?: string | null, visibility?: 'open' | 'private') => Promise<unknown>;
@@ -242,126 +235,32 @@ function VisitHero({ visit, onPlanVisit, onViewPlans }: { visit: Visit | null; o
   );
 }
 
-function readingStage(percent: number): string {
-  if (percent < 15) return 'beginning';
-  if (percent < 40) return 'first part';
-  if (percent < 65) return 'middle';
-  if (percent < 85) return 'later part';
-  return 'final stretch';
-}
-
-function jointReadingSummary(myProgress: { percent: number } | null | undefined, partnerProgress: { percent: number } | null | undefined): string {
-  const places = [myProgress?.percent, partnerProgress?.percent].filter((value): value is number => typeof value === 'number');
-  if (places.length === 0) return 'Open it whenever you both feel like reading.';
-  const sharedPlace = readingStage(places.reduce((sum, value) => sum + value, 0) / places.length);
-  if (places.length === 2) return `You’re both around the ${sharedPlace} of the story. Read at your own pace—there’s no race.`;
-  return `The story is around the ${sharedPlace} for one of you. The other can join whenever.`;
-}
-
-function BookShelf({ state, userId, onOpenReader }: { state: BooksState; userId: string; onOpenReader: (bookId: string) => void }) {
-  const fileInput = useRef<HTMLInputElement | null>(null);
-  const shelfFull = state.books.length >= MAX_BOOKS_ON_SHELF;
-  const active = state.books.find((book) => book.status === 'reading') ?? state.books.find((book) => book.status === 'left') ?? state.books[0] ?? null;
-  const myProgress = active ? state.progress.find((progress) => progress.book_id === active.id && progress.user_id === userId) : null;
-  const partnerProgress = active ? state.progress.find((progress) => progress.book_id === active.id && progress.user_id !== userId) : null;
-  const chooseFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (file) await state.upload(file as File & { name: string; size: number; type: string });
-  };
-  const upload = () => fileInput.current?.click();
-  const remove = async (book: SharedBook) => {
-    if (window.confirm(`Remove “${book.title}” from your shared shelf?`)) await state.remove(book);
-  };
-  return (
-    <SectionCard data-card="read-together" data-section="read-together" style={{ padding: 15, background: 'linear-gradient(150deg, #fff 0%, #f8fff9 100%)' }}>
-      <input ref={fileInput} data-upload-input type="file" accept=".epub,.pdf,application/pdf,application/epub+zip" onChange={(event) => { void chooseFile(event); }} style={{ display: 'none' }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div style={{ width: '34px', height: '34px', borderRadius: tokens.radii.full, display: 'grid', placeItems: 'center', background: tokens.colors.primaryGreenSoft, color: tokens.colors.primaryGreenDeep }}><BookOpen size={17} /></div>
-        <div><h3 style={{ margin: 0, color: tokens.colors.textPrimary, fontSize: '0.94rem', fontWeight: 900 }}>Read together</h3><p style={{ margin: '2px 0 0', color: tokens.colors.textMuted, fontSize: '0.68rem' }}>A shared book, at your own pace.</p></div>
-      </div>
-      {active ? (
-        <div data-book-card={active.id} style={{ marginTop: '12px', padding: '12px', borderRadius: tokens.radii.md, background: tokens.colors.bgSurfaceSubtle }}>
-          <p style={{ margin: 0, color: tokens.colors.primaryGreenDeep, fontSize: '0.64rem', letterSpacing: '0.07em', textTransform: 'uppercase', fontWeight: 900 }}>{active.status === 'finished' ? 'Finished together' : active.status === 'left' ? 'Paused together' : 'On your shared shelf'}</p>
-          <p style={{ margin: '4px 0 0', color: tokens.colors.textPrimary, fontSize: '0.91rem', fontWeight: 900 }}>{active.title}</p>
-          <p style={{ margin: '5px 0 0', color: tokens.colors.textSecondary, fontSize: '0.72rem', lineHeight: 1.4 }}>
-            {jointReadingSummary(myProgress, partnerProgress)}
-          </p>
-          <button type="button" data-action="read-together" onClick={() => onOpenReader(active.id)} style={{ ...buttonStyle, width: '100%', marginTop: '10px', minHeight: '38px', padding: '8px 12px', background: tokens.colors.primaryGreenDeep }}>
-            <BookOpen size={15} />{active.status === 'left' ? 'Continue reading together' : 'Open the book'}
-          </button>
-        </div>
-      ) : (
-        <div style={{ marginTop: '12px', padding: '12px', borderRadius: tokens.radii.md, background: tokens.colors.bgSurfaceSubtle }}>
-          <p style={{ margin: 0, color: tokens.colors.textSecondary, fontSize: '0.74rem', lineHeight: 1.45 }}>Choose a book for a quiet shared moment—no progress bars, no pressure.</p>
-        </div>
-      )}
-      {state.error && <p role="alert" style={{ margin: '8px 0 0', color: tokens.colors.primaryPinkDeep, fontSize: '0.7rem' }}>{state.error}</p>}
-      {state.books.length > 1 && (
-        <div style={{ marginTop: '9px', display: 'grid', gap: '6px' }}>
-          {state.books.filter((book) => book.id !== active?.id).map((book) => (
-            <div key={book.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
-              <span style={{ flex: 1, color: tokens.colors.textSecondary }}>{book.title}</span>
-              <button type="button" onClick={() => onOpenReader(book.id)} style={{ border: 0, background: 'none', color: tokens.colors.primaryGreenDeep, fontFamily: tokens.typography.fontFamily, fontWeight: 800, cursor: 'pointer' }}>Open</button>
-              <button type="button" onClick={() => { void remove(book); }} aria-label={`Remove ${book.title}`} style={{ border: 0, background: 'none', color: tokens.colors.textMuted, cursor: 'pointer', lineHeight: 0 }}><Trash2 size={13} /></button>
-            </div>
-          ))}
-        </div>
-      )}
-      {!shelfFull && (
-        <button type="button" data-upload-book disabled={state.busy} onClick={upload} style={{ ...secondaryButtonStyle, width: '100%', marginTop: '10px', minHeight: '38px', padding: '8px', color: tokens.colors.primaryGreenDeep, opacity: state.busy ? 0.55 : 1 }}>
-          <Upload size={14} />{state.busy ? 'Uploading…' : active ? 'Add a book' : 'Choose a shared book'}
-        </button>
-      )}
-      {shelfFull && <p style={{ margin: '8px 2px 0', color: tokens.colors.textMuted, fontSize: '0.66rem' }}>{SHELF_FULL_HELP}</p>}
-    </SectionCard>
-  );
-}
-
-function localActivityOptions(books: SharedBook[]) {
-  return {
-    books: books.filter((book) => book.status !== 'finished').map((book) => ({ id: book.id, name: book.title })),
-    games: GAMES.map((game) => ({ id: game.id, name: game.name })),
-  };
-}
+const GAME_OPTIONS = GAMES.map((game) => ({ id: game.id, name: game.name }));
 
 function TogetherTimeSection({
-  sessions = [], state, userId, partnerName, onOpenReader, timezone, saving = false, error, remindersEnabled, onPropose, onAgree, onSuggest, onTalkAbout, onUpdate, onOpen,
+  sessions = [], userId, partnerName, timezone, saving = false, error, remindersEnabled, onPropose, onAgree, onSuggest, onTalkAbout, onUpdate, onOpen,
 }: {
   sessions?: TogetherTimeSession[];
-  state: BooksState;
   userId: string;
   partnerName: string;
-  onOpenReader: (bookId: string) => void;
   timezone?: string;
   saving?: boolean;
   error?: string | null;
   remindersEnabled?: boolean;
-  onPropose?: (input: { activityType: TogetherActivityType; activityId: string; activityName: string; scheduledAt: string; timezone: string }) => Promise<void>;
+  onPropose?: (input: { activityType: 'game'; activityId: string; activityName: string; scheduledAt: string; timezone: string }) => Promise<void>;
   onAgree?: (session: TogetherTimeSession) => Promise<void>;
   onSuggest?: (session: TogetherTimeSession, scheduledAt: string, timezone: string) => Promise<void>;
   onTalkAbout?: (session: TogetherTimeSession) => Promise<void> | void;
   onUpdate?: (session: TogetherTimeSession, status: 'done' | 'cancelled') => Promise<void>;
   onOpen?: (session: TogetherTimeSession) => void;
 }) {
-  const options = useMemo(() => localActivityOptions(state.books), [state.books]);
-  const firstActivity = options.books[0] ? { activityType: 'book' as const, activityId: options.books[0].id, activityName: options.books[0].name } : { activityType: 'game' as const, activityId: 'word-wheel', activityName: 'Word Wheel' };
-  const [activityType, setActivityType] = useState<TogetherActivityType>(firstActivity.activityType);
-  const [activityId, setActivityId] = useState(firstActivity.activityId);
+  const [activityId, setActivityId] = useState<string>(GAME_OPTIONS[0]?.id ?? 'word-wheel');
   const [scheduledAt, setScheduledAt] = useState(() => defaultDateTime(timezone));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // The one card whose "Suggest another time" picker is open, and its draft value.
   const [suggestingFor, setSuggestingFor] = useState<string | null>(null);
   const [suggestedAt, setSuggestedAt] = useState('');
-  useEffect(() => {
-    const newOptions = localActivityOptions(state.books);
-    if (activityType === 'book' && !newOptions.books.some((book) => book.id === activityId)) {
-      if (newOptions.books[0]) { setActivityType('book'); setActivityId(newOptions.books[0].id); }
-      else { setActivityType('game'); setActivityId('word-wheel'); }
-    }
-  }, [state.books, activityType, activityId]);
-  const currentOptions = activityType === 'book' ? options.books : options.games;
-  const selectedActivity = currentOptions.find((option) => option.id === activityId) ?? currentOptions[0] ?? null;
+  const selectedActivity = GAME_OPTIONS.find((option) => option.id === activityId) ?? GAME_OPTIONS[0] ?? null;
   const proposed = sessions.filter((session) => session.status === 'proposed');
   const scheduled = sessions.filter((session) => session.status === 'scheduled');
   const past = sessions.filter((session) => session.status === 'done' || session.status === 'cancelled');
@@ -381,7 +280,7 @@ function TogetherTimeSection({
     setErrorMessage(null);
     try {
       await onPropose({
-        activityType,
+        activityType: 'game',
         activityId: selectedActivity.id,
         activityName: selectedActivity.name,
         scheduledAt: date.toISOString(),
@@ -461,21 +360,12 @@ function TogetherTimeSection({
       <SectionHeading icon={<Clock3 size={17} />} title="Together time" subtitle="Suggest a time to do something together — it only locks in once you both agree." />
       <SectionCard data-together-time-scheduler style={{ padding: 15 }}>
         <form onSubmit={(event) => { void submit(event); }} style={{ display: 'grid', gap: '10px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: '8px' }}>
-            <label style={{ display: 'grid', gap: '5px', color: tokens.colors.textSecondary, fontSize: '0.69rem', fontWeight: 800 }}>
-              What shall we do?
-              <select aria-label="Together time activity type" value={activityType} onChange={(event) => { const value = event.target.value as TogetherActivityType; setActivityType(value); const next = value === 'book' ? options.books[0] : options.games.find((game) => game.id === activityId) || options.games[0]; if (next) setActivityId(next.id); }} style={{ ...fieldStyle, padding: '9px 8px', fontSize: '0.74rem' }}>
-                <option value="book" disabled={options.books.length === 0}>Read a book</option>
-                <option value="game">Play a game</option>
-              </select>
-            </label>
-            <label style={{ display: 'grid', gap: '5px', color: tokens.colors.textSecondary, fontSize: '0.69rem', fontWeight: 800 }}>
-              Pick one
-              <select aria-label="Choose a book or game" value={activityId} onChange={(event) => setActivityId(event.target.value)} style={{ ...fieldStyle, padding: '9px 8px', fontSize: '0.74rem' }}>
-                {currentOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-              </select>
-            </label>
-          </div>
+          <label style={{ display: 'grid', gap: '5px', color: tokens.colors.textSecondary, fontSize: '0.69rem', fontWeight: 800 }}>
+            What shall we play?
+            <select aria-label="Choose a game" value={activityId} onChange={(event) => setActivityId(event.target.value)} style={{ ...fieldStyle, padding: '9px 8px', fontSize: '0.74rem' }}>
+              {GAME_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+          </label>
           <label style={{ display: 'grid', gap: '5px', color: tokens.colors.textSecondary, fontSize: '0.69rem', fontWeight: 800 }}>
             When?
             <input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} style={fieldStyle} />
@@ -500,8 +390,8 @@ function TogetherTimeSection({
             return (
               <SectionCard key={session.id} data-together-time-session={session.id} data-together-time-status="proposed" style={{ padding: '13px 14px', border: `1.5px dashed ${tokens.colors.accentLavender}` }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '9px' }}>
-                  <div style={{ width: '38px', height: '38px', flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: tokens.radii.md, background: session.activity_type === 'book' ? tokens.colors.primaryGreenSoft : tokens.colors.accentLavenderSoft, color: session.activity_type === 'book' ? tokens.colors.primaryGreenDeep : tokens.colors.accentLavenderDeep }}>
-                    {session.activity_type === 'book' ? <BookOpen size={17} /> : <Gamepad2 size={17} />}
+                  <div style={{ width: '38px', height: '38px', flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: tokens.radii.md, background: tokens.colors.accentLavenderSoft, color: tokens.colors.accentLavenderDeep }}>
+                    <Gamepad2 size={17} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, color: tokens.colors.textPrimary, fontSize: '0.84rem', fontWeight: 900, overflowWrap: 'anywhere' }}>{session.activity_name}</p>
@@ -531,8 +421,8 @@ function TogetherTimeSection({
             return (
               <SectionCard key={session.id} data-together-time-session={session.id} data-together-time-status="scheduled" data-highlighted={undefined} style={{ padding: '13px 14px', border: due ? `1.5px solid ${tokens.colors.primaryPink}` : `1px solid ${tokens.colors.borderSubtle}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                  <div style={{ width: '38px', height: '38px', flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: tokens.radii.md, background: session.activity_type === 'book' ? tokens.colors.primaryGreenSoft : tokens.colors.accentLavenderSoft, color: session.activity_type === 'book' ? tokens.colors.primaryGreenDeep : tokens.colors.accentLavenderDeep }}>
-                    {session.activity_type === 'book' ? <BookOpen size={17} /> : <Gamepad2 size={17} />}
+                  <div style={{ width: '38px', height: '38px', flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: tokens.radii.md, background: tokens.colors.accentLavenderSoft, color: tokens.colors.accentLavenderDeep }}>
+                    <Gamepad2 size={17} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, color: tokens.colors.textPrimary, fontSize: '0.84rem', fontWeight: 900, overflowWrap: 'anywhere' }}>{session.activity_name}</p>
@@ -543,9 +433,13 @@ function TogetherTimeSection({
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '7px', marginTop: '10px' }}>
-                  <button type="button" data-open-scheduled-activity={session.id} onClick={() => onOpen?.(session)} style={{ ...buttonStyle, flex: 1, minHeight: '37px', padding: '8px 10px', fontSize: '0.74rem', background: session.activity_type === 'book' ? tokens.colors.primaryGreenDeep : tokens.colors.accentLavenderDeep }}>
-                    Open {session.activity_type === 'book' ? 'the book' : 'game'} <ArrowUpRight size={14} />
-                  </button>
+                  {session.activity_type === 'book' ? (
+                    <p style={{ flex: 1, margin: 0, color: tokens.colors.textMuted, fontSize: '0.72rem', lineHeight: 1.4 }}>Reading together is no longer available.</p>
+                  ) : (
+                    <button type="button" data-open-scheduled-activity={session.id} onClick={() => onOpen?.(session)} style={{ ...buttonStyle, flex: 1, minHeight: '37px', padding: '8px 10px', fontSize: '0.74rem', background: tokens.colors.accentLavenderDeep }}>
+                      Open game <ArrowUpRight size={14} />
+                    </button>
+                  )}
                   <button type="button" aria-label={`Cancel ${session.activity_name}`} onClick={() => { void updateSession(session, 'cancelled'); }} style={{ ...secondaryButtonStyle, minHeight: '37px', padding: '7px 10px', color: tokens.colors.textMuted }}><Trash2 size={14} /></button>
                   {due && <button type="button" aria-label={`Mark ${session.activity_name} complete`} onClick={() => { void updateSession(session, 'done'); }} style={{ ...secondaryButtonStyle, minHeight: '37px', padding: '7px 10px', color: tokens.colors.primaryGreenDeep }}><Check size={14} /></button>}
                 </div>
@@ -562,7 +456,6 @@ function TogetherTimeSection({
           <ul style={{ paddingLeft: '18px', fontSize: '0.72rem', lineHeight: 1.8 }}>{past.map((session) => <li key={session.id}>{session.activity_name} · {session.status === 'done' ? 'done' : 'cancelled'}</li>)}</ul>
         </details>
       )}
-      <BookShelf state={state} userId={userId} onOpenReader={onOpenReader} />
     </section>
   );
 }
@@ -673,13 +566,11 @@ function SomedaySection({ items = [], userId, saving = false, onAdd, onUpdate, o
 
 /** The Together tab: the next visit countdown, agreed shared activities, and matched ideas. */
 export const TogetherView: React.FC<TogetherViewProps> = ({
-  state,
   userId,
   partnerName,
   visit = null,
   onPlanVisit = () => {},
   onViewVisitPlans = onPlanVisit,
-  onOpenReader,
   somedayItems = [],
   somedayError = null,
   somedaySaving = false,
@@ -710,10 +601,9 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
     }
     if (!requestedSession || handledSession.current === requestedSession.id) return;
     handledSession.current = requestedSession.id;
-    if (requestedSession.activity_type === 'book') onOpenReader(requestedSession.activity_id);
-    else onOpenActivity?.(requestedSession);
+    if (requestedSession.activity_type !== 'book') onOpenActivity?.(requestedSession);
     onClearInitialSession?.();
-  }, [initialSessionId, requestedSession, onOpenReader, onOpenActivity, onClearInitialSession]);
+  }, [initialSessionId, requestedSession, onOpenActivity, onClearInitialSession]);
   return (
     <div data-view="together" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 14px 22px', display: 'grid', alignContent: 'start', gap: '20px', overscrollBehavior: 'contain' }}>
       <div style={{ display: 'grid', gap: '6px', margin: '2px 2px 0' }}>
@@ -728,10 +618,8 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
 
       <TogetherTimeSection
         sessions={togetherTimeSessions}
-        state={state}
         userId={userId}
         partnerName={partnerName}
-        onOpenReader={onOpenReader}
         timezone={timezone}
         saving={togetherTimeSaving}
         error={togetherTimeError}
