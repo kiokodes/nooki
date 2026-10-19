@@ -6,6 +6,7 @@ test('Word Wheel core: buildable words, blank groups, hints, tie-break and shuff
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
   try {
     const wheel = await server.ssrLoadModule('/src/lib/wordWheel.ts');
+    const practice = await server.ssrLoadModule('/src/lib/wordWheelPractice.ts');
     const {
       canBuildWord, normalizeWord, wordGroups, chooseHint, nextHintIndex,
       compareWordAttempts, formatWordClock, formatWordTime, shuffleLetters, isWordLevel,
@@ -22,6 +23,17 @@ test('Word Wheel core: buildable words, blank groups, hints, tie-break and shuff
     assert.equal(isWordLevel('spicy'), false);
     assert.equal(isWordDuration(180), true);
     assert.equal(isWordDuration(120), false);
+
+    const practicePuzzle = practice.choosePracticePuzzle([{
+      letters: 'ceiprtu', base_word: 'picture',
+      packs: { easy: { '60': ['picture', 'cut', 'it'] } },
+    }], 'easy', 60, () => 0);
+    assert.deepEqual(practicePuzzle, { letters: 'ceiprtu', grandWord: 'picture', words: ['picture', 'cut', 'it'] });
+    const practiceSession = practice.createPracticeWordSession(practicePuzzle, 'easy', 60, 1_000, () => 0);
+    assert.equal(practiceSession.round.status, 'running');
+    assert.equal(practiceSession.round.mine.started, true);
+    assert.equal(practiceSession.round.mine.started_at, new Date(1_000).toISOString());
+    assert.equal(practiceSession.round.partner.started, false);
 
     const groups = wordGroups(['picture', 'cut', 'it', 'up', 'tie', 'true', 'price', 'pure'], 'picture');
     assert.deepEqual(groups.map((group) => [group.length, group.grand, group.words.length]), [

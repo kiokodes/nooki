@@ -51,23 +51,34 @@ test('design preview: every game is a chip in the rail, Chess included', async (
     await act(async () => document.querySelector('[data-preview-game="word"]').click());
     assert.equal(document.querySelectorAll('.chess-cell').length, 0, 'the chess board leaves with its chip');
 
-    // The Word Wheel tab is settings, not a running round: no wheel, no clock, until
-    // the player sets it up and both sides are ready.
+    // The Word Wheel tab offers a local practice run and an async challenge. Neither
+    // path relies on a shared ready handshake.
     const settings = document.querySelector('[data-preview-word-wheel="settings"]');
     assert.ok(settings, 'the Word Wheel tab opens on its settings');
-    assert.equal(document.querySelector('.word-wheel'), null, 'no wheel before the round is opened');
+    assert.equal(document.querySelector('.word-wheel'), null, 'no wheel before either action');
     assert.equal(document.querySelector('.word-timer'), null, 'and no clock running');
     assert.ok(settings.textContent.includes('Choose the difficulty'));
     assert.ok(settings.textContent.includes('How long is the round?'));
+    assert.ok(buttonText('Practice solo →'));
+    assert.ok(buttonText('Challenge Ana asynchronously →'));
 
     await act(async () => settings.querySelector('[data-preview-word-level="hard"]').click());
     await act(async () => settings.querySelector('[data-preview-word-duration="180"]').click());
-    await act(async () => buttonText('Set the wheel for Ana →').click());
-    assert.ok(document.querySelector('.word-wheel-card.word-lobby'), 'setting the wheel opens its lobby, not a live clock');
-    assert.equal(document.querySelector('.word-timer'), null, 'still nothing ticking in the lobby');
-    await act(async () => buttonText('I’m ready').click());
-    await waitFor(() => document.querySelectorAll('.word-letter').length === 7, 'once both are ready the wheel opens');
-    assert.ok(document.querySelector('.word-timer'), 'and only now does the round clock run');
+    await act(async () => buttonText('Practice solo →').click());
+    await waitFor(() => document.querySelector('.word-wheel'), 'practice starts locally from the settings');
+    assert.ok(document.body.textContent.includes('Solo practice'));
+    assert.ok(document.querySelector('.word-timer'), 'practice has its own countdown');
+    await act(async () => buttonText('← All games').click());
+
+    const settingsAgain = document.querySelector('[data-preview-word-wheel="settings"]');
+    await act(async () => buttonText('Challenge Ana asynchronously →').click());
+    assert.ok(document.querySelector('.word-wheel-card.word-lobby'), 'an async challenge opens a start lobby');
+    assert.equal(document.querySelector('.word-timer'), null, 'the multiplayer clock has not started yet');
+    await act(async () => buttonText('Start my 3 minutes →').click());
+    await waitFor(() => document.querySelectorAll('.word-letter').length === 7, "starting this player's attempt opens the board");
+    assert.ok(document.querySelector('.word-timer'), "this player's clock starts independently");
+    assert.ok(document.body.textContent.includes('Ana: not started'), 'the sample partner may still be unstarted');
+    assert.ok(settingsAgain, 'the settings page remains the stable entry point after leaving a run');
   } finally {
     await act(async () => root.unmount());
     await server.close();

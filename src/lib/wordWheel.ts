@@ -11,9 +11,6 @@ export type WordDuration = typeof WORD_DURATIONS[number];
 
 /** Hints are limited per round: each one reveals a single letter of an unfound word. */
 export const WORD_HINTS = 2;
-/** How far ahead the server sets the shared start, so both phones can receive it. */
-export const WORD_START_LEAD_MS = 8_000;
-
 export const WORD_LEVEL_LABELS: Record<WordLevel, string> = {
   easy: 'Easy',
   medium: 'Medium',

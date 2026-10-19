@@ -43,6 +43,8 @@ test('Connect Four is async-resumable and its turns, wins and draws are database
     assert.equal(perms.rows[0].allowed, false);
     await db.exec(await readFile(new URL('../supabase/migrations/202610180009_dash_duel.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/202610190001_word_wheel.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/202610190002_dash_duel_dodge_speed.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/202610190003_word_wheel_async_practice.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8'));
   } finally { await db?.close(); await server.close(); }
 });

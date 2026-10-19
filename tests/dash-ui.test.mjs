@@ -58,8 +58,8 @@ test('Dash Duel offers async, presence-gated live and local free modes with acce
       round: 1, score_x: 0, score_o: 0, my_pick: null, partner_locked: false, finished: false,
       winner_id: null, rounds: [],
       dash: {
-        course_version: 1,
-        course: [{ tick: 30, kind: 'barrier', lanes: [0], jumpable: true }],
+        course_version: 2,
+        course: [{ tick: 30, kind: 'barrier', lanes: [0] }],
         mode: 'together', level: 'easy', created_by: 'a', mine: null,
         partner: { status: 'waiting', ended: null },
       },
@@ -78,12 +78,15 @@ test('Dash Duel offers async, presence-gated live and local free modes with acce
     calls.length = 0;
 
     match.dash.mine = {
-      status: 'running', ended: null, distance: 0, hearts: 0, ticks: 0, lane: 1, jump_ticks: 0,
+      status: 'running', ended: null, distance: 0, hearts: 0, ticks: 0, lane: 1,
       actions: [], started_at: new Date().toISOString(), last_seen: new Date().toISOString(),
     };
     match.dash.partner = { status: 'running', ended: null, distance: 12, hearts: 1, ticks: 12, last_seen: new Date().toISOString() };
     await renderGate(true);
     assert.equal(document.querySelectorAll('.dash-lane').length, 3);
+    assert.equal(document.querySelector('[aria-label="Jump over a barrier"]'), null, 'the active run has only dodge controls');
+    assert.equal(document.querySelector('.dash-chibi.is-airborne'), null, 'the runner no longer has a jump animation');
+    assert(document.querySelector('[data-dash-speed="steady"]'), 'the speed ramp is shown from the start');
     assert(document.querySelector('.dash-progress-partner .dash-chibi-mini'), 'the shared progress marker is the partner’s distinct chibi runner');
     assert.equal(document.querySelectorAll('.dash-chibi').length, 2, 'both partners have characters on the shared track');
     await act(async () => button('Leave run').click());

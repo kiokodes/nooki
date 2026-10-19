@@ -114,6 +114,8 @@ test('chess database: authoritative moves, turns, checkmate and situational wins
     await db.exec(await readFile(new URL('../supabase/migrations/202610180006_connect_four.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/202610180009_dash_duel.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/202610190001_word_wheel.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/202610190002_dash_duel_dodge_speed.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/202610190003_word_wheel_async_practice.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8'));
     await login('a');
     assert.equal((await match(hunt)).winner_id, a.id, 'rerunning the retirement migration preserves supported matches');

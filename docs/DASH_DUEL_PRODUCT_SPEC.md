@@ -11,7 +11,7 @@ Dash Duel lives in Nooki’s paired-couple Games area and Supabase/Postgres RPC 
 
 ## 1. Product intent
 
-Dash Duel is a short, replayable three-lane runner set on the Lagos Express. Couples can set an async challenge (the first creator chooses the level), start a live race only while the partner is online (both ready up before the shared start), or take a free local run. Ranked partners use the same course, collect hearts, change lanes and jump barriers. Async progress stays available when the other person is offline; the live race shows the other runner’s confirmed distance.
+Dash Duel is a short, replayable three-lane runner set on the Lagos Express. Couples can set an async challenge (the first creator chooses the level), start a live race only while the partner is online (both ready up before the shared start), or take a free local run. Ranked partners use the same course, collect hearts and dodge barriers by changing lanes. Obstacles descend from the top of the screen toward a runner pinned at the bottom; simulation ticks and road motion speed up as the run progresses. Async progress stays available when the other person is offline; the live race shows the other runner’s confirmed distance.
 
 ### Product promises
 
@@ -23,19 +23,19 @@ Dash Duel is a short, replayable three-lane runner set on the Lagos Express. Cou
 - **Short, forgiving session:** one run should generally take about 1–2 minutes; the user can leave and resume the same live attempt.
 - **Crash has mode-appropriate meaning:** in an async challenge it ends one attempt and waits for the other partner; in a live race, the other active runner wins immediately. A forfeit in an async challenge is zero distance/hearts.
 
-## 2. Version-one gameplay decisions
+## 2. Current gameplay decisions (course version 2)
 
 | Topic | Decision |
 |---|---|
-| Camera | Portrait, forward-running track viewed from behind / slightly above; the runner stays near the lower third and track elements move toward them. |
+| Camera | Portrait, top-down three-lane track; obstacles enter at the top and descend toward a runner pinned at the bottom edge. |
 | Lanes | Exactly 3, ordered left / centre / right, indexed 0 / 1 / 2. Start in centre. |
 | Modes | Async challenge (first creator chooses Easy, Steady or Spicy), live together (only offered while the partner is present; both ready before ticks begin), and local free play (not saved or scored). |
 | Course | A fixed, 900-tick maximum course, dealt once by the server at match creation. Both partners get the same obstacle and heart schedule. |
-| Simulation | Deterministic discrete ticks at 120 ms. Distance advances one unit per survived tick. The authoritative result is based on ticks replayed, not wall-clock time. |
-| Controls | Swipe left/right changes one lane; tap or swipe up jumps. On-screen left, jump and right controls are always available for discoverability/accessibility. Keyboard arrows and Space are supported on desktop. |
+| Simulation | Deterministic discrete ticks: 120 ms for ticks 1–300, 105 ms for 301–600 and 90 ms for 601–900. Distance advances one unit per survived tick; the SQL referee enforces the same elapsed-time curve. |
+| Controls | Swipe or tap left/right to change one lane. Two visible left/right buttons and the keyboard arrows or A/D keys are available. There is no jump action or jump animation. |
 | Lane change | Immediate at the next simulation tick; a lane-change command at a tick is applied before that tick’s collision check. Out-of-bounds lane changes are ignored (not fatal). |
-| Jump | A jump command gives 3 ticks of clearance, including the command tick. A jump cannot be extended by sending repeated jump commands while already airborne. |
-| Hazards | Barrier events occupy one or two lanes. Collision occurs when the runner is in an occupied lane at the event tick and is not airborne. Every obstacle event must leave at least one valid safe lane, including a jump-safe option where applicable. |
+| Speed ramp | The tick interval shortens in two steps and the road markings accelerate to match. Obstacle cadence also tightens in later course sections. |
+| Hazards | Barrier events occupy one or two lanes. Collision occurs when the runner is in an occupied lane at the event tick. Every event leaves at least one open lane, so hazards are always dodgeable. |
 | Hearts | Heart events occupy one lane. A heart is collected only by entering that lane at that event tick. Hearts add a tie-break score only; distance remains the primary objective. |
 | End of run | Collision or reaching tick 900. The ranked run cannot be restarted; reload resumes the same attempt. Explicit “Leave run” confirms a forfeit (zero in a challenge; other active runner wins in live play). Free play can be restarted freely. |
 | Winner | Async challenge: compare verified distance, then hearts; an exact tie is a draw. Live together: the first runner to crash loses immediately to the other active runner. A confirmed challenge forfeit is distance 0 and hearts 0. |
@@ -56,7 +56,7 @@ Represent the course as a compact, ordered list of events in `game_matches.dash`
 
 ```ts
 type DashCourseEvent =
-  | { tick: number; kind: 'barrier'; lanes: number[]; jumpable: boolean }
+  | { tick: number; kind: 'barrier'; lanes: number[] }
   | { tick: number; kind: 'heart'; lane: number };
 ```
 
@@ -66,7 +66,7 @@ Requirements:
 - Events are sorted by tick; at most one event per tick in v1.
 - Course generation is server-side and validates that barriers are not unavoidable. A phone must not be able to replace the course.
 - Course cadence should average 1 event every 8–12 ticks, with a short 30-tick safe opening and increasing density in later thirds. Every 10th event on average may be a heart event. Hearts do not replace all hazards; ensure there are frequent route decisions.
-- Include a course version number (`course_version: 1`) so replay rules can change later without silently changing old matches.
+- New courses use `course_version: 2`; version-one open runs remain replayable during upgrade, but new controls and courses do not support jumping.
 - Both clients receive the whole course. The route is not secret; fairness comes from server validation and identical course data.
 
 ### 3.2 Input log
@@ -74,7 +74,7 @@ Requirements:
 The client sends only actions, never score or position claims:
 
 ```ts
-type DashAction = [tick: number, action: 'left' | 'right' | 'jump'];
+type DashAction = [tick: number, action: 'left' | 'right'];
 ```
 
 Rules:
@@ -83,23 +83,22 @@ Rules:
 - Multiple different actions on the same tick are refused. A retry with an already-stored identical action is idempotently ignored, matching the retry-safe Tetris/Snake report behaviour.
 - A run report contains the new input delta, current reached tick, and final flag. Server merges the delta, replays the full log from tick 0 through the reported tick, updates server-derived progress and last-seen time, and ends the run on collision/cap/forfeit.
 - Cap cumulative input payload size (900 actions maximum for a 900-tick route) and reject invalid action strings, non-increasing input, out-of-range ticks, impossible run status transitions and stale match IDs.
-- Never trust `distance`, `hearts`, `lane`, `jumping`, `crashed`, `status`, `score` or `winner_id` sent by the client.
+- Never trust `distance`, `hearts`, `lane`, `crashed`, `status`, `score` or `winner_id` sent by the client.
 
 ### 3.3 Authoritative replay
 
 Create a pure TypeScript simulation in `src/lib/dash.ts`; mirror it in private SQL functions in the migration. Both must implement the same order exactly:
 
-1. Initialize lane=1, hearts=0, jump_ticks=0, alive=true, distance=0.
+1. Initialize lane=1, hearts=0, alive=true and distance=0.
 2. For each simulation tick from 1 through requested ticks (input tick is simulation tick minus one):
-   - Apply the action logged for that tick (left/right one lane, or set jump_ticks=3 when currently grounded).
+   - Apply the action logged for that tick (left/right one lane).
    - Ignore a lane change beyond 0..2.
-   - If a jump is active, this tick is airborne; decrement jump_ticks after resolving the event.
-   - Resolve this tick’s course event. For a heart in the current lane, increment hearts. For a barrier, collision if current lane is in `lanes` and the tick is not airborne.
+   - Resolve this tick’s course event. For a heart in the current lane, increment hearts. For a barrier, collide if the current lane is in `lanes`.
    - If alive, increment distance by one. If collision happens, stop immediately; collision tick is not added to distance.
 3. Stop at cap 900.
 4. Store server-derived `distance`, `hearts`, `status`, `ended` (`barrier`, `cap`, `forfeit`), and `ticks`.
 
-Be explicit in unit tests about whether a jump lasts exactly three collision checks and that an obstacle at tick N is handled after the N-tick input. Shared fixtures should exercise both TS and SQL replay so drift is caught.
+Test that jump actions are rejected for new courses and that an obstacle at tick N is handled after the N-tick lane input. Shared fixtures should exercise both TS and SQL replay so drift is caught.
 
 ## 4. Match lifecycle and async behaviour
 
@@ -134,7 +133,7 @@ interface DashRunSide {
   ended?: 'barrier' | 'cap' | 'forfeit' | null;
 }
 interface DashMatchState {
-  course_version: 1;
+  course_version: 2;
   course: DashCourseEvent[];
   mine: DashRun | null;
   partner: DashRunSide;
@@ -151,7 +150,7 @@ interface DashMatchState {
 
 ## 5. Database/API implementation contract
 
-Use the next sequential migration after the Together list enhancements: **`supabase/migrations/202610180009_dash_duel.sql`** (007 adds visits and the list; 008 adds list details/order and visit links; 006 is Connect Four).
+The original Dash Duel RPC and match schema live in **`supabase/migrations/202610180009_dash_duel.sql`**. The current dodge-only and speed-ramp rules are applied afterward by **`supabase/migrations/202610190002_dash_duel_dodge_speed.sql`**.
 
 ### Schema
 
@@ -180,7 +179,7 @@ Follow existing patterns rather than introducing a separate backend abstraction:
 - Add RPC wrappers and safe parsing/mapping for course/run data.
 - Extend `useGames` with `startDash`, `startDashRun`, `beatDash`, `finishDash`, `forfeitDash`, and `duelLive` as needed. Ensure heartbeat methods do not block column/button input.
 - Implement `src/lib/dash.ts` as deterministic, typed core with pure functions and replay. Keep React and network imports out of the core.
-- Build `DashDuel.tsx` and styles with semantic buttons, keyboard controls, touch swipes, reduced-motion handling, reconnect status, exit confirmation and partner-progress display.
+- Build `DashDuel.tsx` and styles with semantic left/right buttons, keyboard controls, horizontal touch swipes, reduced-motion handling, reconnect status, exit confirmation and partner-progress display. Do not add jump controls or jump animations.
 - Wire it in `GamesView.tsx`; include Dash start/retry copy, match view, ongoing filtering, badge, final-result/history row and rematch path. Do not add Dash to the library until its RPCs are wired; no disabled-looking fake card.
 - No game asset must be downloaded at runtime. If a visual runner asset is not ready, use an authored CSS/SVG chibi silhouette and stable lane/obstacle icons; keep semantics available to assistive technology.
 
@@ -203,7 +202,7 @@ Follow existing patterns rather than introducing a separate backend abstraction:
 
 ### Active run board
 
-- Track area with exactly three clearly separated lanes and approaching items. Character sits in lower region.
+- Track area with exactly three clearly separated lanes; obstacles descend from the top toward the character pinned at the bottom.
 - HUD: current distance (units can be shown as metres if product uses one unit = one metre), hearts, partner marker/distance, and short connection status.
 - Controls remain reachable on small phones; do not make canvas itself the only control. Touch controls must prevent accidental page scroll during play but must not disable scroll outside the active board.
 - Every heart and barrier has an icon and accessible label; color is never the only cue. Respect `prefers-reduced-motion` by using simpler transitions/no shake.
@@ -233,8 +232,9 @@ Dash Duel is ready for a release candidate only when all are true:
 
 - [ ] Library card starts/resumes the same Dash match for both accounts in a couple and never for an unrelated account.
 - [ ] Each match has one immutable shared course and each partner has at most one run.
-- [ ] Three-lane controls work by swipe, visible buttons, and keyboard; lane bounds are safe.
-- [ ] A barrier collision ends the run; a valid jump/lane change avoids it; hearts are counted only by the server.
+- [ ] Obstacles visibly travel from the top toward the bottom-pinned character; three-lane dodging works by horizontal swipe, visible buttons and keyboard, with safe lane bounds.
+- [ ] Jump controls and jump animation are absent; a lane change avoids a barrier and hearts are counted only by the server.
+- [ ] Tick timing, obstacle motion and the referee's real-time budget all accelerate in the same two later-run phases.
 - [ ] For the same course and action log, TypeScript and SQL replay produce identical distance/hearts/end reason.
 - [ ] The client cannot spoof score/distance/hearts/winner by altering RPC arguments.
 - [ ] Partner distance updates while a run is active, remains available async, and the UI indicates staleness.
@@ -248,7 +248,7 @@ Dash Duel is ready for a release candidate only when all are true:
 
 ## 9. Suggested implementation order
 
-1. **Core first:** define course/action types, simulation and TS unit fixtures (lane bounds, jump windows, collisions, hearts, cap).
+1. **Core first:** define course/action types, simulation and TS unit fixtures (lane bounds, collision direction, speed budget, hearts and cap).
 2. **SQL referee:** add migration, replay/settlement/RPCs and integration tests; prove SQL parity against shared fixtures before building the animated board.
 3. **Service/hook:** map types, wrappers, migration-aware errors, retry-safe progress reporting and pending/duel-live logic.
 4. **Game screen:** waiting gate, runner board/controls, partner target, pause/reconnect/crash/result states.

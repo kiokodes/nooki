@@ -15,6 +15,13 @@ test('Dash Duel database referee: shared routes, async settlement, live crash/ca
     const auth = await server.ssrLoadModule('/src/lib/authService.ts');
     const games = await server.ssrLoadModule('/src/lib/gamesService.ts');
     const dashCore = await server.ssrLoadModule('/src/lib/dash.ts');
+    const ramp = await db.query(`SELECT public.dash_tick_duration(1) AS opening,
+      public.dash_tick_duration(301) AS middle, public.dash_tick_duration(601) AS fast,
+      public.dash_elapsed_ms(300) AS first_ramp, public.dash_elapsed_ms(600) AS second_ramp,
+      public.dash_elapsed_ms(900) AS finish`);
+    assert.deepEqual(ramp.rows[0], { opening: 120, middle: 105, fast: 90, first_ramp: 36000, second_ramp: 67500, finish: 94500 });
+    const budget = await db.query(`SELECT public.dash_budget(now() - interval '36 seconds') AS ticks`);
+    assert.equal(budget.rows[0].ticks, 306, 'the server budget follows the accelerated clock plus six ticks of slack');
     const a = (await auth.signUpWithEmail('dash-a@test.com', 'password')).user;
     await auth.saveOnboardingProfile(a.id, { name: 'A', location: null, timezone: 'Africa/Lagos' });
     const { couple } = await auth.createCouple(a.id, '2020-01-01');
@@ -32,12 +39,12 @@ test('Dash Duel database referee: shared routes, async settlement, live crash/ca
 
     const course = [
       { tick: 1, kind: 'heart', lane: 0 },
-      { tick: 3, kind: 'barrier', lanes: [1], jumpable: true },
-      { tick: 4, kind: 'barrier', lanes: [1], jumpable: true },
-      { tick: 5, kind: 'barrier', lanes: [1], jumpable: true },
-      { tick: 6, kind: 'barrier', lanes: [0], jumpable: false },
+      { tick: 3, kind: 'barrier', lanes: [1] },
+      { tick: 4, kind: 'barrier', lanes: [1] },
+      { tick: 5, kind: 'barrier', lanes: [1] },
+      { tick: 6, kind: 'barrier', lanes: [0] },
     ];
-    const actions = [{ tick: 0, action: 'left' }, { tick: 2, action: 'jump' }];
+    const actions = [{ tick: 0, action: 'left' }];
 
     // The first async challenger chooses the level and gets one immutable shared route.
     await login('a');
@@ -48,9 +55,12 @@ test('Dash Duel database referee: shared routes, async settlement, live crash/ca
     assert.equal(opened.dash.mode, 'challenge');
     assert.equal(opened.dash.level, 'steady', 'the first course creator sets the difficulty');
     assert.equal(opened.dash.created_by, a.id);
+    assert.equal(opened.dash.course_version, 2, 'new courses use the dodge-only accelerated rules');
     assert.equal(opened.dash.mine, null);
     assert.equal(opened.dash.partner.status, 'waiting');
     assert.ok(opened.dash.course.length > 60, 'the server dealt the complete shared course');
+    assert(opened.dash.course.filter((event) => event.kind === 'barrier').every((event) => !('jumpable' in event)),
+      'new server-dealt barriers require lane dodging, not jumping');
 
     const runA = await games.startDashRun(challenge);
     assert.equal(runA.status, 'running');
@@ -59,6 +69,10 @@ test('Dash Duel database referee: shared routes, async settlement, live crash/ca
       p_id: challenge, p_ticks: 2, p_actions: [[0, 'left'], [0, 'right']],
     });
     assert.ok(duplicateTick.error, 'two different moves cannot occupy one tick');
+    const jumpAction = await supabase.rpc('dash_beat', {
+      p_id: challenge, p_ticks: 1, p_actions: [[0, 'jump']],
+    });
+    assert.ok(jumpAction.error, 'the server rejects new jump inputs');
     const claimedScore = await supabase.rpc('dash_beat', {
       p_id: challenge, p_ticks: 1, p_actions: [], p_distance: 999, p_hearts: 999,
     });
@@ -115,7 +129,7 @@ test('Dash Duel database referee: shared routes, async settlement, live crash/ca
     await login('a');
     const live = await games.startDash('together', 'steady');
     assert.notEqual(live, challenge, 'challenge and live-race matches are independent');
-    await setCourse(live, [{ tick: 1, kind: 'barrier', lanes: [1], jumpable: true }]);
+    await setCourse(live, [{ tick: 1, kind: 'barrier', lanes: [1] }]);
     const readyA = await games.startDashRun(live);
     assert.equal(readyA.status, 'ready');
     assert.equal((await match(live)).dash.mine.status, 'ready');
@@ -140,7 +154,7 @@ test('Dash Duel database referee: shared routes, async settlement, live crash/ca
     // Completing the whole route is not a crash-loss in live mode. The other runner may
     // finish their attempt; verified distance then settles the result.
     const capRace = await games.startDash('together', 'steady');
-    await setCourse(capRace, [{ tick: 900, kind: 'barrier', lanes: [1], jumpable: false }]);
+    await setCourse(capRace, [{ tick: 900, kind: 'barrier', lanes: [1] }]);
     await login('a');
     await games.startDashRun(capRace);
     await login('b');

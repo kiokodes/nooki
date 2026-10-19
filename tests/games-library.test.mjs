@@ -51,8 +51,9 @@ test('games library: the rail shows one game at a time and swipes between them',
     await act(async () => wordTab.click());
     assert.equal(panels()[0].dataset.game, 'word-wheel');
     assert.equal(wordTab.getAttribute('aria-selected'), 'true');
-    assert.ok(panels()[0].textContent.includes('Swipe the letters'), 'the word wheel panel arrives whole');
-    assert.ok([...panels()[0].querySelectorAll('button')].some(item => item.textContent.includes('Set the wheel for Bob')), 'with its start button');
+    assert.ok(panels()[0].textContent.includes('Practice solo anytime'), 'the word wheel panel describes local practice');
+    assert.ok([...panels()[0].querySelectorAll('button')].some(item => item.textContent.includes('Challenge Bob asynchronously')), 'with its async challenge button');
+    assert.ok([...panels()[0].querySelectorAll('button')].some(item => item.textContent.includes('Practice solo')), 'and a separate practice button');
 
     // Arrow keys walk the rail like a tab list, and the panel follows.
     await act(async () => rail.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })));

@@ -37,6 +37,8 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     const connectFourMigration = await readFile(new URL('../supabase/migrations/202610180006_connect_four.sql', import.meta.url), 'utf8');
     const dashMigration = await readFile(new URL('../supabase/migrations/202610180009_dash_duel.sql', import.meta.url), 'utf8');
     const wordMigration = await readFile(new URL('../supabase/migrations/202610190001_word_wheel.sql', import.meta.url), 'utf8');
+    const dashUpdateMigration = await readFile(new URL('../supabase/migrations/202610190002_dash_duel_dodge_speed.sql', import.meta.url), 'utf8');
+    const wordAsyncMigration = await readFile(new URL('../supabase/migrations/202610190003_word_wheel_async_practice.sql', import.meta.url), 'utf8');
     // Mimic a pre-Snake generic entry point with the current, no-daily API shape. The
     // library can still read Games, but the button gets the named migration repair.
     await db.exec(`
@@ -92,6 +94,8 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     await db.exec(connectFourMigration);
     await db.exec(dashMigration);
     await db.exec(wordMigration);
+    await db.exec(dashUpdateMigration);
+    await db.exec(wordAsyncMigration);
     await db.exec(verify);
     await auth.signInWithEmail('alice@test.com', 'password');
     await click('Try again');
@@ -127,6 +131,8 @@ test('Duel: an old database reports the migration, polling keeps the error, and 
     await db.exec(connectFourMigration);
     await db.exec(dashMigration);
     await db.exec(wordMigration);
+    await db.exec(dashUpdateMigration);
+    await db.exec(wordAsyncMigration);
     await db.exec(verify);
   } finally {
     await act(async () => root.unmount());

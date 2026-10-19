@@ -3,7 +3,7 @@ import {
   beatDashRun, beatSnakeRun, beatTetrisRun, cancelWordRound, fetchGames, finishDashRun, finishSnakeRun,
   finishTetrisRun, forfeitDashRun, forfeitSnakeRun, forfeitTetrisRun, playChess, playConnectFour, playGame,
   readyWordRound, startChess, startConnectFour, startDash, startDashRun, startGame, startSnakeRun, startTetris,
-  startTetrisRun, startWordRound, submitWordRound,
+  startTetrisRun, startWordAttempt, startWordRound, submitWordRound,
   type DashMatchMode, type DashRun, type GameId, type GameMatch, type GamesSnapshot, type SnakeRun,
   type TetrisRun, type WordRound,
 } from '../lib/gamesService';
@@ -30,8 +30,9 @@ export function needsMyMove(match: GameMatch, userId: string | null): boolean {
   if (match.game === 'word-wheel') {
     const round = match.word;
     if (!round) return true;
-    // Still to accept the invite, or still to finish my timed attempt.
-    return !round.mine.ready || (round.status === 'running' && !round.mine.submitted);
+    // Each partner starts and finishes their own clock independently; a sweep may
+    // have already zero-filled an attempt that never started.
+    return !round.mine.submitted && (!round.mine.started || round.status === 'running');
   }
   if (match.game === 'connect-four') return match.turn_id === userId;
   return !match.my_pick;
@@ -194,12 +195,14 @@ export function useGames(coupleId: string | null, userId: string | null) {
     beatDash,
     finishDash,
     forfeitDash: (matchId: string) => run(async () => { await forfeitDashRun(matchId); }, 'dash-duel'),
-    /** Set or resume the couple's open Word Wheel lobby with these settings. */
+    /** Set or resume the couple's asynchronous Word Wheel challenge with these settings. */
     startWordRound: (level: WordLevel, seconds: WordDuration) => run(async () => {
       const id = await startWordRound(level, seconds);
       if (current.current === scope) setSelected({ scope, id });
     }, 'word-wheel'),
-    /** Lobby handshake. The second ready sets one shared start time on the server. */
+    /** Start this phone's own timed attempt; the partner can start later. */
+    startWordAttempt: (matchId: string) => run(async () => { await startWordAttempt(matchId); }, 'word-wheel'),
+    /** Legacy alias for clients that still show the old ready button. */
     readyWord: (matchId: string) => run(async () => { await readyWordRound(matchId); }, 'word-wheel'),
     /**
      * A timed-round result is submitted behind the board's back, like a duel

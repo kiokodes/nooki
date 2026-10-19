@@ -13,6 +13,13 @@ test('games service distinguishes Snake setup failures from pairing, network and
     client = supabase;
     await client.auth.initialize();
     const games = await server.ssrLoadModule('/src/lib/gamesService.ts');
+    assert.deepEqual(games.dashActionRows([
+      { tick: 0, action: 'left' },
+      { tick: 1, action: 'jump' },
+      { tick: 2, action: 'right' },
+    ]), [[0, 'left'], [2, 'right']], 'only left/right controls are sent for new runs');
+    assert.deepEqual(games.dashActions([[0, 'jump']]), [{ tick: 0, action: 'jump' }],
+      'stored legacy jump logs stay readable without becoming new controls');
     const fail = (code, message) => { client.rpc = async () => ({ data: null, error: { code, message } }); };
     fail('P0001', 'Invalid game settings.');
     await assert.rejects(games.startGame('snake', 3), /202610150010_snake_duel.sql/);
@@ -40,6 +47,8 @@ test('games service distinguishes Snake setup failures from pairing, network and
     await assert.rejects(games.startChess('queen-hunt'), /202610150011_chess.sql/);
     fail('42883', 'function public.chess_view(jsonb) does not exist');
     await assert.rejects(games.fetchGames(), /202610150011_chess.sql/);
+    fail('PGRST202', 'Could not find public.word_start in the schema cache');
+    await assert.rejects(games.startWordAttempt('word-round'), /202610190003_word_wheel_async_practice.sql/);
     fail('P0001', 'Both partners must be paired.');
     await assert.rejects(games.startGame('snake', 3), /^Error: Both partners must be paired\.$/);
     fail('', 'Failed to fetch');

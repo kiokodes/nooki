@@ -10,10 +10,14 @@ import {
 import {
   DASH_BEAT_MS,
   DASH_MAX_TICKS,
-  DASH_TICK_MS,
+  DASH_VISIBLE_TICKS,
   createDashState,
   dashEventLabel,
   dashLevelLabel,
+  dashObstacleTopPct,
+  dashRoadDurationMs,
+  dashSpeedPhase,
+  dashTickDuration,
   replayDash,
   stepDash,
   dealPracticeDashCourse,
@@ -41,6 +45,8 @@ interface ResumeRun {
 
 interface DashBoardProps {
   course: DashCourseEvent[];
+  /** Only used to replay already-saved inputs from an unfinished v1 course. */
+  allowLegacyJump?: boolean;
   resume?: ResumeRun;
   partner?: DashSide;
   partnerName: string;
@@ -110,6 +116,7 @@ export function DashDuel({ match, userId, partnerName, partnerOnline, games, onE
         <DashBoard
           key={`${match.id}:${mine.started_at ?? mine.ready_at ?? 'run'}`}
           course={course}
+          allowLegacyJump={dash.course_version < 2}
           resume={{ ticks: mine.ticks, actions: dashActions(mine.actions) }}
           partner={partner}
           partnerName={partnerName}
@@ -252,6 +259,7 @@ export function DashFreePlay({ level, seed, onExit }: { level: DashLevel; seed: 
 
 function DashBoard({
   course,
+  allowLegacyJump = false,
   resume,
   partner,
   partnerName,
@@ -265,7 +273,9 @@ function DashBoard({
   onExit,
   onReplay,
 }: DashBoardProps) {
-  const [state, setState] = useState<DashState>(() => resume ? replayDash(course, resume.ticks, resume.actions) : createDashState());
+  const [state, setState] = useState<DashState>(() => resume
+    ? replayDash(course, resume.ticks, resume.actions, allowLegacyJump)
+    : createDashState());
   const stateRef = useRef(state);
   const actionsRef = useRef<DashAction[]>(resume?.actions.slice() ?? []);
   const pendingActionsRef = useRef<DashAction[]>([]);
@@ -293,19 +303,19 @@ function DashBoard({
   useEffect(() => {
     if (!resume) return;
     const serverActions = resume.actions;
-    const merged = new Map<number, DashActionName>();
+    const merged = new Map<number, DashAction['action']>();
     for (const action of serverActions) merged.set(action.tick, action.action);
     for (const action of actionsRef.current) if (!merged.has(action.tick)) merged.set(action.tick, action.action);
     actionsRef.current = [...merged.entries()].sort(([a], [b]) => a - b).map(([tick, action]) => ({ tick, action }));
     pendingActionsRef.current = pendingActionsRef.current.filter((action) =>
       !serverActions.some((saved) => saved.tick === action.tick && saved.action === action.action));
     if (resume.ticks >= stateRef.current.ticks && resume.ticks > lastConfirmedTickRef.current) {
-      const canonical = replayDash(course, resume.ticks, actionsRef.current);
+      const canonical = replayDash(course, resume.ticks, actionsRef.current, allowLegacyJump);
       stateRef.current = canonical;
       setState(canonical);
     }
     lastConfirmedTickRef.current = Math.max(lastConfirmedTickRef.current, resume.ticks);
-  }, [course, resume, resume?.ticks, resume?.actions]);
+  }, [course, resume, resume?.ticks, resume?.actions, allowLegacyJump]);
 
   const commit = useCallback(async () => {
     if (!ranked || inFlightRef.current) return;
@@ -332,7 +342,7 @@ function DashBoard({
   }, [ranked]);
 
   // The step clock advances only while visible. A hidden tab does not accrue fake progress;
-  // the server tick budget still prevents a client from moving faster than real time.
+  // ticks become shorter in later thirds, and the server validates the same speed curve.
   useEffect(() => {
     const visibility = () => setAway(document.visibilityState === 'hidden');
     document.addEventListener('visibilitychange', visibility);
@@ -341,11 +351,12 @@ function DashBoard({
 
   useEffect(() => {
     if (away || state.ended) return;
-    const timer = window.setInterval(() => {
+    let timer: number;
+    const tick = () => {
       if (document.visibilityState === 'hidden' || stateRef.current.ended) return;
       const action = queuedActionRef.current ?? undefined;
       queuedActionRef.current = null;
-      const next = stepDash(stateRef.current, course, action);
+      const next = stepDash(stateRef.current, course, action, allowLegacyJump);
       if (next.applied) {
         actionsRef.current = [...actionsRef.current, next.applied];
         pendingActionsRef.current = [...pendingActionsRef.current, next.applied];
@@ -355,12 +366,14 @@ function DashBoard({
       if (next.state.ended && ranked) {
         lastBeatRef.current = Date.now();
         void commit();
-      } else if (next.state.ticks === DASH_MAX_TICKS && ranked) {
-        void commit();
       }
-    }, DASH_TICK_MS);
-    return () => window.clearInterval(timer);
-  }, [away, course, ranked, state.ended, commit]);
+      if (!next.state.ended) {
+        timer = window.setTimeout(tick, dashTickDuration(next.state.ticks + 1));
+      }
+    };
+    timer = window.setTimeout(tick, dashTickDuration(stateRef.current.ticks + 1));
+    return () => window.clearTimeout(timer);
+  }, [allowLegacyJump, away, course, ranked, state.ended, commit]);
 
   // Periodic progress shares the action log without touching the Games busy lock.
   useEffect(() => {
@@ -404,8 +417,7 @@ function DashBoard({
       if (target?.matches('input, textarea, select')) return;
       const action = event.key === 'ArrowLeft' || event.key.toLowerCase() === 'a' ? 'left'
         : event.key === 'ArrowRight' || event.key.toLowerCase() === 'd' ? 'right'
-          : event.key === 'ArrowUp' || event.key === ' ' || event.key.toLowerCase() === 'w' ? 'jump'
-            : null;
+          : null;
       if (!action) return;
       event.preventDefault();
       steer(action);
@@ -422,10 +434,15 @@ function DashBoard({
     touchStartRef.current = null;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
     if (Math.abs(dx) > Math.abs(dy)) steer(dx < 0 ? 'left' : 'right');
-    else if (dy < 0) steer('jump');
   };
 
-  const upcoming = course.filter((event) => event.tick > state.ticks && event.tick <= state.ticks + 28);
+  const upcoming = course.filter((event) => event.tick > state.ticks && event.tick <= state.ticks + DASH_VISIBLE_TICKS);
+  const speedPhase = dashSpeedPhase(state.ticks);
+  const speedLabel = speedPhase === 'steady' ? 'STEADY' : speedPhase === 'quicker' ? 'PICKING UP' : 'FAST';
+  const stageStyle = {
+    '--dash-tick-duration': `${dashTickDuration(Math.max(state.ticks, 1))}ms`,
+    '--dash-road-duration': `${dashRoadDurationMs(state.ticks)}ms`,
+  } as React.CSSProperties;
   const partnerDistance = partner?.distance;
   const partnerMarker = partnerDistance === undefined ? undefined : Math.min(95, Math.max(5, partnerDistance / DASH_MAX_TICKS * 100));
   const coursePct = Math.min(100, state.distance / DASH_MAX_TICKS * 100);
@@ -451,14 +468,21 @@ function DashBoard({
       <div className="dash-progress" aria-label={`You have run ${state.distance} of ${DASH_MAX_TICKS} metres`}>
         <i className="dash-progress-you" style={{ width: `${coursePct}%` }} />
         {partnerMarker !== undefined && <span className="dash-progress-partner" style={{ left: `${partnerMarker}%` }} aria-label={`${partnerName} at ${partnerDistance} metres`}>
-          <ChibiRunner seed={partnerSeed ?? partnerName} contrastSeed={characterSeed} running={partner?.status === 'running'} airborne={false} mini />
+          <ChibiRunner seed={partnerSeed ?? partnerName} contrastSeed={characterSeed} running={partner?.status === 'running'} mini />
         </span>}
       </div>
-      <div className="dash-course-head"><span>📍 LAGOS EXPRESS</span><span>{dashLevelLabelForBoard(mode, ranked)}</span></div>
+      <div className="dash-course-head">
+        <span>📍 LAGOS EXPRESS</span>
+        <span>{dashLevelLabelForBoard(mode, ranked)}</span>
+        <span className="dash-speed" data-dash-speed={speedPhase} aria-label={`Speed ${speedLabel.toLowerCase()}; it increases as you survive`}>
+          ⚡ {speedLabel}
+        </span>
+      </div>
       <div
         className="dash-stage"
+        style={stageStyle}
         role="img"
-        aria-label={`Three lane Lagos running track. ${upcoming.map(dashEventLabel).join('; ') || 'Clear track ahead.'}`}
+        aria-label={`Three lane Lagos dodge track. ${upcoming.map(dashEventLabel).join('; ') || 'Clear track ahead.'}`}
         onPointerDown={(event) => { touchStartRef.current = { x: event.clientX, y: event.clientY }; }}
         onPointerUp={onTouchEnd}
         onPointerCancel={() => { touchStartRef.current = null; }}
@@ -471,7 +495,7 @@ function DashBoard({
         </div>
         {upcoming.map((event) => {
           const gap = event.tick - state.ticks;
-          const top = 10 + (gap / 28) * 59;
+          const top = dashObstacleTopPct(gap);
           if (event.kind === 'heart') {
             return <span className="dash-track-item dash-track-heart" key={`${event.tick}:${event.kind}`} style={{ left: `${(event.lane + 0.5) * 100 / 3}%`, top: `${top}%` }} aria-hidden="true">💗</span>;
           }
@@ -480,9 +504,8 @@ function DashBoard({
           ));
         })}
         <div className="dash-runner-position" style={{ left: `${(state.lane + 0.5) * 100 / 3}%` }}>
-          <ChibiRunner seed={characterSeed ?? 'local-runner'} running={!state.ended && !away} airborne={state.jumpTicks > 0} />
+          <ChibiRunner seed={characterSeed ?? 'local-runner'} running={!state.ended && !away} />
         </div>
-        <div className="dash-road-stripe" aria-hidden="true" />
         <span className="dash-distance-label" aria-hidden="true">{state.distance} m</span>
       </div>
       <ul className="dash-sr-only" aria-label="Upcoming course events">
@@ -500,9 +523,8 @@ function DashBoard({
           {ranked && <button type="button" className="dash-secondary" onClick={onExit}>Back to Games</button>}
         </div>
       ) : (
-        <div className="dash-controls" aria-label="Runner controls">
+        <div className="dash-controls" aria-label="Dodge controls">
           <button type="button" aria-label="Move to the left lane" onClick={() => steer('left')}>←<small>LEFT</small></button>
-          <button type="button" className="dash-jump" aria-label="Jump over a barrier" onClick={() => steer('jump')}>↑<small>JUMP</small></button>
           <button type="button" aria-label="Move to the right lane" onClick={() => steer('right')}>→<small>RIGHT</small></button>
           {ranked && <button type="button" className="dash-exit" onClick={() => setShowLeave(true)}>Leave run</button>}
         </div>
@@ -533,7 +555,7 @@ function dashLevelLabelForBoard(mode: 'challenge' | 'together' | 'free', ranked:
   return mode === 'together' ? 'LIVE RACE' : 'SHARED COURSE';
 }
 
-function ChibiRunner({ seed, contrastSeed, running, airborne, mini = false }: { seed: string; contrastSeed?: string; running: boolean; airborne: boolean; mini?: boolean }) {
+function ChibiRunner({ seed, contrastSeed, running, mini = false }: { seed: string; contrastSeed?: string; running: boolean; mini?: boolean }) {
   const outfitPalette = ['#ef7699', '#5597a6', '#e1a54c', '#8d79b9', '#60a483', '#db785e'];
   const colorIndex = (value: string) => {
     let hash = 0;
@@ -544,7 +566,7 @@ function ChibiRunner({ seed, contrastSeed, running, airborne, mini = false }: { 
   const partnerColor = contrastSeed ? colorIndex(contrastSeed) : -1;
   const outfit = outfitPalette[mini && playerColor === partnerColor ? (playerColor + 1) % outfitPalette.length : playerColor];
   return (
-    <svg className={`dash-chibi${mini ? ' dash-chibi-mini' : ''}${running ? ' is-running' : ''}${airborne ? ' is-airborne' : ''}`} viewBox="0 0 64 78" role="img" aria-label={mini ? 'Partner chibi runner' : 'Chibi runner'}>
+    <svg className={`dash-chibi${mini ? ' dash-chibi-mini' : ''}${running ? ' is-running' : ''}`} viewBox="0 0 64 78" role="img" aria-label={mini ? 'Partner chibi runner' : 'Chibi runner'}>
       <ellipse cx="32" cy="73" rx="19" ry="4" fill="#362a2e" opacity=".24" />
       <path d="M25 56 18 68l-8 3 2 4 13-2 9-13M39 56l7 11 9 2-1 4-14 1-8-12" fill="#71433b" stroke="#60372f" strokeWidth="2" strokeLinejoin="round" />
       <path d="M21 37q11-7 22 0l3 19q-14 8-29 0z" fill={outfit} stroke="#714331" strokeWidth="2" />

@@ -78,8 +78,8 @@ async function mockDash(page) {
         turn_id: 'test-user', best_of: 3, round: 1, score_x: 0, score_o: 0,
         my_pick: null, partner_locked: false, finished: false, winner_id: null, rounds: [],
         dash: {
-          course_version: 1,
-          course: [{ tick: 1, kind: 'barrier', lanes: [1], jumpable: true }],
+          course_version: 2,
+          course: [{ tick: 28, kind: 'barrier', lanes: [1] }],
           mode: args.p_mode, level: args.p_level, created_by: 'test-user', mine: null,
           partner: { status: 'waiting', ended: null },
         },
@@ -89,7 +89,7 @@ async function mockDash(page) {
     if (name === 'dash_start') {
       state.runs += 1;
       const run = {
-        status: 'running', ended: null, distance: 0, hearts: 0, ticks: 0, lane: 1, jump_ticks: 0,
+        status: 'running', ended: null, distance: 0, hearts: 0, ticks: 0, lane: 1,
         actions: [], started_at: new Date().toISOString(), last_seen: new Date().toISOString(),
       };
       state.snapshot.matches[0].dash.mine = run;
@@ -99,7 +99,13 @@ async function mockDash(page) {
       const run = state.snapshot.matches[0].dash.mine;
       const args = request.postDataJSON();
       state.finishes += Number(name === 'dash_finish');
-      Object.assign(run, { status: 'crash', ended: 'barrier', ticks: args.p_ticks, distance: 0, last_seen: new Date().toISOString() });
+      Object.assign(run, {
+        status: name === 'dash_finish' ? 'crash' : 'running',
+        ended: name === 'dash_finish' ? 'barrier' : null,
+        ticks: args.p_ticks,
+        distance: name === 'dash_finish' ? args.p_ticks - 1 : args.p_ticks,
+        last_seen: new Date().toISOString(),
+      });
       return route.fulfill({ json: run, headers });
     }
     throw new Error(`Unexpected Dash request: ${request.url()}`);
@@ -120,19 +126,29 @@ test('Dash Duel runs a complete mobile crash attempt, saves the referee result a
   await expect(page.locator('.dash-stage')).toBeVisible();
   await expect(page.locator('.dash-lane')).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Move to the left lane' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Jump over a barrier' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jump over a barrier' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Move to the right lane' })).toBeVisible();
-  await expect(page.locator('[data-dash-waiting="me"]')).toBeVisible({ timeout: 5_000 });
-  await expect(page.locator('[data-dash-waiting="me"]')).toContainText('Barrier hit');
-  expect(state.starts).toBe(1);
-  expect(state.runs).toBe(1);
-  expect(state.finishes).toBe(1);
-  expect(state.snapshot.matches[0].dash.mine.distance).toBe(0);
+  const obstacle = page.locator('.dash-track-barrier');
+  await expect(obstacle).toHaveCount(1);
+  const startingTop = await obstacle.evaluate((item) => Number.parseFloat(item.style.top));
+  expect(startingTop).toBeLessThan(15);
+  const runnerPlacement = await page.locator('.dash-runner-position').evaluate((runner) => {
+    const stage = runner.closest('.dash-stage');
+    return { bottom: Number.parseFloat(getComputedStyle(runner).bottom), height: stage.getBoundingClientRect().height };
+  });
+  expect(runnerPlacement.bottom).toBeLessThan(runnerPlacement.height * 0.06);
+  await expect.poll(async () => obstacle.evaluate((item) => Number.parseFloat(item.style.top))).toBeGreaterThan(startingTop + 10);
   const dimensions = await page.locator('.games-view').evaluate((view) => ({
     scroll: view.scrollWidth,
     client: view.clientWidth,
     board: view.querySelector('.dash-stage').getBoundingClientRect().width,
   }));
+  await expect(page.locator('[data-dash-waiting="me"]')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('[data-dash-waiting="me"]')).toContainText('Barrier hit');
+  expect(state.starts).toBe(1);
+  expect(state.runs).toBe(1);
+  expect(state.finishes).toBe(1);
+  expect(state.snapshot.matches[0].dash.mine.distance).toBeGreaterThan(0);
   expect(dimensions.scroll).toBe(dimensions.client);
   expect(dimensions.board).toBeLessThanOrEqual(360);
 });
