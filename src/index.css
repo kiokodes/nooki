@@ -399,6 +399,39 @@ html, body {
   }
 }
 
+/* Home's Today's decision card (DailyDecisionCard), the Our day card's twin: until the
+   couple agrees it glows with the same pink as the nav badge below. The pulse is only
+   for this phone's own move — "Make a decision" and "Talk it out" — while waiting for
+   the partner's decision keeps the steady glow the card paints inline, with no pulse,
+   because there is nothing for this phone to do but wait. The keyframes start from that
+   same inline glow, so dropping the animation for reduced motion never drops the glow. */
+.nooki-decision-card:focus-visible {
+  outline: 3px solid #ae785d;
+  outline-offset: 2px;
+}
+
+.nooki-decision-card--action {
+  animation: nooki-decision-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes nooki-decision-glow {
+  0%,
+  100% {
+    box-shadow: 0 4px 12px rgba(58, 45, 32, 0.08), 0 0 0 2px rgba(236, 72, 153, 0.55),
+      0 0 14px rgba(249, 168, 212, 0.55);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(58, 45, 32, 0.08), 0 0 0 3px rgba(236, 72, 153, 0.35),
+      0 0 24px rgba(249, 168, 212, 0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-decision-card--action {
+    animation: none !important;
+  }
+}
+
 /* The chat tab's unread badge: a quiet pink dot that grows into a count. */
 .nooki-nav-badge {
   position: absolute;

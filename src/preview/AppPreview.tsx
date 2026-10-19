@@ -25,7 +25,7 @@ import { DangerSettingsModal } from '../components/common/DangerSettingsModal';
 import pairAffectionate from '../assets/companions/pair-affectionate.png';
 import type { PushNotificationsState } from '../hooks/usePushNotifications';
 import type { MissYouBatch } from '../lib/missYou';
-import type { ChatEntry, Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
+import type { ChatEntry, Couple, DailyDecisionQuestion, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
 
 /**
  * Design preview for the Nooki surfaces, served by the dev server at /preview.html.
@@ -111,6 +111,24 @@ const PRESETS: Preset[] = [
 
 type PreviewTab = 'home' | 'chat' | 'games';
 type PreviewGame = 'snake' | 'chess' | 'tetris' | 'word';
+
+/**
+ * Today's decision on the Home card, one stage at a time: the control above the phone
+ * walks the card through every status line it can show, so the glow (and the moment it
+ * settles) can be looked at without two live accounts trading choices.
+ */
+const PREVIEW_DECISION_QUESTION: DailyDecisionQuestion = {
+  id: 1,
+  question: 'What should we plan together?',
+  options: ['Cook dinner', 'Watch a film', 'Take a walk'],
+};
+
+const PREVIEW_DECISION_STAGES = [
+  { label: 'Make a decision', my_choice: null, partner_responded: false, both_answered: false, agreed: false },
+  { label: 'Waiting for Ana', my_choice: 2, partner_responded: false, both_answered: false, agreed: false },
+  { label: 'Talk it out', my_choice: 2, partner_responded: true, both_answered: true, agreed: false },
+  { label: 'Decided', my_choice: 2, partner_responded: true, both_answered: true, agreed: true },
+] as const;
 
 /** The duels played out in the Games tab of this page, in the app's rail order. */
 const PREVIEW_GAMES: { id: PreviewGame; icon: string; name: string }[] = [
@@ -252,6 +270,8 @@ export const AppPreview = () => {
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
   const [partnerTyping, setPartnerTyping] = useState(false);
+  // Which stage of today's decision the Home card is showing (see PREVIEW_DECISION_STAGES).
+  const [decisionStage, setDecisionStage] = useState(0);
   // Couple Settings is the real sheet over sample state. It is the longest surface in the
   // app — sign-out, the 18+ gate, the notification card and the danger zone — so being able
   // to open it here is how the panel's scrolling gets looked at on a small screen.
@@ -511,6 +531,13 @@ export const AppPreview = () => {
         </button>
         <button
           type="button"
+          style={controlStyle(decisionStage > 0)}
+          onClick={() => setDecisionStage((value) => (value + 1) % PREVIEW_DECISION_STAGES.length)}
+        >
+          {`Decision: ${PREVIEW_DECISION_STAGES[decisionStage].label} →`}
+        </button>
+        <button
+          type="button"
           style={controlStyle(Boolean(missYouReveal))}
           onClick={() => setMissYouReveal({
             count: Math.max(1, missYouTaps),
@@ -616,6 +643,18 @@ export const AppPreview = () => {
                 eventsError={null}
                 onOpenCalendar={() => setShowCalendar(true)}
                 partnerOnline={partnerOnline}
+                dailyDecision={{
+                  partnerName: partner.name,
+                  state: {
+                    question: PREVIEW_DECISION_QUESTION,
+                    loading: false,
+                    error: null,
+                    my_choice: PREVIEW_DECISION_STAGES[decisionStage].my_choice,
+                    partner_responded: PREVIEW_DECISION_STAGES[decisionStage].partner_responded,
+                    both_answered: PREVIEW_DECISION_STAGES[decisionStage].both_answered,
+                    agreed: PREVIEW_DECISION_STAGES[decisionStage].agreed,
+                  },
+                }}
                 photo={{
                   src: photoFramed ? pairAffectionate : null,
                   uploading: false,

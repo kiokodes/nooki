@@ -710,6 +710,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onOpenCalendar={() => setShowCalendar(true)}
             partnerOnline={partnerOnline}
             onOpenDailyDecision={() => setShowDailyDecision(true)}
+            dailyDecision={{ state: dailyDecision, partnerName: partner.name }}
             photo={{
               src: couplePhoto.url,
               uploading: couplePhoto.busy,
