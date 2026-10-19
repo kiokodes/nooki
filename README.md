@@ -80,7 +80,9 @@ apply and verify the database migrations separately.
    `202610180007_together_visits_and_someday_list.sql` (the Together tab's planned visits
    and shared someday list), then
    `202610180008_someday_details_order_and_visit_link.sql` (the list's notes, its manual
-   drag order, and the "Add to our next visit" link).
+   drag order, and the "Add to our next visit" link), then
+   `202610180009_dash_duel.sql` (Dash Duel's shared course, verified runs and live-ready
+   handshake).
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -875,7 +877,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
 migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
@@ -1243,9 +1245,9 @@ back-to-the-passage loop), **Our next visit** (a countdown, the visit planner, a
 ideas pinned from the someday list) and **Our someday list** (a shared, manually ordered
 list of things to experience together, each with 1,000 characters of notes and a one-tap
 move into the next visit); synced music and scrapbooks are still to come. Games includes
-Rock Paper Scissors, Chess, Sudoku, the asynchronous Snake Duel and the
-asynchronous Tetris Duel (five minutes each, in either a sprint or a survival), and
-voice/video calling is still a "coming soon" toast. No sample conversations or questions
+Rock Paper Scissors, Chess, Sudoku, asynchronous Snake and Tetris Duels, and Dash Duel
+(a Lagos runner with an async course challenge, online-only live race and local free play).
+Voice/video calling is still a "coming soon" toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, Discuss uses the rows imported into `questions`, and Daily Decisions uses the
 owner-uploaded pool rows in `daily_decision_questions`, drawn one random unseen question per couple per day.
@@ -1273,8 +1275,10 @@ Games are always available: there is no daily Games challenge. Apply
 **`supabase/migrations/202610150007_games.sql`**, then
 **`202610150010_snake_duel.sql`**, **`202610150011_chess.sql`**,
 **`202610150012_tetris_duel.sql`**, then
-**`202610180002_remove_daily_games_and_tic_tac_toe.sql`** and
-**`202610180006_connect_four.sql`** to an existing project before running
+**`202610180002_remove_daily_games_and_tic_tac_toe.sql`**, **`202610180006_connect_four.sql`**,
+**`202610180007_together_visits_and_someday_list.sql`**,
+**`202610180008_someday_details_order_and_visit_link.sql`**, and
+**`202610180009_dash_duel.sql`** to an existing project before running
 **`supabase/verify-games.sql`**. New projects receive the same final shape from
 `schema.sql`. The retirement migration deletes historical daily-game and Tic Tac Toe rows,
 removes their date/board columns, and replaces the daily-flag Games RPC.
@@ -1290,6 +1294,9 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
   or survival duel. The database replays taps to settle the result.
 - **Connect Four:** turns are async and resume across devices. The server checks whose turn it
   is, drops each checker into the selected column, and decides wins and draws under a row lock.
+- **Dash Duel:** a three-lane Lagos runner with an async shared-course challenge (the first
+  partner chooses the difficulty), a live race shown only while the partner is online, and a
+  local unranked free run. The server replays inputs to verify distance and hearts.
 - An unfinished match resumes when either partner opens the same game; the live matches
   stand in the Games tab's swipeable **Ongoing games** card — one card's height however
   many are open. Finished duels stay available through the **Last duel** row beneath it,
@@ -1299,8 +1306,9 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
   realtime payload; the app receives only the sanitized Games RPC snapshot.
 
 Before release, test each game with two paired accounts, including a reload during an open
-match and a sealed Rock Paper Scissors pick. For Snake and Tetris, test a live run on two
-phones and confirm that leaving it forfeits the run.
+match and a sealed Rock Paper Scissors pick. For Snake, Tetris and Dash Duel, test a live
+run on two phones; verify that Play Together is hidden while the partner is offline and
+starts on a shared ready handshake.
 
 ### Troubleshooting the Duel button
 

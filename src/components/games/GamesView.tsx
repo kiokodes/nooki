@@ -10,8 +10,10 @@ import { TetrisDuel } from './TetrisDuel';
 import { Sudoku } from './Sudoku';
 import { ChessDuel } from './ChessDuel';
 import { ConnectFour } from './ConnectFour';
+import { DashDuel, DashFreePlay } from './DashDuel';
 import { LastDuelRow, OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
+import { DASH_LEVELS, dashLevelLabel, type DashLevel } from '../../lib/dash';
 import './games.css';
 
 /** A practice run in progress: its own pieces or food, dealt on this phone and never reported. */
@@ -28,29 +30,33 @@ interface WarmUp {
  * must never see: they have both played, and the card claims the game is still going.
  */
 function runDuelConcluded(match: GameMatch): boolean {
-  const duel = match.game === 'tetris' ? match.tetris : match.game === 'snake' ? match.snake : null;
+  const duel = match.game === 'tetris' ? match.tetris : match.game === 'snake' ? match.snake : match.game === 'dash-duel' ? match.dash : null;
   if (!duel) return false;
-  const mineIn = !!duel.mine && duel.mine.status !== 'running';
-  const theirsIn = duel.partner.status !== 'waiting' && duel.partner.status !== 'running';
+  const mineIn = !!duel.mine && !['running', 'ready'].includes(duel.mine.status);
+  const theirsIn = duel.partner.status !== 'waiting' && duel.partner.status !== 'running' && duel.partner.status !== 'ready';
   return mineIn && theirsIn;
 }
 
-export function GamesView({ games, userId, partnerName }: { games: GamesState; userId: string; partnerName: string }) {
+export function GamesView({ games, userId, partnerName, partnerOnline = false }: { games: GamesState; userId: string; partnerName: string; partnerOnline?: boolean }) {
   const [bestOf, setBestOf] = useState(3);
   const [mode, setMode] = useState<TetrisMode>('sprint');
   const [warmUp, setWarmUp] = useState<WarmUp | null>(null);
   const [sudokuOpen, setSudokuOpen] = useState(false);
   const [chessMode, setChessMode] = useState<ChessMode>('classic');
+  const [dashLevel, setDashLevel] = useState<DashLevel>('steady');
+  const [dashFreePlay, setDashFreePlay] = useState(false);
+  const [dashFreeSeed, setDashFreeSeed] = useState(0);
+  const startDashFreePlay = () => { setDashFreeSeed(Date.now()); setDashFreePlay(true); };
   const m = games.match;
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
-  const openMatch = (id: string | null) => { setWarmUp(null); setSudokuOpen(false); games.select(id); };
+  const openMatch = (id: string | null) => { setWarmUp(null); setSudokuOpen(false); setDashFreePlay(false); games.select(id); };
   const startTetrisWarmUp = () => setWarmUp({ game: 'tetris', foods: [], pieces: dealPracticePieces(), nonce: Date.now() });
   const startSnakeWarmUp = () => setWarmUp({ game: 'snake', foods: dealPracticeFoods(), pieces: [], nonce: Date.now() });
   // Keep failed starts beside the button that was tapped, not above an offscreen header.
   const inlineErrorGame = !m && !sudokuOpen && !warmUp ? games.errorGame : null;
   /** The most recent *settled* duel of either kind, so its result stays reachable below the library. */
-  const lastDuel = games.data?.matches?.find((match) => (match.game === 'snake' || match.game === 'tetris') && match.finished);
+  const lastDuel = games.data?.matches?.find((match) => (match.game === 'snake' || match.game === 'tetris' || match.game === 'dash-duel') && match.finished);
   /** The couple's live matches: still to be played, one swipe away in their own card. */
   const ongoing = (games.data?.matches ?? []).filter((match) => !match.finished && !runDuelConcluded(match));
   const ongoingSlides: OngoingSlide[] = ongoing.map((match) => ({
@@ -73,19 +79,23 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
     name: GAMES.find(g => g.id === lastDuel.game)?.name ?? 'Duel',
     won: lastDuel.winner_id === userId,
     drawn: lastDuel.winner_id === null,
-    mine: lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? 0,
-    // Optional chaining all the way down: a duel's own column is an empty object until the
-    // migration that manages it is applied, and a sealed score has no `score` key at all.
-    theirs: lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? 0,
+    mine: lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? lastDuel.dash?.mine?.distance ?? 0,
+    // Optional chaining all the way down: each duel's own column is absent until its
+    // migration is installed, and a missing field is never shown as a claimed score.
+    theirs: lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? lastDuel.dash?.partner?.distance ?? 0,
+    mineHearts: lastDuel.dash?.mine?.hearts ?? null,
+    theirHearts: lastDuel.dash?.partner?.hearts ?? null,
   } : null;
 
   return <section className="games-view" aria-label="Games">
-    <header><span className="games-eyebrow">A little lovers rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
+    <header><span className="games-eyebrow">A little lovers rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : dashFreePlay ? 'Dash Duel · Free run' : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
     {games.error && !inlineErrorGame && <GameError games={games} card />}
     {!games.data && !games.error && <p role="status">Loading your games…</p>}
     {m ? <>
-      <button className="game-back" onClick={() => openMatch(null)}>← All games</button>
-      {practice ?? (m.game === 'connect-four' ? (
+      {!(m.game === 'dash-duel' && m.dash?.mine?.status === 'running') && <button className="game-back" onClick={() => openMatch(null)}>← All games</button>}
+      {practice ?? (m.game === 'dash-duel' ? (
+        <DashDuel match={m} userId={userId} partnerName={partnerName} partnerOnline={partnerOnline} games={games} onExit={() => openMatch(null)} />
+      ) : m.game === 'connect-four' ? (
         <ConnectFour match={m} userId={userId} partnerName={partnerName} busy={games.busy} onMove={(column) => void games.playConnectFour(m, column)} onExit={() => openMatch(null)} />
       ) : m.game === 'chess' ? (
         <ChessDuel
@@ -127,6 +137,9 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
           {m.finished && <button disabled={games.busy} onClick={() => void games.start(m.game, m.best_of)}>Play again</button>}
         </div>
       ))}
+    </> : dashFreePlay ? <>
+      <button className="game-back" onClick={() => setDashFreePlay(false)}>← All games</button>
+      <DashFreePlay level={dashLevel} seed={dashFreeSeed} onExit={() => setDashFreePlay(false)} />
     </> : sudokuOpen ? <>
       <button className="game-back" onClick={() => setSudokuOpen(false)}>← All games</button>
       <Sudoku partnerName={partnerName} onExit={() => setSudokuOpen(false)} />
@@ -140,7 +153,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
       <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
       {lastDuelLine && <LastDuelRow
         name={lastDuelLine.name}
-        outcome={`${lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You ${lastDuelLine.mine} — ${lastDuelLine.theirs} ${partnerName} →`}
+        outcome={`${lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You ${lastDuelLine.mine}${lastDuelLine.mineHearts === null ? '' : ` 💗 ${lastDuelLine.mineHearts}`} — ${lastDuelLine.theirs}${lastDuelLine.theirHearts === null ? '' : ` 💗 ${lastDuelLine.theirHearts}`} ${partnerName} →`}
         onOpen={() => openMatch(lastDuel?.id ?? null)}
       />}
       {GAMES.map(game => (
@@ -170,8 +183,24 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
               {(['sprint','survival'] as TetrisMode[]).map(option => <button key={option} type="button" aria-pressed={mode === option} onClick={() => setMode(option)} data-tetris-mode-option={option}>{tetrisModeLabel(option)}</button>)}
             </fieldset>
           )}
+          {game.id === 'dash-duel' && (
+            <fieldset className="dash-level-picker">
+              <legend>Choose the course difficulty</legend>
+              {DASH_LEVELS.map(option => <button key={option} type="button" aria-pressed={dashLevel === option} onClick={() => setDashLevel(option)}>{dashLevelLabel(option)}</button>)}
+            </fieldset>
+          )}
           {games.error && inlineErrorGame === game.id && <GameError games={games} />}
-          <div className="game-actions">
+          {game.id === 'dash-duel' ? (
+            <div className="game-actions dash-library-actions">
+              <button type="button" disabled={games.busy || !games.data} aria-busy={games.pendingGame === game.id} onClick={() => void games.startDashDuel('challenge', dashLevel)}>
+                {games.pendingGame === game.id ? 'Setting course…' : 'Set a challenge →'}
+              </button>
+              {partnerOnline && <button type="button" className="dash-together-button" disabled={games.busy || !games.data} onClick={() => void games.startDashDuel('together', dashLevel)}>
+                Play together · online →
+              </button>}
+              <button type="button" className="snake-secondary" onClick={startDashFreePlay} data-action="dash-free-play">Free run · just for fun</button>
+            </div>
+          ) : <div className="game-actions">
             <button
               type="button"
               disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
@@ -192,7 +221,7 @@ export function GamesView({ games, userId, partnerName }: { games: GamesState; u
                 Warm-up run (not counted)
               </button>
             )}
-          </div>
+          </div>}
         </article>
       ))}
       <p className="game-hint">Games are always open for a rematch.</p>

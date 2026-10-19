@@ -4,6 +4,8 @@ export interface DuelLeaveDialogProps {
   /** What is being walked out on — "your snake run", "your Tetris run". */
   runLabel: string;
   partnerName: string;
+  /** Override for async modes where a forfeit is scored as zero instead of ending now. */
+  forfeitCopy?: string;
   busy?: boolean;
   onKeepPlaying: () => void;
   onForfeit: () => void;
@@ -17,15 +19,12 @@ export interface DuelLeaveDialogProps {
  * cannot be paused — so the question reads the same way whichever board is behind it.
  */
 export const DuelLeaveDialog: React.FC<DuelLeaveDialogProps> = ({
-  runLabel, partnerName, busy = false, onKeepPlaying, onForfeit,
+  runLabel, partnerName, forfeitCopy, busy = false, onKeepPlaying, onForfeit,
 }) => (
   <div className="snake-leave" role="dialog" aria-modal="true" aria-label={`Leave ${runLabel}`}>
     <div className="snake-leave-card">
       <h2>Leave {runLabel}?</h2>
-      <p>
-        Leaving is a forfeit: {partnerName} wins this duel straight away, and {runLabel} cannot
-        be paused or picked up again.
-      </p>
+      <p>{forfeitCopy ?? `Leaving is a forfeit: ${partnerName} wins this duel straight away, and ${runLabel} cannot be paused or picked up again.`}</p>
       <p className="game-hint">The clock keeps running while this is on screen.</p>
       <div className="snake-leave-actions">
         <button type="button" onClick={onKeepPlaying}>Keep playing</button>

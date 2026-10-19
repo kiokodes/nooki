@@ -1,26 +1,27 @@
 # Dash Duel — Product & Implementation Specification
 
-**Status:** Ready for implementation planning
+**Status:** Implemented; release validation in progress
 **Product owner:** Nooki
-**Target:** Mobile-first, two-player, async-first endless-runner duel
-**Out of scope for this document:** art production, sound/music, monetization, matchmaking outside an existing couple
+**Target:** Mobile-first Lagos runner with async challenges, presence-gated live races and local free play
+**Out of scope for this document:** art production beyond authored CSS/SVG, sound/music, monetization, matchmaking outside an existing couple
 
-This spec makes the product and technical decisions for Dash Duel so implementation can proceed without reopening design questions. The game must use Nooki’s existing paired-couple Games area and Supabase/Postgres RPC pattern. It must not ship as a fake-local multiplayer demo: both partners need to play separate runs of the same server-dealt course, with persisted progress and server-decided results.
+Dash Duel lives in Nooki’s paired-couple Games area and Supabase/Postgres RPC pattern. Ranked modes are not fake-local multiplayer: both partners play separate attempts on the same server-dealt course, with persisted progress and server-decided results. Free play is intentionally local and unranked.
 
 ---
 
 ## 1. Product intent
 
-Dash Duel is a short, replayable runner for two partners. Each partner plays whenever convenient. They run the same course on their own device, collect hearts, change among three lanes, jump barriers, and try to go farther than their partner. If both are online, progress updates quickly enough that the partner’s marker feels live. If one is offline, the other can still play; their run and result remain available when they return.
+Dash Duel is a short, replayable three-lane runner set on the Lagos Express. Couples can set an async challenge (the first creator chooses the level), start a live race only while the partner is online (both ready up before the shared start), or take a free local run. Ranked partners use the same course, collect hearts, change lanes and jump barriers. Async progress stays available when the other person is offline; the live race shows the other runner’s confirmed distance.
 
 ### Product promises
 
-- **Async by default:** no lobby countdown, simultaneous start, or requirement that both people be online.
-- **Same course:** the match has one immutable, server-dealt course shared by both runs.
+- **Three clear modes:** Set a challenge is async-first; Play together is hidden unless the partner is online and starts only after both ready; Free run is local and unranked.
+- **Async by default:** a challenge never needs both people online.
+- **Same course:** each ranked match has one immutable, server-dealt course shared by both runs.
 - **Fair result:** the database replays submitted inputs against that course and calculates distance/hearts/collision. A phone never submits a claimed score.
 - **Transparent competition:** each side can see the partner’s current distance while a run is active and the final result after both runs settle.
 - **Short, forgiving session:** one run should generally take about 1–2 minutes; the user can leave and resume the same live attempt.
-- **Crash ends a run, not an async match:** a crash immediately ends that partner’s run. The match settles once both partners’ runs are finished. The winner is the better run; this keeps async play meaningful and avoids declaring a winner while the other person has not played yet.
+- **Crash has mode-appropriate meaning:** in an async challenge it ends one attempt and waits for the other partner; in a live race, the other active runner wins immediately. A forfeit in an async challenge is zero distance/hearts.
 
 ## 2. Version-one gameplay decisions
 
@@ -28,6 +29,7 @@ Dash Duel is a short, replayable runner for two partners. Each partner plays whe
 |---|---|
 | Camera | Portrait, forward-running track viewed from behind / slightly above; the runner stays near the lower third and track elements move toward them. |
 | Lanes | Exactly 3, ordered left / centre / right, indexed 0 / 1 / 2. Start in centre. |
+| Modes | Async challenge (first creator chooses Easy, Steady or Spicy), live together (only offered while the partner is present; both ready before ticks begin), and local free play (not saved or scored). |
 | Course | A fixed, 900-tick maximum course, dealt once by the server at match creation. Both partners get the same obstacle and heart schedule. |
 | Simulation | Deterministic discrete ticks at 120 ms. Distance advances one unit per survived tick. The authoritative result is based on ticks replayed, not wall-clock time. |
 | Controls | Swipe left/right changes one lane; tap or swipe up jumps. On-screen left, jump and right controls are always available for discoverability/accessibility. Keyboard arrows and Space are supported on desktop. |
@@ -35,16 +37,16 @@ Dash Duel is a short, replayable runner for two partners. Each partner plays whe
 | Jump | A jump command gives 3 ticks of clearance, including the command tick. A jump cannot be extended by sending repeated jump commands while already airborne. |
 | Hazards | Barrier events occupy one or two lanes. Collision occurs when the runner is in an occupied lane at the event tick and is not airborne. Every obstacle event must leave at least one valid safe lane, including a jump-safe option where applicable. |
 | Hearts | Heart events occupy one lane. A heart is collected only by entering that lane at that event tick. Hearts add a tie-break score only; distance remains the primary objective. |
-| End of run | Collision or reaching tick 900. The run cannot be restarted; closing the tab/device pauses the local presentation and resume continues the same persisted attempt. Explicit “Leave run” confirms a forfeit, which counts as a zero-distance crash. |
-| Winner | Compare verified distance (ticks survived), then hearts collected. Exact distance-and-heart tie is a draw. A crash is a natural run end and does not itself award the opponent an automatic win. A confirmed forfeit is scored as distance 0 and hearts 0. |
+| End of run | Collision or reaching tick 900. The ranked run cannot be restarted; reload resumes the same attempt. Explicit “Leave run” confirms a forfeit (zero in a challenge; other active runner wins in live play). Free play can be restarted freely. |
+| Winner | Async challenge: compare verified distance, then hearts; an exact tie is a draw. Live together: the first runner to crash loses immediately to the other active runner. A confirmed challenge forfeit is distance 0 and hearts 0. |
 | Attempts | Exactly one run per partner per open match. Finished matches can be played again from the library, creating/resuming a new open match only when no open one exists. |
 | Live display | Show the partner’s last server-confirmed distance and a target flag on the course. Polling may be every 2 seconds (existing Games cadence); a running run sends a progress heartbeat every 2 seconds. Show “updated X seconds ago” if the partner has not reported recently. Do not imply sub-second realtime. |
 | Art | Use the existing Nooki visual language and a small, authored chibi runner made from CSS/SVG or existing local assets. Avoid remote runtime assets. Use distinct outfit/colour for each account’s character. Do not block mechanics on bespoke illustration. |
 | Sound / haptics | Off by default; no sound dependency in v1. Respect reduced-motion settings; haptics are optional enhancement, not required feedback. |
 
-### Why “crash = they win” is not an immediate async result
+### Why async crash and live crash differ
 
-A partner may have crashed before the other partner has opened the game. Declaring a winner at that point would make the async promise arbitrary. In v1, **crash terminates that player’s run**; when both runs are finished, the database compares the verified runs. In a live race, the UI can celebrate the still-running player’s lead, but must label the opponent’s run as finished and wait for the match result protocol. If product owner later wants “first crash instantly loses,” that is a different synchronous mode and should not be mixed into this async-first implementation.
+A challenge may be started and crashed before the other partner opens the game. Declaring a winner at that point would make async play arbitrary, so an async crash ends only that attempt and the match waits for the other run. In Play together, both runners passed the ready gate and share a start tick; the first crash awards the active partner the live race.
 
 ## 3. Run and course model
 
@@ -62,7 +64,7 @@ Requirements:
 
 - Course is generated once inside the server-side `start_dash` RPC and remains immutable for the match.
 - Events are sorted by tick; at most one event per tick in v1.
-- Course generation is seeded/server-side and validates that barriers are not unavoidable. A phone must not be able to replace the course.
+- Course generation is server-side and validates that barriers are not unavoidable. A phone must not be able to replace the course.
 - Course cadence should average 1 event every 8–12 ticks, with a short 30-tick safe opening and increasing density in later thirds. Every 10th event on average may be a heart event. Hearts do not replace all hazards; ensure there are frequent route decisions.
 - Include a course version number (`course_version: 1`) so replay rules can change later without silently changing old matches.
 - Both clients receive the whole course. The route is not secret; fairness comes from server validation and identical course data.
@@ -77,10 +79,10 @@ type DashAction = [tick: number, action: 'left' | 'right' | 'jump'];
 
 Rules:
 
-- Sort ascending by tick. One action at most per tick. Input tick must be an integer >= 0 and <= the submitted progress.
+- Sort ascending by tick. One action at most per tick. Input tick is zero-based, must be an integer >= 0, and must be less than the submitted tick count.
 - Multiple different actions on the same tick are refused. A retry with an already-stored identical action is idempotently ignored, matching the retry-safe Tetris/Snake report behaviour.
 - A run report contains the new input delta, current reached tick, and final flag. Server merges the delta, replays the full log from tick 0 through the reported tick, updates server-derived progress and last-seen time, and ends the run on collision/cap/forfeit.
-- Cap cumulative input payload size (for example 2,000 actions) and reject invalid action strings, non-increasing input, out-of-range ticks, impossible run status transitions and stale match IDs.
+- Cap cumulative input payload size (900 actions maximum for a 900-tick route) and reject invalid action strings, non-increasing input, out-of-range ticks, impossible run status transitions and stale match IDs.
 - Never trust `distance`, `hearts`, `lane`, `jumping`, `crashed`, `status`, `score` or `winner_id` sent by the client.
 
 ### 3.3 Authoritative replay
@@ -88,7 +90,7 @@ Rules:
 Create a pure TypeScript simulation in `src/lib/dash.ts`; mirror it in private SQL functions in the migration. Both must implement the same order exactly:
 
 1. Initialize lane=1, hearts=0, jump_ticks=0, alive=true, distance=0.
-2. For each tick in ascending order from 1 through requested ticks:
+2. For each simulation tick from 1 through requested ticks (input tick is simulation tick minus one):
    - Apply the action logged for that tick (left/right one lane, or set jump_ticks=3 when currently grounded).
    - Ignore a lane change beyond 0..2.
    - If a jump is active, this tick is airborne; decrement jump_ticks after resolving the event.
@@ -104,7 +106,7 @@ Be explicit in unit tests about whether a jump lasts exactly three collision che
 ### 4.1 Start / resume
 
 - Add `dash-duel` to `GameId` and the Games library, with copy: **“Three lanes, one shared track. Grab hearts, dodge barriers, and beat your partner’s distance.”**
-- A dedicated `start_dash()` RPC starts or resumes the couple’s one open Dash Duel. Lock the couple row, confirm both profiles are paired, create the match if none is open, and deal the immutable route on creation.
+- A dedicated `start_dash(mode, level)` RPC starts or resumes the couple’s open challenge or live-together Dash Duel (one open match per mode). Lock the couple row, confirm both profiles are paired, create the match if none is open, and deal the immutable route on creation.
 - Do not route Dash through generic `start_game` if that risks migration-era overload behavior; dedicated start RPC is consistent with `start_chess` / `start_tetris`.
 - First player opening the match gets a run only on tapping **Start my run**. The second partner may start at any time. Resume returns the same run, route, progress and action log for that user.
 - If a match has been open past its expiry/grace window, server sweep settles missing runs as forfeits before starting a new match. Choose a 7-day match expiry for an async game; an offline partner must not block a couple indefinitely.
@@ -149,7 +151,7 @@ interface DashMatchState {
 
 ## 5. Database/API implementation contract
 
-Use a new sequential migration after Connect Four: **`supabase/migrations/202610180006_dash_duel.sql`**.
+Use the next sequential migration after the Together list enhancements: **`supabase/migrations/202610180009_dash_duel.sql`** (007 adds visits and the list; 008 adds list details/order and visit links; 006 is Connect Four).
 
 ### Schema
 
@@ -160,14 +162,14 @@ Use a new sequential migration after Connect Four: **`supabase/migrations/202610
 
 ### RPCs
 
-- `start_dash() RETURNS uuid`: authentication/pair validation; lock couple; find or create open match; deal course exactly once.
-- `dash_start(p_id uuid) RETURNS jsonb`: authenticated match participant only; create the player’s one run and return the immutable course plus canonical run state; if already running, return that same run.
+- `start_dash(p_mode text, p_level text) RETURNS uuid`: authentication/pair validation; lock couple; find/create the open async or live match; the first creator sets the level and the immutable course.
+- `dash_start(p_id uuid) RETURNS jsonb`: authenticated match participant only; challenge mode starts that partner’s run; live mode records readiness and starts both attempts at one shared tick after both are ready.
 - `dash_beat(p_id uuid, p_ticks integer, p_actions jsonb) RETURNS jsonb`: append idempotent actions, replay, update own run progress/last_seen, settle if terminal.
 - `dash_finish(p_id uuid, p_ticks integer, p_actions jsonb) RETURNS jsonb`: same commit path, with final/cap semantics; final replay determines natural crash or cap, never client claim.
 - `dash_forfeit(p_id uuid) RETURNS jsonb`: participant’s own running/waiting attempt only; settle it as forfeited with zero distance/hearts; check idempotency.
 - Private helpers: `dash_replay`, `dash_commit`, `dash_settle`, `dash_sweep`, `dash_view`, `dash_max_ticks`, and course generation/validation. Revoke private helper EXECUTE from `PUBLIC`, `anon`, and `authenticated`; grant only public wrapper RPCs to authenticated. Keep match table inaccessible directly, consistent with the rest of Games.
 - Use row locks for the match mutation and lock consistently to avoid race conditions between simultaneous heartbeat/finish/forfeit requests. A repeated stale tick/report must not erase newer data.
-- Make migration safe to apply after `202610180006_connect_four.sql` and safe to rerun where practical. Keep fresh consolidated `supabase/schema.sql` in sync.
+- Make migration safe to apply after `202610180007_together_visits_and_someday_list.sql` and safe to rerun where practical. Keep fresh consolidated `supabase/schema.sql` in sync.
 - Extend `supabase/verify-games.sql` to check the column, game constraint, RPC signatures/privileges, and that all replay/settle internals remain server-only.
 
 ### Client integration
@@ -190,7 +192,7 @@ Follow existing patterns rather than introducing a separate backend abstraction:
 - Description: **Three lanes, one shared track. Grab hearts, dodge barriers, and beat your partner’s distance.**
 - Primary button: **Dash [partner] →** (or match existing library wording pattern).
 - Loading state names the game and does not show a generic spinner without context.
-- Start errors name `202610180006_dash_duel.sql` and `supabase/verify-games.sql` in the same way Snake/Tetris guide users to their setup migration.
+- Start errors name `202610180009_dash_duel.sql` and `supabase/verify-games.sql` in the same way Snake/Tetris guide users to their setup migration. Show the live option only while partner presence is online; the async and free options stay visible.
 
 ### Waiting/gate screen
 
@@ -221,7 +223,7 @@ Follow existing patterns rather than introducing a separate backend abstraction:
 10. Hearts do not affect primary distance ordering; hearts break distance ties only.
 11. Both score equal distance/hearts: draw, `winner_id` null.
 12. Exit confirmation dismissed: do not forfeit. Confirmed forfeit: server persists, partner can complete and win.
-13. One run reaches cap: end as `cap`, no crash penalty; wait for other attempt.
+13. A run reaches cap: end as `cap`, no crash penalty. In async and live modes, wait for the other attempt and compare verified distance/hearts; only a live crash or confirmed forfeit awards the other active runner immediately.
 14. Database migration absent: user sees setup guidance specific to Dash, not raw Postgres/PGRST error.
 15. A broken/stale games_state: keep migration errors visible and retry the actual failed start/action, following existing hook behavior.
 
@@ -237,11 +239,11 @@ Dash Duel is ready for a release candidate only when all are true:
 - [ ] The client cannot spoof score/distance/hearts/winner by altering RPC arguments.
 - [ ] Partner distance updates while a run is active, remains available async, and the UI indicates staleness.
 - [ ] A finished run cannot be restarted in the same match; other partner may still play later.
-- [ ] Match settles to the higher verified distance, hearts tie-break, or draw; no premature async victory.
+- [ ] Async challenge settles to higher verified distance, hearts tie-break or draw without premature victory; live mode waits for both ready and awards the other active runner on crash.
 - [ ] Retry/reload/overlap, forfeit, expiry, invalid move, nonparticipant, and RLS/privilege cases are covered.
 - [ ] Pending badge, ongoing carousel, last-duel history, and rematch behavior agree with state.
 - [ ] `supabase/verify-games.sql`, full test suite, TypeScript, lint (no new warnings/errors), and production build pass.
-- [ ] README deployment sequence documents migration 006 after 005 and lists the Dash setup verification.
+- [ ] README deployment sequence documents `202610180009_dash_duel.sql` after `202610180008_someday_details_order_and_visit_link.sql` and lists Dash verification.
 - [ ] At least one browser-level test plays a full run on mobile-sized viewport and one server test validates replay/settlement.
 
 ## 9. Suggested implementation order
@@ -258,5 +260,4 @@ Dash Duel is ready for a release candidate only when all are true:
 - True sub-second WebSocket/presence updates; 2-second server-confirmed progress polling is sufficient for “live when both online”.
 - Power-ups, boosts, shields, skins unlocks, monetized cosmetics, leaderboards outside the couple.
 - Different courses per mode, user-generated courses, matchmaking strangers, ghost replays, spectating and tournament brackets.
-- Multiplayer simultaneous start/countdown. Async attempt comparison is the default product contract.
-- Separate synchronous “crash immediately gives the still-running partner the win” race mode.
+- Separate ranked matchmaking outside the couple. Async challenge comparison remains the default; the live-together option is explicitly presence-gated and ready-gated.
