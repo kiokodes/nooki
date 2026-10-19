@@ -27,6 +27,9 @@ test('games service distinguishes Snake setup failures from pairing, network and
       'the raw Postgres constraint error must not reach the user');
     // Tetris' start hits the same downgraded check the same way.
     await assert.rejects(games.startTetris('sprint'), /Tetris Duel needs a database update\..*202610150014_restore_chess_tetris_game_check\.sql/);
+    await assert.rejects(games.startDash('challenge', 'steady'), /202610180008_dash_duel\.sql/);
+    fail('PGRST202', 'Could not find public.dash_start in the schema cache');
+    await assert.rejects(games.startDashRun('dash-match'), /202610180008_dash_duel\.sql/);
     fail('PGRST202', 'Could not find public.snake_start in the schema cache');
     await assert.rejects(games.startSnakeRun('match'), /202610150010_snake_duel.sql/);
     fail('42883', 'function public.snake_sweep(uuid) does not exist');

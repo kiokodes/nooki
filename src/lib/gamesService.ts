@@ -4,6 +4,8 @@ import type { ChessColor, ChessEndReason, ChessPieceType, ChessState } from './c
 import { isSnakeDirection } from './snake';
 import type { TetrisInput, TetrisMode } from './tetris';
 import { isTetrisAction } from './tetris';
+import type { DashAction, DashCourseEvent, DashLevel } from './dash';
+import { isDashAction, isDashLevel } from './dash';
 
 export const GAMES = [
   { id: 'rock-paper-scissors', name: 'Rock Paper Scissors', icon: '✊ ✋ ✌️', description: 'Pick in secret. Reveal together.' },
@@ -32,6 +34,12 @@ export const GAMES = [
     description: 'Five minutes each, same pieces. Highest score, or last one stacking.',
   },
   { id: 'connect-four', name: 'Connect Four', icon: '🔴', description: 'Take turns whenever you have a moment. First to connect four wins.' },
+  {
+    id: 'dash-duel',
+    name: 'Dash Duel',
+    icon: '🏃',
+    description: 'Three lanes, one Lagos track. Grab hearts, dodge barriers, and beat your partner’s distance.',
+  },
 ] as const;
 export type GameId = typeof GAMES[number]['id'];
 
@@ -101,6 +109,45 @@ export interface TetrisDuel {
   partner: TetrisSide;
 }
 
+export type DashMatchMode = 'challenge' | 'together';
+export type DashRunStatus = 'ready' | 'running' | 'done' | 'crash' | 'forfeit';
+
+/** The other runner's server-confirmed, public race progress. */
+export interface DashSide {
+  status: 'waiting' | DashRunStatus;
+  ended: string | null;
+  distance?: number;
+  hearts?: number;
+  ticks?: number;
+  last_seen?: string | null;
+}
+
+/** One attempt, reconstructed and scored by the database referee. */
+export interface DashRun extends DashSide {
+  status: DashRunStatus;
+  distance: number;
+  hearts: number;
+  ticks: number;
+  lane: number;
+  jump_ticks: number;
+  actions: [number, string][];
+  started_at?: string;
+  ready_at?: string;
+  last_seen?: string;
+  finished_at?: string;
+}
+
+/** Shared immutable course and this phone's attempt, plus the partner's live distance. */
+export interface DashDuel {
+  course_version: number;
+  course: DashCourseEvent[];
+  mode: DashMatchMode;
+  level: DashLevel;
+  created_by: string | null;
+  mine: DashRun | null;
+  partner: DashSide;
+}
+
 /** A chess match as the database reports it: the position, and only the position. */
 export interface ChessSnapshot {
   mode: 'classic' | 'capture-race' | 'queen-hunt';
@@ -128,17 +175,21 @@ export interface GameMatch {
   chess?: ChessSnapshot | null;
   /** Connect Four's server-validated 6×7 board, row-major from the top. */
   board?: string[];
+  /** Dash Duel's shared Lagos course and individual verified runs. */
+  dash?: DashDuel | null;
 }
 export interface GamesSnapshot { wins: Record<string, number>; matches: GameMatch[] }
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
 const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
 const TETRIS_SETUP_ERROR = 'Tetris Duel needs a database update. Apply migration 202610150012_tetris_duel.sql after 202610150011_chess.sql; if Tetris is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
+const DASH_SETUP_ERROR = 'Dash Duel needs a database update. Apply supabase/migrations/202610180008_dash_duel.sql after 202610180007_together_visits_and_someday_list.sql, then run supabase/verify-games.sql before retrying.';
 
 async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args);
   if (error) {
     const snakeRequest = name.startsWith('snake_') || (name === 'start_game' && args.p_game === 'snake');
     const tetrisRequest = name.startsWith('tetris_') || name === 'start_tetris';
+    const dashRequest = name.startsWith('dash_') || name === 'start_dash' || error.message.includes('dash_');
     // Migration 007's start_game exists, but only accepts the two original games.
     // This is not a missing-RPC error: it rejects a perfectly valid Duel button click.
     const legacySnakeStart = name === 'start_game' && args.p_game === 'snake'
@@ -159,8 +210,13 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
     const legacyTetrisStart = name === 'start_tetris'
       && error.code === '23514' && error.message.includes('game_matches_game_check');
     if (legacyTetrisStart) throw new Error(TETRIS_SETUP_ERROR);
+    const legacyDashStart = name === 'start_dash'
+      && error.code === '23514' && error.message.includes('game_matches_game_check');
+    if (legacyDashStart) throw new Error(DASH_SETUP_ERROR);
     if (['PGRST202', '42P01', '42703', '42883'].includes(error.code)) {
-      throw new Error(snakeRequest || error.message.includes('snake_')
+      throw new Error(dashRequest
+        ? DASH_SETUP_ERROR
+        : snakeRequest || error.message.includes('snake_')
         ? SNAKE_SETUP_ERROR
         : tetrisRequest || error.message.includes('tetris_')
           ? TETRIS_SETUP_ERROR
@@ -177,8 +233,100 @@ export async function fetchGames(): Promise<GamesSnapshot> {
   if (!data || !Array.isArray(data.matches) || !data.wins || typeof data.wins !== 'object') {
     throw new Error('Games returned an incomplete response. Retry the connection; if it persists, run supabase/verify-games.sql.');
   }
-  return data;
+  return {
+    ...data,
+    matches: data.matches.map((match) => match.game === 'dash-duel'
+      ? { ...match, dash: dashDuelFromWire(match.dash) }
+      : match),
+  };
 }
+
+function dashCourseEvents(value: unknown): DashCourseEvent[] {
+  if (!Array.isArray(value)) return [];
+  const events: DashCourseEvent[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const event = item as Record<string, unknown>;
+    const tick = Number(event.tick);
+    if (!Number.isInteger(tick) || tick < 1 || tick > 900) continue;
+    if (event.kind === 'heart') {
+      const lane = Number(event.lane);
+      if (Number.isInteger(lane) && lane >= 0 && lane <= 2) events.push({ tick, kind: 'heart', lane: lane as 0 | 1 | 2 });
+    } else if (event.kind === 'barrier' && Array.isArray(event.lanes)) {
+      const lanes = [...new Set(event.lanes.map(Number).filter((lane) => Number.isInteger(lane) && lane >= 0 && lane <= 2))] as (0 | 1 | 2)[];
+      if (lanes.length > 0 && lanes.length <= 2) events.push({ tick, kind: 'barrier', lanes, jumpable: event.jumpable === true });
+    }
+  }
+  return events.sort((a, b) => a.tick - b.tick);
+}
+
+/** Actions already accepted by the database, as the deterministic core's move list. */
+export function dashActions(rows: [number, string][] | undefined): DashAction[] {
+  if (!Array.isArray(rows)) return [];
+  const actions: DashAction[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length !== 2) continue;
+    const tick = Number(row[0]);
+    if (Number.isInteger(tick) && tick >= 0 && isDashAction(row[1])) actions.push({ tick, action: row[1] });
+  }
+  return actions.sort((a, b) => a.tick - b.tick);
+}
+
+export const dashActionRows = (actions: DashAction[]): [number, string][] => actions.map(({ tick, action }) => [tick, action]);
+
+function dashDuelFromWire(value: unknown): DashDuel | null {
+  if (!value || typeof value !== 'object') return null;
+  const duel = value as Record<string, unknown>;
+  const normalizeSide = (raw: unknown, mine: boolean): DashRun | DashSide | null => {
+    if (raw === null || raw === undefined) return mine ? null : { status: 'waiting', ended: null };
+    if (!raw || typeof raw !== 'object') return mine ? null : { status: 'waiting', ended: null };
+    const side = raw as Record<string, unknown>;
+    const allowed = ['ready', 'running', 'done', 'crash', 'forfeit'];
+    const status = side.status === 'waiting' && !mine
+      ? 'waiting' as const
+      : allowed.includes(String(side.status)) ? side.status as DashRunStatus : 'ready' as const;
+    const distance = Math.max(0, Number.isFinite(Number(side.distance)) ? Number(side.distance) : 0);
+    const hearts = Math.max(0, Number.isFinite(Number(side.hearts)) ? Number(side.hearts) : 0);
+    const ticks = Math.max(0, Number.isFinite(Number(side.ticks)) ? Number(side.ticks) : 0);
+    const base: DashSide = {
+      status,
+      ended: typeof side.ended === 'string' ? side.ended : null,
+      distance,
+      hearts,
+      ticks,
+      last_seen: typeof side.last_seen === 'string' ? side.last_seen : null,
+    };
+    if (!mine) return base;
+    return {
+      ...base,
+      status,
+      distance,
+      hearts,
+      ticks,
+      lane: Math.max(0, Math.min(2, Number(side.lane) || 0)),
+      jump_ticks: Math.max(0, Number(side.jump_ticks) || 0),
+      actions: dashActions(side.actions as [number, string][] | undefined).map(({ tick, action }) => [tick, action]),
+      started_at: typeof side.started_at === 'string' ? side.started_at : undefined,
+      ready_at: typeof side.ready_at === 'string' ? side.ready_at : undefined,
+      last_seen: typeof side.last_seen === 'string' ? side.last_seen : undefined,
+      finished_at: typeof side.finished_at === 'string' ? side.finished_at : undefined,
+    };
+  };
+  const mine = normalizeSide(duel.mine, true) as DashRun | null;
+  const partner = normalizeSide(duel.partner, false) as DashSide;
+  const mode = duel.mode === 'together' ? 'together' : 'challenge';
+  const level = isDashLevel(duel.level) ? duel.level : 'steady';
+  return {
+    course_version: Number.isInteger(Number(duel.course_version)) ? Number(duel.course_version) : 1,
+    course: dashCourseEvents(duel.course),
+    mode,
+    level,
+    created_by: typeof duel.created_by === 'string' ? duel.created_by : null,
+    mine,
+    partner,
+  };
+}
+
 /** Start or resume an open Rock Paper Scissors match or Snake Duel. */
 export const startGame = (game: GameId, bestOf = 3) => rpc<string>('start_game', { p_game: game, p_best_of: bestOf });
 export const playGame = (match: GameMatch, move: string) => rpc<void>('play_game', { p_id: match.id, p_round: match.round, p_move: move });
@@ -311,3 +459,19 @@ export const beatTetrisRun = (id: string, ticks: number, inputs: TetrisInput[]) 
 export const finishTetrisRun = (id: string, ticks: number, inputs: TetrisInput[]) =>
   rpc<TetrisRun>('tetris_finish', { p_id: id, p_ticks: ticks, p_inputs: tetrisInputRows(inputs) });
 export const forfeitTetrisRun = (id: string) => rpc<TetrisRun>('tetris_forfeit', { p_id: id });
+
+/* ---------------------------------------------------------------------------
+   Dash Duel. A ranked attempt is a shared course plus action deltas: SQL replays the
+   complete log and returns the canonical distance, hearts and crash reason. The
+   `together` mode uses a two-person ready handshake; `challenge` starts either run
+   independently, whenever each partner has time. Free play is kept local to the UI.
+   --------------------------------------------------------------------------- */
+
+export const startDash = (mode: DashMatchMode, level: DashLevel) =>
+  rpc<string>('start_dash', { p_mode: mode, p_level: level });
+export const startDashRun = (id: string) => rpc<DashRun>('dash_start', { p_id: id });
+export const beatDashRun = (id: string, ticks: number, actions: DashAction[]) =>
+  rpc<DashRun>('dash_beat', { p_id: id, p_ticks: ticks, p_actions: dashActionRows(actions) });
+export const finishDashRun = (id: string, ticks: number, actions: DashAction[]) =>
+  rpc<DashRun>('dash_finish', { p_id: id, p_ticks: ticks, p_actions: dashActionRows(actions) });
+export const forfeitDashRun = (id: string) => rpc<DashRun>('dash_forfeit', { p_id: id });

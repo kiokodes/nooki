@@ -211,10 +211,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const games = useGames(couple?.id ?? null, currentUser?.id ?? null);
 
   /**
-   * Every way out of the Games tab goes through here. A live duel run — snake or Tetris —
-   * has no pause and no second chance, so a tab change while one is on screen is a forfeit,
-   * and the couple is asked before it happens — with the run still going behind the
-   * question.
+   * Every way out of the Games tab goes through here. A live duel run — Snake, Tetris or
+   * Dash Duel — has no pause and no second chance, so a tab change while one is on screen
+   * is a forfeit, and the couple is asked before it happens.
    */
   const requestTab = useCallback((key: TabKey) => {
     if (key === activeTab) return;
@@ -683,7 +682,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onSayMore={handleSayMore}
           />
         ) : activeTab === 'games' ? (
-          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} />
+          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} partnerOnline={partnerOnline} />
         ) : isHome ? (
           <HomeView
             everyday={<EverydayStatusCards coupleId={couple.id} userId={currentUser.id} partnerId={partner.id} partnerName={partner.name} onMessage={() => { setChatContextStored(null); setActiveTab('chat'); }} />}
@@ -1014,15 +1013,24 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             board, which keeps running while the question is on screen. */}
         {pendingTab && games.match && (
           <DuelLeaveDialog
-            runLabel={games.duelLive === 'tetris' ? 'your Tetris run' : 'your run'}
+            runLabel={games.duelLive === 'tetris' ? 'your Tetris run' : games.duelLive === 'dash-duel' ? 'your Dash Duel run' : 'your run'}
             partnerName={partner.name}
+            forfeitCopy={games.duelLive === 'dash-duel'
+              ? games.match?.dash?.mode === 'together'
+                ? `Leaving the live race gives it to ${partner.name}.`
+                : `Your Dash Duel score becomes zero. ${partner.name} can still play the shared course later.`
+              : undefined}
             busy={games.busy}
             onKeepPlaying={() => setPendingTab(null)}
             onForfeit={() => {
               const target = pendingTab;
               const matchId = games.match?.id;
               setPendingTab(null);
-              if (matchId) void games.forfeitSnake(matchId);
+              if (matchId) {
+                if (games.duelLive === 'tetris') void games.forfeitTetris(matchId);
+                else if (games.duelLive === 'dash-duel') void games.forfeitDash(matchId);
+                else void games.forfeitSnake(matchId);
+              }
               setActiveTab(target);
             }}
           />

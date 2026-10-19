@@ -41,6 +41,7 @@ test('Connect Four is async-resumable and its turns, wins and draws are database
     await assert.rejects(service.playConnectFour(finished, 2), /finished/);
     const perms = await db.query("SELECT has_table_privilege('authenticated','public.game_matches','SELECT') allowed");
     assert.equal(perms.rows[0].allowed, false);
+    await db.exec(await readFile(new URL('../supabase/migrations/202610180008_dash_duel.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8'));
   } finally { await db?.close(); await server.close(); }
 });
