@@ -110,11 +110,12 @@ const PRESETS: Preset[] = [
 ];
 
 type PreviewTab = 'home' | 'chat' | 'games';
-type PreviewGame = 'snake' | 'tetris' | 'word';
+type PreviewGame = 'snake' | 'chess' | 'tetris' | 'word';
 
-/** The three duels played out in the Games tab of this page, in the app's rail order. */
+/** The duels played out in the Games tab of this page, in the app's rail order. */
 const PREVIEW_GAMES: { id: PreviewGame; icon: string; name: string }[] = [
   { id: 'snake', icon: '🐍', name: 'Snake Duel' },
+  { id: 'chess', icon: '♞', name: 'Chess' },
   { id: 'tetris', icon: '🧱', name: 'Tetris Duel' },
   { id: 'word', icon: '🔤', name: 'Word Wheel' },
 ];
@@ -574,9 +575,9 @@ export const AppPreview = () => {
                   onOpen={() => {}}
                 />
                 <LastDuelRow name="Tetris Duel" outcome="You won · You 4100 — 900 Ana →" onOpen={() => {}} />
-                <ChessDuel partnerName={partner.name} />
                 {/* The same rail the app uses: game titles on top, one board under them.
-                    A toggle rather than a router — the preview is a page, not an app. */}
+                    Chess is a chip like the others — it is a library game, not a fixture
+                    of the page. A toggle rather than a router: this is a page, not an app. */}
                 <section className="game-library" aria-label="Game library" style={{ marginTop: '12px' }}>
                   <div className="game-rail" role="tablist" aria-label="Choose a game">
                     {PREVIEW_GAMES.map((game) => (
@@ -596,11 +597,13 @@ export const AppPreview = () => {
                   </div>
                   <div className="game-panel-track">
                     <div className="game-panel" key={previewGame}>
-                      {previewGame === 'tetris'
-                        ? <PreviewTetris partnerName={partner.name} />
-                        : previewGame === 'word'
-                          ? <PreviewWordWheel userId={profile.id} partnerId={partner.id} partnerName={partner.name} />
-                          : <PreviewSnake partnerName={partner.name} />}
+                      {previewGame === 'chess'
+                        ? <ChessDuel partnerName={partner.name} />
+                        : previewGame === 'tetris'
+                          ? <PreviewTetris partnerName={partner.name} />
+                          : previewGame === 'word'
+                            ? <PreviewWordWheel userId={profile.id} partnerId={partner.id} partnerName={partner.name} />
+                            : <PreviewSnake partnerName={partner.name} />}
                     </div>
                   </div>
                 </section>
@@ -827,11 +830,13 @@ export const AppPreview = () => {
         {tab === 'chat'
           ? 'Chat preview · sample conversation only · send a message, or make Ana type and reply'
           : tab === 'games'
-            ? (previewGame === 'tetris'
-              ? 'Tetris Duel preview · played out on this page, no backend · the real duel is scored by the database'
-              : previewGame === 'word'
-                ? 'Word Wheel preview · sample wheel, played on this page · the real round is timed and scored by the database'
-                : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
+            ? (previewGame === 'chess'
+              ? 'Chess preview · both sides played on this page, no backend · the real duel is refereed by the database'
+              : previewGame === 'tetris'
+                ? 'Tetris Duel preview · played out on this page, no backend · the real duel is scored by the database'
+                : previewGame === 'word'
+                  ? 'Word Wheel preview · sample wheel, played on this page · the real round is timed and scored by the database'
+                  : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
             : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
       </p>
     </div>
