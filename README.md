@@ -86,8 +86,9 @@ apply and verify the database migrations separately.
    server-counted results), then `202610190002_dash_duel_dodge_speed.sql` (top-to-bottom
    obstacles, dodge-only controls and referee-checked acceleration), then
    `202610190003_word_wheel_async_practice.sql` (solo practice and independent multiplayer
-   clocks). Finally run `supabase/seed/word_puzzles.sql` once to install the pregenerated
-   puzzle bank.
+   clocks), then `202610190004_together_tab_restructure.sql` (visit wishes, day-by-day plans,
+   private/matched Someday ideas, scheduled Together time and visit memories). Finally run
+   `supabase/seed/word_puzzles.sql` once to install the pregenerated puzzle bank.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -144,14 +145,15 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 ### Brand-new, empty Supabase project only
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
-(including `couple_events`, `messages`, the five Discuss tables, the shared-books tables,
-`push_subscriptions` and `miss_you_taps`), the location columns and generated marketplace
-key on `profiles`, RLS policies, pairing, question, push-device, miss-you and Daily
-Decisions RPCs, the anniversary and answer-reveal triggers, the Realtime publication
-membership for the chat, Discuss and Daily Decisions tables, the mutual-breakup RPCs and
-the private `shared-books` storage bucket; it does not populate user/couple records, and it
-contains no Discuss or Daily Decisions questions — upload those separately. Notifications additionally need the `send-push` Edge Function, its VAPID
-secret and the `messages` Database Webhook, which no SQL file can create for you.
+(including `couple_events`, `messages`, the Discuss and shared-books tables, visit wishes,
+checklists, Someday votes, Together-time sessions, visit memories, `push_subscriptions` and
+`miss_you_taps`), location columns and generated marketplace key, RLS policies, RPCs,
+triggers, Realtime publication membership and the private `shared-books` and
+`visit-memories` storage buckets; it does not populate user/couple records, and it contains
+no Discuss or Daily Decisions questions — upload those separately. Push delivery still
+needs the `send-push` Edge Function and VAPID secrets; chat notifications need the
+`messages` Database Webhook. Scheduled Together-time reminders also need `pg_cron`,
+`pg_net`, the Vault secrets described below and the `send-push` function.
 
 ## Supabase Auth configuration
 
@@ -1170,13 +1172,13 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] A third account cannot read either partner's responses, and an app user cannot write
       prompt rows or update/delete responses directly.
 - [ ] A third account cannot read the couple's sessions, answers or comments.
-- [ ] The Together tab's empty shelf shows **Read together** with an Upload book button and
-      the "DRM-free EPUB or PDF only" note; a picked file appears as the reading book.
+- [ ] **Read together** appears inside Together time with its upload control and the
+      "DRM-free EPUB or PDF only" note; a picked file appears on the shared shelf.
 - [ ] A second upload while a book is reading says "Leave or delete current book first."
       and the same rule holds even if the request is forced through.
-- [ ] The reading card shows the title, both people's percentages and Continue reading;
-      the reader opens full-screen, resumes this phone's place, and saves progress a few
-      seconds after page turns (not on every turn).
+- [ ] The reading card shows the title and a joint-place summary without comparing
+      percentages; the reader opens full-screen, resumes this phone's place, and saves
+      progress a few seconds after page turns (not on every turn).
 - [ ] Tap the middle of the page to hide and show the bars; tap the edges or swipe to
       turn pages.
 - [ ] Selecting text opens the comment box; **Highlight & share** paints the passage in
@@ -1192,20 +1194,21 @@ Use your actual accounts; there is no automatic user creation.
       and jumping still work.
 - [ ] A third account cannot read the couple's books, bookmarks or highlights, and no
       book file is reachable without the couple's own signed URL.
-- [ ] Adding a someday idea puts it at the top of the Together tab on both phones; adding
-      several never replaces or reorders the others.
-- [ ] Drag the dots on an idea (or focus the dots and press ↑/↓) and the list reorders;
-      after a reload both phones show the same order.
-- [ ] Tapping an idea opens its sheet: the 500-character idea, a notes box that accepts
-      well over 500 characters (up to 1,000), and a save that both partners see. Delete
-      asks first, then removes it for both.
-- [ ] With a visit planned, **Add to our next visit** marks the idea "Next visit", puts it
-      under "What we'll do" on the visit card, and **Remove from this visit** takes it back
-      off without deleting the idea.
-- [ ] With no visit planned, **Plan our next visit** opens the planner; saving the visit
-      pins the idea to it automatically. Cancelling leaves the idea untouched.
-- [ ] Deleting a visit keeps its pinned ideas and simply returns them to the someday list;
-      a third account can neither read nor reorder the list.
+- [ ] Ideas can be shared or private; the other partner and a third account cannot read a
+      private idea. The author can still edit its note and sharing setting.
+- [ ] Each partner's **I want this** vote is private; the same open idea shows **It’s a
+      match** only after both partners vote yes. Manual reordering is not offered in the UI.
+- [ ] A visit with no day plan lets either partner choose an open Someday idea for a
+      specific day; removing it returns the same idea to the unplanned list.
+- [ ] Both partners can write one visit wish, and neither answer is visible until both
+      have submitted. The second submission reveals both wishes on each phone.
+- [ ] The shared checklist lets either partner add an item, assign one owner and check it
+      off; an account outside the couple cannot read the list.
+- [ ] After a past visit, each partner can add one photo and one short best-moment line.
+      Both contributions appear in the memory timeline and each partner can edit only
+      their own entry.
+- [ ] A scheduled Together-time push opens its exact book or game from the notification;
+      tapping the reminder with the app open switches tabs without a reload.
 - [ ] Couple Settings shows **Notifications**; on Android/desktop the switch turns on after
       the browser's permission prompt, and says "On this device" afterwards.
 - [ ] With both apps closed, a message from device A produces a notification on device B
@@ -1252,14 +1255,14 @@ the bottom of the screen. **Notifications** are standard Web Push sent by
 this repository's own `send-push` Edge Function — no notification service, SDK or account
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
-tab, and an unread count on the installed app's icon; the chat is the only thing announced
-so far. Together hosts **Read together** (shared books:
-one EPUB or PDF in play per couple, a full-screen reader, saved places for both
-partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
-back-to-the-passage loop), **Our next visit** (a countdown, the visit planner, and the
-ideas pinned from the someday list) and **Our someday list** (a shared, manually ordered
-list of things to experience together, each with 1,000 characters of notes and a one-tap
-move into the next visit); synced music and scrapbooks are still to come. Games includes
+tab, and an unread count on the installed app's icon. Together hosts **Next visit** (a
+countdown, private-until-both-answered wishes, a day-by-day plan and an owner-assigned
+checklist), **Together time** (scheduled shared books or games with a due-time reminder,
+plus Read together), **Someday** (private or shared ideas with quiet yes-votes and mutual
+matches), and a timeline of visit memories from both partners. Shared books still include
+one EPUB or PDF in play per couple, a full-screen reader, saved places, "Jump to {partner}",
+two-colour highlights, and the highlight → chat → back-to-the-passage loop; synced music
+and scrapbooks are still to come. Games includes
 Rock Paper Scissors, Chess, Sudoku, asynchronous Snake and Tetris Duels, and Dash Duel
 (a Lagos runner with an async course challenge, online-only live race and local free play).
 Voice/video calling is still a "coming soon" toast. No sample conversations or questions
@@ -1480,9 +1483,9 @@ applied to your live project by the frontend build.
 - **Upload** — a file picker on the Together tab takes a **DRM-free EPUB or PDF, up to
   40 MB**. The shelf row is created first (so a couple that already has an active book
   is told "Leave or delete current book first." before a single byte uploads), then the
-  file goes up. The card shows the title, both people's percentages and **Continue
-  reading**; a paused or finished book keeps its card with Continue, Upload new and
-  Delete.
+  file goes up. On Together time the card shows the shared title and a gentle joint-place
+  summary—never separate progress percentages. A paused or finished book stays available
+  in the reader.
 - **One active book per couple**, enforced by a unique index on `couple_id` where
   `status = 'reading'` — a second reading row cannot exist even if the app has a bug.
   Paused (`left`) and `finished` books stay on the shelf until deleted.
@@ -1554,50 +1557,74 @@ get the same tables and functions from `schema.sql`.
 
 - **Adding** — “Add to our list” takes one line (up to 500 characters) and drops it at the
   top of the couple's list. There is no practical limit on how many ideas a couple keeps.
-- **Order** — the dots on the left drag a row anywhere in the list; the grip is also a
-  button, so focusing it and pressing ↑/↓ moves the idea one slot. The whole order is saved
-  in one database call (`reorder_someday_items`), so the two phones always read the same
-  list after the next load or Realtime update. New ideas join above the list, and completed
-  ideas move into the collapsed “completed” group.
-- **Opening an idea** — tapping the words opens a bottom sheet. The idea stays editable,
-  and **More about it** holds up to **1,000 characters** of context (the request was “at
-  least 500”): the place, the plan, who mentioned it. Notes show as a one-line preview on
-  the row and update for both partners.
+- **Visibility** — each idea is either **Shared** (open to both partners) or **Just you**.
+  Private ideas and their votes are hidden from the other partner by RLS, not merely by the
+  interface. Only the author can change an idea's visibility.
+- **“I want this”** — either partner can mark an idea privately. Individual votes are not
+  called out; a shared idea becomes **It’s a match** only when both partners want it, and
+  matches rise to the top. The old manual ordering function remains for existing records,
+  but the Together tab no longer has reorder controls.
+- **More about it** — the optional note holds up to **1,000 characters** of context (the
+  request was “at least 500”): the place, the plan, who mentioned it.
 - **Deleting** — the trash button on the row and the Delete button in the sheet both ask
   first, then remove the idea for both partners.
 
-### Moving an idea into a visit
+### Planning the next visit
 
-**Add to our next visit** is the bridge between the list and a real plan:
+- With no visit set, **Pick your next visit date** is the most prominent card. The existing
+  visit planner still stores the shared date, location and timezone; the card keeps its
+  countdown once a visit is saved.
+- Each partner writes **One thing I want from this visit**. Their wish rows are private to
+  their author until both partners have replied; the second answer makes both visible at
+  once. Realtime refreshes the reveal on each phone.
+- The visit plan is grouped day by day. Each day can pull in an open Someday idea (the
+  existing idea row is linked, not copied), or leave the day open. A trigger checks that
+  the chosen date falls inside the visit. Taking an idea off the plan returns it to the
+  unplanned list; deleting a visit still preserves its ideas.
+- A short shared checklist gives every item one owner (either partner) and lets both check
+  it off. The database checks that the owner belongs to the couple.
 
-- With a next visit planned, the button pins the idea to it. The row gets a small **Next
-  visit** pill and the idea appears under **What we'll do** on the visit card. This is the
-  same row, not a copy; **Remove from this visit** takes the pin off and leaves the idea on
-  the someday list. If the idea belongs to a visit that has already passed, the sheet also
-  offers **Take it off that visit**.
-- Without a visit, the button becomes **Plan our next visit**: it opens the visit planner
-  and remembers the idea, then pins it to the visit the couple saves. Closing the planner
-  without saving leaves the idea exactly where it was.
-- Deleting the visit does **not** delete its ideas: `visit_id` goes back to NULL and every
-  pinned idea simply returns to the unplanned someday list.
-- A visit from another couple can never be linked, even with a forged request; a database
-  trigger enforces that the idea and the visit belong to the same couple.
+### Together time and memories
+
+- Schedule **Read together**, **Word Wheel** or another game at a specific time. Both
+  partners see the session; the scheduled push reminder opens the exact activity from a
+  single tap. Read together now lives inside Together time. The card summarizes joint
+  progress in words without putting two percentages side by side.
+- After a visit ends, each partner can add one private-bucket photo and one short line about
+  the best moment. Contributions build the visit timeline; both can see the memories, while
+  each partner can edit only their own entry. The prompt appears in the Together tab after
+  the visit, including when the other person has already contributed.
+- Scheduled notifications require the deployed `send-push` Edge Function, enabled
+  `pg_cron` and `pg_net`, and two Supabase Vault secrets named `nooki_send_push_url` and
+  `nooki_push_webhook_secret`. The first is the HTTPS function URL; the second must match
+  the Edge Function's `PUSH_WEBHOOK_SECRET`. Never put either value in frontend code or a
+  migration. Enable `pg_cron` and `pg_net` in Supabase → Database → Extensions before
+  applying the migration. Then, in the SQL Editor, save the URL and same webhook secret:
+
+  ```sql
+  select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'nooki_send_push_url');
+  select vault.create_secret('<PUSH_WEBHOOK_SECRET>', 'nooki_push_webhook_secret');
+  ```
+
+  If the extensions were enabled after applying the migration, rerun its final cron-schedule
+  `DO` block. Both partners still need to enable notifications on their own devices.
 
 ### Data and privacy
 
-The list and its visits are couple-scoped tables with row-level security (read, insert,
-update and delete each check `get_user_couple_id`). The notes ceiling and non-empty title
-are database constraints, not just form limits. The reorder function is callable only by a
-signed-in member, rejects duplicate ids, and refuses any id that is not on the caller's own
-list. Realtime keeps both phones' rows, visit card, and completed group in step.
+The tables are couple-scoped with row-level security, and the database—not the interface—
+keeps visit wishes hidden until both reply, hides private ideas, validates checklist owners
+and visit days, and checks that a memory belongs to the author and has ended its visit.
+Memory images use a private storage bucket with short-lived signed URLs. Realtime keeps the
+shared plan, matches, sessions and timeline in step.
 
-Local coverage: `node --test tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs`
-(plus the existing Together/book tests).
+Local coverage: `node --test --test-force-exit tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs tests/together-restructure.test.mjs tests/together-hooks.test.mjs tests/together-tab.test.mjs`. The force-exit flag closes the existing Supabase/Vite test handles after all assertions finish.
 
-Before release, use two real paired accounts: add several ideas, reorder them on both
-phones (including while the other phone is open), add a long note, delete one, pin one to
-the next visit, remove it, then delete the visit and confirm the idea is still there. Check
-a third account sees none of it in its network responses.
+Before release, use two real paired accounts: submit private visit wishes on both phones
+and confirm they reveal together; put an open idea into one visit day; assign and complete
+checklist items; vote yes on the same open idea from both accounts; schedule a Together time
+and tap its push notification; then add one photo and one best-moment line from each partner
+after a visit. Check that private ideas and an unanswered wish stay hidden from the partner,
+and a third account sees none of the couple's data.
 
 ## Everyday status + mood (Home)
 

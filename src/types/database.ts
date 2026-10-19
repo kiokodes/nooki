@@ -377,6 +377,63 @@ export interface Visit {
   updated_at: string;
 }
 
+/** One partner's private wish for a visit. The RLS policy reveals rows only after both answer. */
+export interface VisitWish {
+  id: string;
+  couple_id: string;
+  visit_id: string;
+  user_id: string;
+  wish: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One short prep task for a visit, assigned to one partner. */
+export interface VisitChecklistItem {
+  id: string;
+  couple_id: string;
+  visit_id: string;
+  text: string;
+  assigned_to: string;
+  completed: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TogetherActivityType = 'book' | 'game';
+export type TogetherDateStatus = 'scheduled' | 'done' | 'cancelled';
+
+/** A shared, timed date: an activity to open together at a particular time. */
+export interface TogetherTimeSession {
+  id: string;
+  couple_id: string;
+  created_by: string | null;
+  activity_type: TogetherActivityType;
+  activity_id: string;
+  activity_name: string;
+  scheduled_at: string;
+  timezone: string;
+  status: TogetherDateStatus;
+  reminder_sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One partner's photo and best-moment line for a completed visit. */
+export interface VisitMemoryEntry {
+  id: string;
+  couple_id: string;
+  visit_id: string;
+  user_id: string;
+  photo_path: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+  /** Short-lived URL; created by the client for display, never persisted. */
+  photo_url?: string | null;
+}
+
 /* ---------------------------------------------------------------------------
    Together tab: Someday list - shared list of things to experience together.
    See supabase/migrations/202610180007_together_visits_and_someday_list.sql and
@@ -390,14 +447,20 @@ export interface SomedayItem {
   text: string;
   /** Extra context added after tapping the idea, up to 1000 characters. */
   details: string | null;
-  /** The couple's manual order, ascending; lower numbers sit higher on the list. */
+  /** Legacy ordering retained for existing records; matching ideas now sort to the top. */
   sort_order: number;
+  /** 'private' is visible only to its author; 'open' is shared with both partners. */
+  visibility: 'open' | 'private';
+  /** The day this idea belongs to when linked to a visit, or null while unplanned. */
+  visit_date: string | null;
   /**
    * The visit this idea was added to ("Add to our next visit"), or null while it is
    * still only a someday idea. Deleting the visit puts the idea back on the list
    * rather than deleting it.
    */
   visit_id: string | null;
+  /** User ids who marked an open (or their own private) idea as something they want. */
+  wanters?: string[];
   completed: boolean;
   completed_at: string | null;
   created_by: string | null;

@@ -16,48 +16,56 @@ interface SomedayListState {
   saving: boolean;
 }
 
+function sortByMatches(items: SomedayItem[]): SomedayItem[] {
+  return [...items].sort((a, b) => {
+    const aMatched = (a.wanters?.length ?? 0) >= 2 ? 1 : 0;
+    const bMatched = (b.wanters?.length ?? 0) >= 2 ? 1 : 0;
+    if (aMatched !== bMatched) return bMatched - aMatched;
+    const orderDifference = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDifference !== 0) return orderDifference;
+    const aDate = a.created_at || '';
+    const bDate = b.created_at || '';
+    return bDate.localeCompare(aDate);
+  });
+}
+
 export function useSomedayList(coupleId: string | null, userId: string | null): SomedayListState & {
-  addItem: (text: string, details?: string | null) => Promise<SomedayItem | null>;
-  updateItem: (item: SomedayItem, text: string, details: string | null) => Promise<void>;
+  addItem: (text: string, details?: string | null, visibility?: 'open' | 'private') => Promise<SomedayItem | null>;
+  updateItem: (item: SomedayItem, text: string, details: string | null, visibility?: 'open' | 'private') => Promise<void>;
+  toggleWant: (item: SomedayItem) => Promise<void>;
   toggleItem: (item: SomedayItem) => Promise<void>;
   deleteItem: (item: SomedayItem) => Promise<void>;
-  /** Reorder the visible list; the ids arrive top to bottom. */
+  /** Legacy API retained for old clients; the Together tab no longer exposes manual ordering. */
   reorderItems: (orderedIds: string[]) => Promise<void>;
-  /** Pin an idea to a visit, or pass null to put it back on the someday list. */
-  attachToVisit: (item: SomedayItem, visitId: string | null) => Promise<void>;
+  /** Pin an open idea to a visit, optionally choosing a specific day. */
+  attachToVisit: (item: SomedayItem, visitId: string | null, visitDate?: string | null) => Promise<void>;
   refresh: () => Promise<void>;
 } {
-  const [state, setState] = useState<SomedayListState>({
-    items: [],
-    loading: true,
-    error: null,
-    saving: false,
-  });
+  const [state, setState] = useState<SomedayListState>({ items: [], loading: true, error: null, saving: false });
 
   const loadItems = useCallback(async () => {
     if (!coupleId) {
       setState((prev) => ({ ...prev, loading: false, items: [] }));
       return;
     }
-
     try {
       setState((prev) => ({ ...prev, loading: true, error: null }));
-
-      const { data, error } = await requireSupabase()
-        .from('someday_items')
-        .select('*')
-        .eq('couple_id', coupleId)
-        .order('sort_order', { ascending: true });
-
-      if (error) {
-        throw new Error(describeDatabaseError(error));
+      const supabase = requireSupabase();
+      const [itemsResult, votesResult] = await Promise.all([
+        supabase.from('someday_items').select('*').eq('couple_id', coupleId).order('sort_order', { ascending: true }),
+        supabase.from('someday_item_votes').select('idea_id, user_id').eq('couple_id', coupleId),
+      ]);
+      if (itemsResult.error) throw new Error(describeDatabaseError(itemsResult.error));
+      if (votesResult.error) throw new Error(describeDatabaseError(votesResult.error));
+      const votesByIdea = new Map<string, string[]>();
+      for (const vote of (votesResult.data || []) as Array<{ idea_id: string; user_id: string }>) {
+        votesByIdea.set(vote.idea_id, [...(votesByIdea.get(vote.idea_id) || []), vote.user_id]);
       }
-
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        items: sortSomedayItems((data as SomedayItem[]) || []),
-      }));
+      const items = sortByMatches(sortSomedayItems((itemsResult.data as SomedayItem[] || []).map((item) => ({
+        ...item,
+        wanters: votesByIdea.get(item.id) || [],
+      }))));
+      setState((prev) => ({ ...prev, loading: false, items }));
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -67,255 +75,120 @@ export function useSomedayList(coupleId: string | null, userId: string | null): 
     }
   }, [coupleId]);
 
-  useEffect(() => {
-    void loadItems();
-  }, [loadItems]);
-
-  // Real-time subscription
+  useEffect(() => { void loadItems(); }, [loadItems]);
   useEffect(() => {
     if (!coupleId) return;
-
     const supabase = requireSupabase();
-    const channel = supabase
-      .channel('someday_items_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'someday_items',
-          filter: `couple_id=eq.${coupleId}`,
-        },
-        () => {
-          void loadItems();
-        },
-      )
+    const channel = supabase.channel('someday-items-and-matches')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'someday_items', filter: `couple_id=eq.${coupleId}` }, () => { void loadItems(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'someday_item_votes', filter: `couple_id=eq.${coupleId}` }, () => { void loadItems(); })
       .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    return () => { void supabase.removeChannel(channel); };
   }, [coupleId, loadItems]);
 
-  const addItem = useCallback(async (text: string, details: string | null = null): Promise<SomedayItem | null> => {
-    if (!coupleId || !userId) {
-      return null;
-    }
-
+  const addItem = useCallback(async (text: string, details: string | null = null, visibility: 'open' | 'private' = 'open'): Promise<SomedayItem | null> => {
+    if (!coupleId || !userId) return null;
     try {
       const cleanText = cleanSomedayText(text);
       const cleanDetails = cleanSomedayDetails(details);
       setState((prev) => ({ ...prev, saving: true, error: null }));
-
-      // A fresh idea joins the top of the couple's own order, exactly where a
-      // newest-first list used to put it. `sort_order` keeps that position through
-      // every later drag.
       const sortOrder = nextSomedaySortOrder(state.items);
-
-      const { data, error } = await requireSupabase()
-        .from('someday_items')
-        .insert({
-          couple_id: coupleId,
-          text: cleanText,
-          details: cleanDetails,
-          sort_order: sortOrder,
-          completed: false,
-          created_by: userId,
-        })
-        .select();
-
-      if (error) {
-        throw new Error(describeDatabaseError(error));
-      }
-
-      const newItem = (data as SomedayItem[])[0];
+      const { data, error } = await requireSupabase().from('someday_items').insert({
+        couple_id: coupleId,
+        text: cleanText,
+        details: cleanDetails,
+        visibility,
+        sort_order: sortOrder,
+        completed: false,
+        created_by: userId,
+      }).select();
+      if (error) throw new Error(describeDatabaseError(error));
       await loadItems();
-      return newItem;
+      return ((data as SomedayItem[]) || [])[0] ?? null;
     } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        saving: false,
-        error: err instanceof Error ? err.message : 'Failed to add item',
-      }));
+      setState((prev) => ({ ...prev, error: err instanceof Error ? err.message : 'Failed to add item' }));
       throw err;
     } finally {
       setState((prev) => ({ ...prev, saving: false }));
     }
   }, [coupleId, userId, state.items, loadItems]);
 
-  const updateItem = useCallback(async (item: SomedayItem, text: string, details: string | null) => {
+  const updateItem = useCallback(async (item: SomedayItem, text: string, details: string | null, visibility?: 'open' | 'private') => {
     if (!coupleId) return;
-
     try {
       const cleanText = cleanSomedayText(text);
       const cleanDetails = cleanSomedayDetails(details);
       setState((prev) => ({ ...prev, saving: true, error: null }));
-
-      const { error } = await requireSupabase()
-        .from('someday_items')
-        .update({
-          text: cleanText,
-          details: cleanDetails,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', item.id)
-        .eq('couple_id', coupleId);
-
-      if (error) {
-        throw new Error(describeDatabaseError(error));
-      }
-
+      const { error } = await requireSupabase().from('someday_items').update({
+        text: cleanText,
+        details: cleanDetails,
+        ...(visibility ? { visibility, ...(visibility === 'private' ? { visit_id: null, visit_date: null } : {}) } : {}),
+        updated_at: new Date().toISOString(),
+      }).eq('id', item.id).eq('couple_id', coupleId);
+      if (error) throw new Error(describeDatabaseError(error));
       await loadItems();
     } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        saving: false,
-        error: err instanceof Error ? err.message : 'Failed to save this idea',
-      }));
+      setState((prev) => ({ ...prev, error: err instanceof Error ? err.message : 'Failed to save this idea' }));
       throw err;
     } finally {
       setState((prev) => ({ ...prev, saving: false }));
     }
   }, [coupleId, loadItems]);
 
-  const toggleItem = useCallback(async (item: SomedayItem) => {
-    if (!coupleId) return;
-
+  const toggleWant = useCallback(async (item: SomedayItem) => {
+    if (!coupleId || !userId) return;
+    const alreadyWants = (item.wanters || []).includes(userId);
+    setState((prev) => ({ ...prev, saving: true, error: null }));
     try {
-      setState((prev) => ({ ...prev, saving: true, error: null }));
-
-      const completedAt = item.completed ? null : new Date().toISOString();
-
-      const { error } = await requireSupabase()
-        .from('someday_items')
-        .update({
-          completed: !item.completed,
-          completed_at: completedAt,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', item.id)
-        .eq('couple_id', coupleId);
-
-      if (error) {
-        throw new Error(describeDatabaseError(error));
-      }
-
+      const query = requireSupabase().from('someday_item_votes');
+      const result = alreadyWants
+        ? await query.delete().eq('idea_id', item.id).eq('user_id', userId)
+        : await query.insert({ idea_id: item.id, couple_id: coupleId, user_id: userId });
+      if (result.error) throw new Error(describeDatabaseError(result.error));
       await loadItems();
     } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        saving: false,
-        error: err instanceof Error ? err.message : 'Failed to toggle item',
-      }));
+      setState((prev) => ({ ...prev, error: err instanceof Error ? err.message : 'Your vote could not be saved.' }));
       throw err;
     } finally {
       setState((prev) => ({ ...prev, saving: false }));
     }
+  }, [coupleId, userId, loadItems]);
+
+  const toggleItem = useCallback(async (item: SomedayItem) => {
+    if (!coupleId) return;
+    const { error } = await requireSupabase().from('someday_items').update({
+      completed: !item.completed,
+      completed_at: item.completed ? null : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', item.id).eq('couple_id', coupleId);
+    if (error) throw new Error(describeDatabaseError(error));
+    await loadItems();
   }, [coupleId, loadItems]);
 
   const deleteItem = useCallback(async (item: SomedayItem) => {
     if (!coupleId) return;
-
-    try {
-      setState((prev) => ({ ...prev, saving: true, error: null }));
-
-      const { error } = await requireSupabase()
-        .from('someday_items')
-        .delete()
-        .eq('id', item.id)
-        .eq('couple_id', coupleId);
-
-      if (error) {
-        throw new Error(describeDatabaseError(error));
-      }
-
-      await loadItems();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        saving: false,
-        error: err instanceof Error ? err.message : 'Failed to delete item',
-      }));
-      throw err;
-    } finally {
-      setState((prev) => ({ ...prev, saving: false }));
-    }
+    const { error } = await requireSupabase().from('someday_items').delete().eq('id', item.id).eq('couple_id', coupleId);
+    if (error) throw new Error(describeDatabaseError(error));
+    await loadItems();
   }, [coupleId, loadItems]);
 
   const reorderItems = useCallback(async (orderedIds: string[]) => {
     if (!coupleId || orderedIds.length === 0) return;
-
-    // The drag already moved the rows on screen; write the order in one atomic
-    // server call so both partners read the same list next time. On failure, reload
-    // the stored order rather than leaving an order only this phone believes in.
-    const byId = new Map(state.items.map((item) => [item.id, item]));
-    const reordered = orderedIds
-      .map((id) => byId.get(id))
-      .filter((item): item is SomedayItem => Boolean(item))
-      .map((item, index) => ({ ...item, sort_order: index }));
-    if (reordered.length !== orderedIds.length) return;
-    // The completed group is not part of the drag; keep its rows on screen while
-    // the new active order is saved.
-    const optimistic = [...reordered, ...state.items.filter((item) => item.completed)];
-    const previous = state.items;
-    setState((prev) => ({ ...prev, items: optimistic, error: null }));
-
-    try {
-      const { error } = await requireSupabase().rpc('reorder_someday_items', { p_ids: orderedIds });
-      if (error) {
-        throw new Error(describeDatabaseError(error));
-      }
-      await loadItems();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        items: previous,
-        error: err instanceof Error ? err.message : 'Failed to reorder the list',
-      }));
-      throw err;
-    }
-  }, [coupleId, state.items, loadItems]);
-
-  const attachToVisit = useCallback(async (item: SomedayItem, visitId: string | null) => {
-    if (!coupleId) return;
-
-    try {
-      setState((prev) => ({ ...prev, saving: true, error: null }));
-
-      const { error } = await requireSupabase()
-        .from('someday_items')
-        .update({
-          visit_id: visitId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', item.id)
-        .eq('couple_id', coupleId);
-
-      if (error) {
-        throw new Error(describeDatabaseError(error));
-      }
-
-      await loadItems();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        saving: false,
-        error: err instanceof Error ? err.message : 'Failed to update this idea',
-      }));
-      throw err;
-    } finally {
-      setState((prev) => ({ ...prev, saving: false }));
-    }
+    const { error } = await requireSupabase().rpc('reorder_someday_items', { p_ids: orderedIds });
+    if (error) throw new Error(describeDatabaseError(error));
+    await loadItems();
   }, [coupleId, loadItems]);
 
-  return {
-    ...state,
-    addItem,
-    updateItem,
-    toggleItem,
-    deleteItem,
-    reorderItems,
-    attachToVisit,
-    refresh: loadItems,
-  };
+  const attachToVisit = useCallback(async (item: SomedayItem, visitId: string | null, visitDate: string | null = null) => {
+    if (!coupleId) return;
+    const { error } = await requireSupabase().from('someday_items').update({
+      visit_id: visitId,
+      visit_date: visitId ? visitDate : null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', item.id).eq('couple_id', coupleId);
+    if (error) throw new Error(describeDatabaseError(error));
+    await loadItems();
+  }, [coupleId, loadItems]);
+
+  return { ...state, addItem, updateItem, toggleWant, toggleItem, deleteItem, reorderItems, attachToVisit, refresh: loadItems };
 }
