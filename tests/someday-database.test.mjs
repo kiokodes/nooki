@@ -4,10 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { installTestBackend } from './helpers/testBackend.mjs';
 
-// The someday list's rules live in the database: one couple owns a list, the order is
-// saved in one atomic call, notes have a hard ceiling, and an idea can only be pinned to
-// a visit from the same couple. The UI is covered in someday-list.test.mjs.
-test('someday list: order, notes, the visit bridge, and what a third account cannot do', async () => {
+// The someday list's rules live in the database: both partners share an ordered task
+// list, and visit links stay couple-scoped. Notes remain legacy storage only.
+test('someday list: shared order, legacy notes, visit links, and third-account isolation', async () => {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false, ws: false },
     define: {
@@ -24,11 +23,8 @@ test('someday list: order, notes, the visit bridge, and what a third account can
 
     // --- Pure helpers ---------------------------------------------------------------
     assert.equal(someday.cleanSomedayText('  Try that restaurant  '), 'Try that restaurant');
-    assert.throws(() => someday.cleanSomedayText('   '), /few words/);
+    assert.throws(() => someday.cleanSomedayText('   '), /task title/);
     assert.throws(() => someday.cleanSomedayText('x'.repeat(501)), /500 characters/);
-    assert.equal(someday.cleanSomedayDetails('  '), null);
-    assert.equal(someday.cleanSomedayDetails('  Book the window table. '), 'Book the window table.');
-    assert.throws(() => someday.cleanSomedayDetails('x'.repeat(1001)), /1000 characters/);
 
     const make = (id, sort_order, completed = false, visit_id = null) => ({
       id,
@@ -48,7 +44,7 @@ test('someday list: order, notes, the visit bridge, and what a third account can
       ['a', 'c', 'b'],
       'the stored order wins',
     );
-    assert.equal(someday.nextSomedaySortOrder([make('a', 0), make('b', -2)]), -3);
+    assert.equal(someday.nextSomedaySortOrder([make('a', 0), make('b', -2)]), 1, 'new tasks append after the current order');
     assert.equal(someday.nextSomedaySortOrder([]), 0);
     assert.deepEqual(
       someday.moveSomedayItem([make('a', 0), make('b', 1), make('c', 2)], 'a', 2).map((item) => item.id),
@@ -256,9 +252,9 @@ test('someday list: order, notes, the visit bridge, and what a third account can
       'Sunset at the beach',
     ]);
 
-    // --- The migration is rerunnable, and the preflight knows this feature -------------
+    // --- The cleanup migration is rerunnable; it leaves the list public to both partners.
     const migration = await readFile(
-      new URL('../supabase/migrations/202610180008_someday_details_order_and_visit_link.sql', import.meta.url),
+      new URL('../supabase/migrations/202610190007_someday_notebook_and_remove_together_time.sql', import.meta.url),
       'utf8',
     );
     await backend.exec(migration);

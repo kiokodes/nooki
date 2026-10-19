@@ -120,21 +120,17 @@ test('push service: which platforms can subscribe, and what each one needs', asy
       assert.equal(push.takePushDeepLink('https://nooki.test/?nooki=together'), 'together');
       assert.equal(push.takePushDeepLink('https://nooki.test/?nooki=media'), 'together',
         'a notification sent before the rename still opens Together');
-      const sessionId = '46d2bba3-c0eb-4ee4-8f20-b6a503d404cb';
-      globalThis.window.location.href = `https://nooki.test/?nooki=together&session=${sessionId}&keep=1`;
+      globalThis.window.location.href = 'https://nooki.test/?nooki=together&keep=1';
       assert.equal(push.takePushDeepLink(), 'together');
-      assert.equal(push.takeTogetherTimeSessionDeepLink(), sessionId, 'the scheduled session id is consumed for an exact activity open');
-      assert.equal(globalThis.window.location.href, 'https://nooki.test/?keep=1', 'session deep links do not keep firing on reload');
-      assert.equal(push.takeTogetherTimeSessionDeepLink('https://nooki.test/?session=not-a-uuid'), null, 'invalid session ids are ignored');
+      assert.equal(globalThis.window.location.href, 'https://nooki.test/?keep=1', 'the Together tab deep link is consumed once');
     } finally {
       delete globalThis.window;
     }
 
     // --- The service worker's message, and the deep-link tabs the app accepts ---------------
     assert.equal(push.isPushOpenTabMessage({ type: 'nooki-open-tab', tab: 'chat' }), true);
-    assert.equal(push.isPushOpenTabMessage({ type: 'nooki-open-tab', tab: 'together', sessionId: '46d2bba3-c0eb-4ee4-8f20-b6a503d404cb' }), true);
+    assert.equal(push.isPushOpenTabMessage({ type: 'nooki-open-tab', tab: 'together' }), true);
     assert.equal(push.isPushOpenTabMessage({ type: 'nooki-open-tab' }), false, 'the message must name a recognized destination tab');
-    assert.equal(push.isPushOpenTabMessage({ type: 'nooki-open-tab', tab: 'together', sessionId: { id: 'not-a-string' } }), false, 'the optional session id is validated before narrowing');
     assert.equal(push.isPushOpenTabMessage({ type: 'nooki-badge', count: 1 }), false);
     assert.equal(push.isPushOpenTabMessage(null), false);
     assert.deepEqual([...push.PUSH_DEEP_LINK_TABS], ['chat', 'together', 'home', 'discuss', 'games']);
@@ -308,15 +304,14 @@ test('push plumbing: manifest, icons, worker and app wiring are all in place', (
     'a notification sent before the rename still opens Together');
   assert(worker.includes('clients.matchAll'), 'an already-open Nooki is focused instead of a second one opened');
   assert(worker.includes('nooki-open-tab'), 'and it tells that window which tab to show');
-  assert(worker.includes('sessionOf(payload)'), 'scheduled activity ids ride inside the push notification data');
-  assert(worker.includes('sessionId: typeof data.sessionId'), 'an already-open app receives the exact session id when the notification is tapped');
+  assert(!worker.includes('sessionOf'), 'Together-time session deep links are no longer sent by the worker');
   assert(!worker.includes("addEventListener('fetch'"), 'the worker caches nothing: no fetch handler, no stale shell');
 
   // --- App wiring: registering the worker, following the deep link, clearing the badge ----
   const main = readSource('../src/main.tsx');
   assert(main.includes('registerNookiServiceWorker()'), 'the worker is registered at boot, so a push lands with the app closed');
   assert(main.includes('const pushStartTab = takePushDeepLink()'), 'a notification tapped while the app was closed is read before the first render');
-  assert(main.includes('initialSessionId={pushStartSession}') && main.includes("pushStartSession ? 'together' : null"), 'a scheduled Together-time deep link opens the right tab and exact session on boot');
+  assert(main.includes('<App initialTab={pushStartTab} />'), 'a notification opens a tab without a Together-time session deep link');
   const app = readSource('../src/App.tsx');
   assert(app.includes('usePushNotifications({'), 'the app owns this device\'s push state');
   assert(app.includes('useState<TabKey>(initialTab ?? \'home\')'), 'the tab a notification asked for is the app\'s initial tab');
@@ -350,9 +345,8 @@ test('push sending: the Edge Function exists, is documented, and never leaks the
   assert(fn.includes("payload.table !== 'messages'"), 'only new messages trigger it');
   assert(fn.includes('status === 404 || status === 410'), 'a device that is gone is deleted, not retried forever');
   assert(fn.includes("tab: 'chat'"), 'the notification deep links into the chat');
-  assert(fn.includes('handleTogetherTimeReminderSweep'), 'the scheduled sweep sends due date-night reminders to both partners');
-  assert(fn.includes("claim_due_together_time_reminders"), 'the function claims reminders atomically in the database');
-  assert(fn.includes('&session=${encodeURIComponent(session.id)}'), 'a tapped reminder targets the exact shared activity');
+  assert(!fn.includes('TogetherTimeReminder'), 'the scheduled date-night reminder path is removed');
+  assert(!fn.includes('together_time_sessions'), 'the push handler no longer watches the removed scheduling table');
 
   const config = readSource('../supabase/config.toml');
   assert(config.includes('[functions.send-push]'), 'the function\'s gateway settings travel with the code');

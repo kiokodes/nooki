@@ -105,8 +105,7 @@ export async function installTestBackend(client) {
       'push_subscriptions', 'miss_you_taps',
       'daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses',
       'couple_photo', 'everyday_status', 'visits', 'someday_items',
-      'visit_wishes', 'visit_checklist_items', 'someday_item_votes',
-      'together_time_sessions', 'visit_memory_entries',
+      'visit_wishes', 'visit_checklist_items', 'visit_memory_entries',
     ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;

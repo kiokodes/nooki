@@ -4,9 +4,7 @@ import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 import { installTestBackend } from './helpers/testBackend.mjs';
 
-// The list hook combines RLS-filtered ideas and quiet votes. This verifies privacy with
-// two authenticated partners rather than relying on the presentation layer to hide rows.
-test('Someday list: private visibility, quiet yes-votes and a mutual match', async () => {
+test('Someday list: both partners share, complete, reorder and delete every task', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
   for (const key of ['window', 'document', 'HTMLElement', 'Event']) globalThis[key] = dom.window[key];
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -41,54 +39,25 @@ test('Someday list: private visibility, quiet yes-votes and a mutual match', asy
     function Harness() { latest = useSomedayList(couple.id, alice.id); return null; }
     const render = () => act(async () => root.render(React.createElement(Harness)));
     await render();
-    let open;
-    let secret;
-    await act(async () => { open = await latest.addItem('Try the night market'); });
-    await act(async () => { secret = await latest.addItem('A surprise for later', 'Just for me.', 'private'); });
-    assert.equal(open.visibility, 'open');
-    assert.equal(secret.visibility, 'private');
-    assert.deepEqual(new Set(latest.items.map((item) => item.id)), new Set([open.id, secret.id]));
+    let one;
+    let two;
+    await act(async () => { one = await latest.addItem('Try the night market'); });
+    await act(async () => { two = await latest.addItem('Watch the sunset'); });
+    assert.deepEqual(latest.items.map((item) => item.text), ['Try the night market', 'Watch the sunset'], 'new tasks join the end of the notebook');
 
-    // Alice's yes-votes are stored separately; the UI can show her own choice without
-    // exposing individual votes to Bob.
-    await act(async () => { await latest.toggleWant(open); });
-    await act(async () => { await latest.toggleWant(secret); });
-    await act(async () => { await latest.refresh(); });
-    assert.deepEqual(new Set(latest.items.find((item) => item.id === open.id).wanters), new Set([alice.id]));
-    assert.deepEqual(new Set(latest.items.find((item) => item.id === secret.id).wanters), new Set([alice.id]));
+    await act(async () => latest.reorderItems([two.id, one.id]));
+    assert.deepEqual(latest.items.map((item) => item.text), ['Watch the sunset', 'Try the night market']);
+    await act(async () => latest.toggleItem(latest.items[0]));
+    assert.equal(latest.items[0].completed, true);
 
     await auth.signInWithEmail('bob@example.com', 'password');
-    const { data: bobItems, error: bobItemsError } = await supabase.from('someday_items').select('*').eq('couple_id', couple.id);
-    assert.equal(bobItemsError, null);
-    assert.deepEqual(bobItems.map((item) => item.id), [open.id], 'RLS hides Alice\'s private idea completely');
-    const { data: bobVotes, error: bobVotesError } = await supabase.from('someday_item_votes').select('idea_id, user_id').eq('couple_id', couple.id);
-    assert.equal(bobVotesError, null);
-    assert.deepEqual(bobVotes.map((vote) => ({ idea_id: vote.idea_id, user_id: vote.user_id })), [{ idea_id: open.id, user_id: alice.id }], 'RLS hides the vote on a private idea');
-    const privateVote = await supabase.from('someday_item_votes').insert({ idea_id: secret.id, couple_id: couple.id, user_id: bob.id });
-    assert(privateVote.error, 'the other partner cannot vote on an idea they cannot see');
-    const forbiddenShare = await supabase.from('someday_items').update({ visibility: 'private' }).eq('id', open.id);
-    assert(forbiddenShare.error, 'only the idea author may change its visibility');
-
-    // Bob votes yes on the open idea. Only the combined state becomes a match.
-    const bobVote = await supabase.from('someday_item_votes').insert({ idea_id: open.id, couple_id: couple.id, user_id: bob.id });
-    assert.equal(bobVote.error, null);
-    await auth.signInWithEmail('alice@example.com', 'password');
-    await act(async () => latest.refresh());
-    const matched = latest.items.find((item) => item.id === open.id);
-    assert.deepEqual(new Set(matched.wanters), new Set([alice.id, bob.id]));
-    assert.equal(matched.wanters.length, 2);
-
-    // The same open item can be placed on one visit day. An out-of-range day and a
-    // private idea are rejected by the database trigger.
-    const { data: visit, error: visitError } = await supabase.from('visits').insert({
-      couple_id: couple.id, start_date: '2099-05-01', end_date: '2099-05-02',
-      location: 'Lagos', timezone: 'Africa/Lagos', is_tentative: false, created_by: alice.id,
-    }).select().single();
-    assert.equal(visitError, null);
-    await act(async () => { await latest.attachToVisit(matched, visit.id, '2099-05-02'); });
-    assert.equal(latest.items.find((item) => item.id === open.id).visit_date, '2099-05-02');
-    await act(async () => assert.rejects(latest.attachToVisit(latest.items.find((item) => item.id === open.id), visit.id, '2099-05-03'), /Choose a day inside this visit/));
-    await act(async () => assert.rejects(latest.attachToVisit(latest.items.find((item) => item.id === secret.id), visit.id, '2099-05-01'), /Share this idea before adding it to a visit/));
+    const { data: sharedItems, error } = await supabase.from('someday_items').select('*').eq('couple_id', couple.id);
+    assert.equal(error, null);
+    assert.deepEqual(new Set(sharedItems.map((item) => item.id)), new Set([one.id, two.id]), 'both tasks are visible to both partners');
+    const deletedByPartner = await supabase.from('someday_items').delete().eq('id', one.id).eq('couple_id', couple.id);
+    assert.equal(deletedByPartner.error, null, 'either partner can remove a task without a vote/consensus');
+    const { data: remaining } = await supabase.from('someday_items').select('*').eq('couple_id', couple.id);
+    assert.deepEqual(remaining.map((item) => item.id), [two.id]);
   } finally {
     await act(async () => root.unmount());
     await backend?.close();

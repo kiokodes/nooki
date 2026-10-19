@@ -4,10 +4,7 @@ import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 import { installTestBackend } from './helpers/testBackend.mjs';
 
-// The hook is the only place that decides where a new idea goes and how a dragged
-// order is sent to the database. This runs the real hook against real RLS in PGlite,
-// with only the Realtime socket stubbed out.
-test('someday list hook: new ideas join the top, notes save, drag order persists and the visit link works', async () => {
+test('someday list hook: append tasks, persist arrow ordering, completion and deletion', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
   for (const key of ['window', 'document', 'HTMLElement', 'Event']) globalThis[key] = dom.window[key];
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -25,17 +22,10 @@ test('someday list hook: new ideas join the top, notes save, drag order persists
   try {
     const { supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts');
     backend = await installTestBackend(supabase);
-    // No live Realtime socket in a unit test; the hook's actions reload the list
-    // themselves, which is what the UI depends on as well.
-    supabase.channel = () => {
-      const channel = { on: () => channel, subscribe: () => channel };
-      return channel;
-    };
+    supabase.channel = () => { const channel = { on: () => channel, subscribe: () => channel }; return channel; };
     supabase.removeChannel = async () => {};
-
     const auth = await server.ssrLoadModule('/src/lib/authService.ts');
     const { useSomedayList } = await server.ssrLoadModule('/src/hooks/useSomedayList.ts');
-
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
     await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
     const bob = (await auth.signUpWithEmail('bob@example.com', 'password')).user;
@@ -45,99 +35,31 @@ test('someday list hook: new ideas join the top, notes save, drag order persists
     await auth.joinCoupleWithCode(alice.id, couple.invite_code);
 
     let latest;
-    function Harness() {
-      latest = useSomedayList(couple.id, alice.id);
-      return null;
-    }
-    const render = () => act(async () => root.render(React.createElement(Harness)));
-    await render();
-    assert.equal(latest.loading, false);
+    function Harness() { latest = useSomedayList(couple.id, alice.id); return null; }
+    await act(async () => root.render(React.createElement(Harness)));
     assert.deepEqual(latest.items, []);
-
     let first;
-    await act(async () => {
-      first = await latest.addItem('Try that restaurant');
-    });
-    assert.equal(first.text, 'Try that restaurant');
-    assert.equal(latest.items.length, 1);
+    let second;
+    await act(async () => { first = await latest.addItem('Try that restaurant'); });
+    await act(async () => { second = await latest.addItem('Sunset at the beach'); });
+    assert.deepEqual(latest.items.map((item) => item.text), ['Try that restaurant', 'Sunset at the beach']);
+    assert.equal(latest.items[1].sort_order, latest.items[0].sort_order + 1);
+    await assert.rejects(latest.addItem('   '), /task title/);
 
-    await act(async () => {
-      await latest.addItem('Sunset at the beach', 'Pack a blanket.');
-    });
-    assert.deepEqual(latest.items.map((item) => item.text), [
-      'Sunset at the beach',
-      'Try that restaurant',
-    ], 'a new idea joins the top');
-    assert.equal(latest.items[0].details, 'Pack a blanket.');
-    assert.equal(latest.items[0].sort_order, latest.items[1].sort_order - 1);
+    await act(async () => latest.reorderItems([second.id, first.id]));
+    assert.deepEqual(latest.items.map((item) => item.id), [second.id, first.id]);
+    await act(async () => latest.toggleItem(latest.items[0]));
+    assert.equal(latest.items[0].completed, true);
+    await act(async () => latest.deleteItem(latest.items[1]));
+    assert.deepEqual(latest.items.map((item) => item.id), [second.id]);
 
-    // Notes and the idea text can be edited later; the list reloads with the new words.
-    await act(async () => {
-      await latest.updateItem(latest.items[1], 'Dinner at that restaurant', 'Ask for the window table.');
-    });
-    assert.equal(latest.items[1].text, 'Dinner at that restaurant');
-    assert.equal(latest.items[1].details, 'Ask for the window table.');
-    await assert.rejects(
-      (async () => {
-        await act(async () => {
-          await latest.updateItem(latest.items[1], '   ', null);
-        });
-      })(),
-      /few words/,
-      'an empty idea title is refused before it reaches the database',
-    );
-
-    // A dragged order is saved and comes back in the same order.
-    const [newest, oldest] = latest.items;
-    await act(async () => {
-      await latest.reorderItems([oldest.id, newest.id]);
-    });
-    assert.deepEqual(latest.items.map((item) => item.text), [
-      'Dinner at that restaurant',
-      'Sunset at the beach',
-    ]);
-
-    // Complete / restore keeps the idea and its place in the completed group.
-    await act(async () => {
-      await latest.toggleItem(latest.items[1]);
-    });
-    assert.equal(latest.items[1].completed, true);
-    await act(async () => {
-      await latest.toggleItem(latest.items[1]);
-    });
-    assert.equal(latest.items[1].completed, false);
-
-    // The visit bridge pins and unpins the same idea.
-    const { data: visit, error: visitError } = await supabase
-      .from('visits')
-      .insert({
-        couple_id: couple.id,
-        start_date: '2099-05-01',
-        end_date: null,
-        location: 'Lagos',
-        timezone: 'Africa/Lagos',
-        is_tentative: false,
-        created_by: alice.id,
-      })
-      .select()
-      .single();
-    assert.equal(visitError, null);
-    await act(async () => {
-      await latest.attachToVisit(latest.items[0], visit.id);
-    });
-    assert.equal(latest.items[0].visit_id, visit.id);
-    await act(async () => {
-      await latest.attachToVisit(latest.items[0], null);
-    });
-    assert.equal(latest.items[0].visit_id, null);
-
-    // Deleting removes only the chosen idea.
-    await act(async () => {
-      await latest.deleteItem(latest.items[1]);
-    });
-    assert.deepEqual(latest.items.map((item) => item.text), ['Dinner at that restaurant']);
-
-    // The migrate-me message is friendly rather than a raw Postgres error.
+    const { data: visit, error } = await supabase.from('visits').insert({
+      couple_id: couple.id, start_date: '2099-05-01', end_date: '2099-05-02',
+      location: 'Lagos', timezone: 'Africa/Lagos', is_tentative: false, created_by: alice.id,
+    }).select().single();
+    assert.equal(error, null);
+    await act(async () => latest.attachToVisit(latest.items[0], visit.id, '2099-05-02'));
+    assert.equal(latest.items[0].visit_date, '2099-05-02');
     assert.equal(latest.error, null);
   } finally {
     await act(async () => root.unmount());

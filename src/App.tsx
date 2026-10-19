@@ -18,7 +18,6 @@ import { bootRaceElapsedMs } from './lib/bootRace';
 import { GamesView } from './components/games/GamesView';
 import { DuelLeaveDialog } from './components/games/DuelLeaveDialog';
 import { useGames } from './hooks/useGames';
-import type { GameId } from './lib/gamesService';
 import { HomeView } from './components/home/HomeView';
 import { DailyDecisionModal } from './components/home/DailyDecisionModal';
 import { MissYouReveal } from './components/home/MissYouReveal';
@@ -30,7 +29,6 @@ import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useVisits } from './hooks/useVisits';
-import { useTogetherTime } from './hooks/useTogetherTime';
 import { useSomedayList } from './hooks/useSomedayList';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
@@ -52,7 +50,7 @@ import {
   signOutUser,
   type AuthUser,
 } from './lib/authService';
-import type { Profile, Couple, DailyDecisionQuestion, TogetherTimeSession } from './types/database';
+import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
 
 type TabKey = 'chat' | 'together' | 'home' | 'discuss' | 'games';
 
@@ -148,15 +146,11 @@ interface AppProps {
    * straight onto the chat instead of painting Home first.
    */
   initialTab?: TabKey | null;
-  /** The scheduled Together time to open after the session list loads on a cold notification tap. */
-  initialSessionId?: string | null;
 }
 
-export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = null }) => {
+export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // Navigation & Modal State
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab ?? 'home');
-  const [openTogetherSessionId, setOpenTogetherSessionId] = useState<string | null>(initialSessionId);
-  const [scheduledGame, setScheduledGame] = useState<GameId | null>(null);
   // A tab the couple asked for while a ranked snake run was live: the run cannot be
   // paused, so leaving the Games tab is a forfeit and they get asked first.
   const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
@@ -238,11 +232,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
   // Visits for the Together tab: the next-visit countdown.
   const visits = useVisits(couple?.id ?? null, currentUser?.id ?? null);
 
-  // Shared ideas can be private and voted on.
+  // Shared, manually ordered notebook tasks for the couple.
   const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
-
-  // Suggested-then-agreed date nights.
-  const togetherTime = useTogetherTime(couple?.id ?? null, currentUser?.id ?? null);
 
   // This device's notification switch, and the deep link a tapped notification carries.
   // App-level like the chat: the home-screen badge is cleared from here, and a
@@ -297,35 +288,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     setShowDailyDecision(false);
     setActiveTab('chat');
   }, [sendChatMessage]);
-
-  // "Talk about it" on a Together time: share the exact activity and time as a normal
-  // message and land in the chat, so the couple can deliberate there before anyone
-  // agrees (or suggest a different time back on the Together tab).
-  const handleTalkAboutTogetherTime = useCallback(async (session: TogetherTimeSession) => {
-    const date = new Date(session.scheduled_at);
-    let when: string;
-    try {
-      when = new Intl.DateTimeFormat(undefined, {
-        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-        timeZone: session.timezone || undefined,
-      }).format(date);
-    } catch {
-      when = date.toLocaleString();
-    }
-    const suggester = session.proposed_by ?? session.created_by;
-    const content = session.status === 'scheduled'
-      ? [
-        `About our Together time: ${session.activity_name}`,
-        `We’re locked in for ${when} (${session.timezone}).`,
-      ].join('\n')
-      : [
-        `Together time idea: ${session.activity_name}`,
-        `${suggester === currentUser?.id ? 'I suggested' : 'You suggested'} ${when} (${session.timezone}).`,
-        'Does that work for you, or shall we find another time?',
-      ].join('\n');
-    await sendChatMessage(content);
-    setActiveTab('chat');
-  }, [sendChatMessage, currentUser?.id]);
 
   // The quote on a linked bubble: jump back to that question and its answers.
   const handleOpenQuestion = useCallback((sessionId: string) => {
@@ -459,8 +421,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const onServiceWorkerMessage = (event: MessageEvent) => {
       if (!isPushOpenTabMessage(event.data)) return;
-      const { tab, sessionId } = event.data;
-      if (tab === 'together' && typeof sessionId === 'string') setOpenTogetherSessionId(sessionId);
+      const { tab } = event.data;
       if ((PUSH_DEEP_LINK_TABS as readonly string[]).includes(tab)) {
         requestTabRef.current(tab as TabKey);
       }
@@ -629,7 +590,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
         />
 
         {/* Chat tab: the couple's live conversation.
-            Together tab: visits, together time and the someday list.
+            Together tab: your next visit and shared someday list.
             Home tab: Today card, today's shared decision and the reserved animated scene area.
             Discuss tab: the question engine over the imported library.
             Games tab: mini-games and chibi room decoration.
@@ -649,10 +610,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
           <GamesView
             games={games}
             userId={currentUser.id}
+            coupleId={couple.id}
+            partnerId={partner.id}
             partnerName={partner.name}
             partnerOnline={partnerOnline}
-            initialGame={scheduledGame}
-            onInitialGameHandled={() => setScheduledGame(null)}
           />
         ) : isHome ? (
           <HomeView
@@ -681,8 +642,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
           />
         ) : activeTab === 'together' ? (
           <TogetherView
-            userId={currentUser.id}
-            partnerName={partner.name}
             visit={visits.visit}
             onPlanVisit={() => setShowVisitPlanning(true)}
             onViewVisitPlans={() => setShowVisitPlanning(true)}
@@ -690,26 +649,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
             somedayError={somedayList.error}
             somedaySaving={somedayList.saving}
             onAddSomedayItem={somedayList.addItem}
-            onUpdateSomedayItem={somedayList.updateItem}
-            onToggleSomedayWant={somedayList.toggleWant}
+            onToggleSomedayItem={somedayList.toggleItem}
+            onReorderSomedayItems={somedayList.reorderItems}
             onDeleteSomedayItem={somedayList.deleteItem}
-            togetherTimeSessions={togetherTime.sessions}
-            togetherTimeError={togetherTime.error}
-            togetherTimeSaving={togetherTime.saving}
-            timezone={profile.timezone}
-            onProposeTogetherTime={togetherTime.propose}
-            onAgreeTogetherTime={togetherTime.agree}
-            onSuggestTogetherTime={togetherTime.suggestTime}
-            onTalkAboutTogetherTime={handleTalkAboutTogetherTime}
-            onUpdateTogetherTime={(session: TogetherTimeSession, status: 'done' | 'cancelled') => status === 'done' ? togetherTime.complete(session) : togetherTime.cancel(session)}
-            onOpenActivity={(session) => {
-              if (session.activity_type !== 'game') return;
-              setScheduledGame(session.activity_id as GameId);
-              setActiveTab('games');
-            }}
-            initialSessionId={openTogetherSessionId}
-            onClearInitialSession={() => setOpenTogetherSessionId(null)}
-            remindersEnabled={push.enabled}
           />
         ) : (
           <ChatView

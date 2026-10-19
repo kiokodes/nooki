@@ -301,40 +301,8 @@ export interface Visit {
   updated_at: string;
 }
 
-/**
- * Together time schedules a game. 'book' only appears on a row that predates the
- * Read together removal, and the tab does not open it.
- */
-export type TogetherActivityType = 'book' | 'game';
-export type TogetherDateStatus = 'proposed' | 'scheduled' | 'done' | 'cancelled';
-
-/**
- * A shared, timed date: an activity to open together at a particular time.
- * It starts as one partner's suggestion ('proposed') and only becomes
- * 'scheduled' — locked in, reminder and all — when the other partner agrees.
- */
-export interface TogetherTimeSession {
-  id: string;
-  couple_id: string;
-  created_by: string | null;
-  activity_type: TogetherActivityType;
-  activity_id: string;
-  activity_name: string;
-  scheduled_at: string;
-  timezone: string;
-  status: TogetherDateStatus;
-  /** Who suggested the current time; the other partner is the one who can agree to it. */
-  proposed_by: string | null;
-  /** The partner who agreed and locked the time in, stamped by the database. */
-  agreed_by: string | null;
-  agreed_at: string | null;
-  reminder_sent_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 /* ---------------------------------------------------------------------------
-   Together tab: Someday list - shared list of things to experience together.
+   Together tab: a shared, ordered list of task titles.
    See supabase/migrations/202610180007_together_visits_and_someday_list.sql and
    supabase/migrations/202610180008_someday_details_order_and_visit_link.sql.
    --------------------------------------------------------------------------- */
@@ -342,14 +310,12 @@ export interface TogetherTimeSession {
 export interface SomedayItem {
   id: string;
   couple_id: string;
-  /** The idea, at most 500 characters: the line the Together tab shows. */
+  /** One shared task title, at most 500 characters. */
   text: string;
-  /** Extra context added after tapping the idea, up to 1000 characters. */
+  /** Legacy notes retained in storage for old rows; the notebook never displays them. */
   details: string | null;
-  /** Legacy ordering retained for existing records; matching ideas now sort to the top. */
+  /** The couple's notebook order; lower values appear nearer the top. */
   sort_order: number;
-  /** 'private' is visible only to its author; 'open' is shared with both partners. */
-  visibility: 'open' | 'private';
   /** The day this idea belongs to when linked to a visit, or null while unplanned. */
   visit_date: string | null;
   /**
@@ -358,8 +324,6 @@ export interface SomedayItem {
    * rather than deleting it.
    */
   visit_id: string | null;
-  /** User ids who marked an open (or their own private) idea as something they want. */
-  wanters?: string[];
   completed: boolean;
   completed_at: string | null;
   created_by: string | null;

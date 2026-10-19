@@ -11,7 +11,7 @@ export function GamesFixture() {
   return (
     <div className="nooki-viewport">
       <main className="nooki-shell">
-        <GamesView games={games} userId="test-user" partnerName="Ana" partnerOnline={partnerOnline} />
+        <GamesView games={games} userId="test-user" coupleId="test-couple" partnerId="test-partner" partnerName="Ana" partnerOnline={partnerOnline} />
       </main>
     </div>
   );

@@ -12,11 +12,16 @@ import {
   type SudokuPuzzle,
 } from '../../lib/sudoku';
 import './games.css';
+import { useSudokuPresence } from '../../hooks/useSudokuPresence';
 
 type SudokuMode = 'solo' | 'competition' | 'collaboration';
 
 interface Props {
   partnerName?: string;
+  coupleId?: string;
+  userId?: string;
+  partnerId?: string;
+  partnerOnline?: boolean;
   onExit?: () => void;
 }
 
@@ -28,8 +33,9 @@ const cardStyle: React.CSSProperties = {
   margin: '0 0 12px',
 };
 
-export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
+export function Sudoku({ partnerName = 'your partner', coupleId, userId, partnerId, partnerOnline = false, onExit }: Props) {
   const [mode, setMode] = useState<SudokuMode>('solo');
+  const collaborationReady = useSudokuPresence(coupleId, userId, partnerId, mode === 'collaboration');
   const [difficulty, setDifficulty] = useState<SudokuDifficulty>('medium');
   const [puzzle, setPuzzle] = useState<SudokuPuzzle | null>(null);
   const [board, setBoard] = useState<SudokuBoard>([]);
@@ -57,6 +63,9 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
   }, [startedAt, finished]);
 
   const start = useCallback(() => {
+    // Collaboration is deliberately a two-player room: both accounts must be in Sudoku
+    // and have selected this mode before either player can deal the puzzle.
+    if (mode === 'collaboration' && !collaborationReady) return;
     const p = generatePuzzle(difficulty);
     setPuzzle(p);
     setBoard(p.puzzle.slice());
@@ -66,7 +75,7 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
     setElapsed(0);
     setFinished(false);
     setWon(false);
-  }, [difficulty]);
+  }, [difficulty, mode, collaborationReady]);
 
   const conflicts = useMemo(() => (board.length ? conflictingCells(board) : new Set<number>()), [board]);
 
@@ -139,12 +148,23 @@ export function Sudoku({ partnerName = 'your partner', onExit }: Props) {
           </div>
           <p style={{ fontSize: '0.75rem', color: tokens.colors.textMuted, margin: '6px 0 0' }}>
             {mode === 'competition' && `Race ${partnerName}: fastest to finish wins. 3 mistakes each.`}
-            {mode === 'collaboration' && 'Solve together: you share only 3 wrong tries.'}
+            {mode === 'collaboration' && 'Solve together: both players must be online, in Sudoku, and have selected Collaboration before the puzzle can start. You share only 3 wrong tries.'}
             {mode === 'solo' && 'Practice on your own.'}
           </p>
         </fieldset>
+        {mode === 'collaboration' && !collaborationReady && (
+          <p className="game-hint" role="status" data-collaboration-ready="false">
+            {partnerOnline
+              ? `Waiting for ${partnerName} to open Sudoku and select Collaboration.`
+              : `Waiting for ${partnerName} to come online and join Sudoku.`}
+          </p>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" style={primaryButton} onClick={start} data-action="sudoku-start">Start puzzle</button>
+          <button type="button" style={primaryButton} onClick={start} data-action="sudoku-start"
+            disabled={mode === 'collaboration' && !collaborationReady}
+            data-collaboration-ready={mode === 'collaboration' ? String(collaborationReady) : undefined}>
+            {mode === 'collaboration' && !collaborationReady ? 'Waiting for both players…' : 'Start puzzle'}
+          </button>
           {onExit && <button type="button" style={secondaryButton} onClick={onExit}>Back</button>}
         </div>
       </section>

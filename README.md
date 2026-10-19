@@ -87,11 +87,11 @@ apply and verify the database migrations separately.
    obstacles, dodge-only controls and referee-checked acceleration), then
    `202610190003_word_wheel_async_practice.sql` (solo practice and independent multiplayer
    clocks), then `202610190004_together_tab_restructure.sql` (visit wishes, day-by-day plans,
-   private/matched Someday ideas, scheduled Together time and visit memories), then
-   `202610190005_together_time_agreement.sql` (a Together time is a suggestion until the
-   other partner agrees to it; dates already scheduled stay scheduled), then
-   `202610190006_remove_shared_books.sql` (removes Read together: the shelf, the reader,
-   book files, highlights and any Together time that was a book). Finally run
+   idea matching, scheduled activities and visit memories), then
+   `202610190005_together_time_agreement.sql`, then
+   `202610190006_remove_shared_books.sql` (removes Read together), and finally
+   `202610190007_someday_notebook_and_remove_together_time.sql` (removes Together time,
+   private Someday visibility and votes; the list becomes a shared, ordered notebook). Finally run
    `supabase/seed/word_puzzles.sql` once to install the pregenerated puzzle bank.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
@@ -150,14 +150,13 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
 (including `couple_events`, `messages`, the Discuss tables, visit wishes,
-checklists, Someday votes, Together-time sessions, visit memories, `push_subscriptions` and
+checklists, visit memories, the shared Someday notebook, `push_subscriptions` and
 `miss_you_taps`), location columns and generated marketplace key, RLS policies, RPCs,
 triggers, Realtime publication membership and the private `visit-memories` storage bucket.
-Read together is not part of the end state. It does not populate user/couple records, and it contains
-no Discuss or Daily Decisions questions — upload those separately. Push delivery still
-needs the `send-push` Edge Function and VAPID secrets; chat notifications need the
-`messages` Database Webhook. Scheduled Together-time reminders also need `pg_cron`,
-`pg_net`, the Vault secrets described below and the `send-push` function.
+Read together and Together time are not part of the end state. It does not populate
+user/couple records, and it contains no Discuss or Daily Decisions questions — upload
+those separately. Push delivery still needs the `send-push` Edge Function and VAPID
+secrets; chat notifications need the `messages` Database Webhook.
 
 ## Supabase Auth configuration
 
@@ -896,12 +895,14 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the Games
-retirement migration deletes daily-game and Tic Tac Toe match history, and
-`202610190006_remove_shared_books.sql` deletes shared books, their files and any
-Together time that was a book. The rest preserve existing data.
+retirement migration deletes daily-game and Tic Tac Toe match history,
+`202610190006_remove_shared_books.sql` deletes shared books and files, and
+`202610190007_someday_notebook_and_remove_together_time.sql` deletes scheduled Together-time
+records and converts former private ideas into shared list items. Legacy idea notes are kept
+in storage but no longer shown. The other migrations preserve existing data.
 
 `supabase/verify.sql` is read-only and must print **PASS**. It checks the pairing RPCs,
 RLS on every table, the anniversary-lock trigger, the `couple_events` calendar, the repeat
@@ -1177,21 +1178,16 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] A third account cannot read either partner's responses, and an app user cannot write
       prompt rows or update/delete responses directly.
 - [ ] A third account cannot read the couple's sessions, answers or comments.
-- [ ] The Together tab has no **Read together** shelf, no book upload and no full-screen
-      reader. Together time offers games only — there is no "Read a book" choice.
-- [ ] Ideas can be shared or private; the other partner and a third account cannot read a
-      private idea. The author can still edit its note and sharing setting.
-- [ ] Each partner's **I want this** vote is private; the same open idea shows **It’s a
-      match** only after both partners vote yes. Manual reordering is not offered in the UI.
+- [ ] The Together tab has no **Read together** shelf, no book upload, no full-screen reader,
+      and no Together-time scheduler.
+- [ ] The Someday list looks like one paper notebook: one-line task titles, numbered rows,
+      and up/down arrows that save the shared order for both partners. There are no private
+      ideas, context fields, or want/vote controls; either partner can remove an item.
 - [ ] **Clear this visit** in the edit sheet asks "Clear this visit for both of you?" first;
       confirming removes the countdown on both phones and ideas pinned to the visit reappear
       on the someday list. "Keep it" changes nothing.
-- [ ] Device A proposing a Together time shows it on device B as a suggestion, not a plan;
-      A has no way to agree to its own suggestion, **Talk about it** posts the activity and
-      time into the chat and opens it, and B can **Suggest another time** (flipping who
-      waits) or **Agree & lock it in**. Nothing reminds either phone before both agree.
-- [ ] A scheduled Together-time push opens its exact game from the notification;
-      tapping the reminder with the app open switches tabs without a reload.
+- [ ] Adding a task on either phone updates the numbered notebook on both; up/down arrows
+      persist the new order, and either partner can complete or delete a task.
 - [ ] Couple Settings shows **Notifications**; on Android/desktop the switch turns on after
       the browser's permission prompt, and says "On this device" afterwards.
 - [ ] With both apps closed, a message from device A produces a notification on device B
@@ -1239,10 +1235,9 @@ this repository's own `send-push` Edge Function — no notification service, SDK
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
 tab, and an unread count on the installed app's icon. Together hosts **Next visit** (a
-countdown to the next shared date), **Together time** (a game at a time one
-partner suggests and
-the other agrees to, with a due-time reminder once it is locked in), and **Someday** (private or shared ideas with quiet yes-votes and mutual
-matches). Read together has been removed. Synced music
+countdown to the next shared date) and **Someday** (a shared, numbered notebook of task titles
+that both partners can add, reorder, complete and delete). Together time and Read together
+have been removed. Synced music
 and scrapbooks are still to come. Games includes
 Rock Paper Scissors, Chess, Sudoku, asynchronous Snake and Tetris Duels, and Dash Duel
 (a Lagos runner with an async course challenge, online-only live race and local free play).
@@ -1455,38 +1450,35 @@ npm run test:browser
 Read together — the shared EPUB/PDF shelf, the full-screen reader, saved places,
 highlights and the chat-to-book jump — has been removed from the Together tab.
 Apply **`supabase/migrations/202610190006_remove_shared_books.sql`** on an existing
-project. It deletes shelf rows, reading progress, highlights, and any Together time
+project. It deletes shelf rows, reading progress, highlights, and Together-time records
 whose activity was a book. Hosted Supabase will not let SQL delete the private
 `shared-books` bucket; remove that bucket in Storage after the migration if a file
-is still there.
+is still there. Migration `202610190007_someday_notebook_and_remove_together_time.sql`
+removes the remaining Together-time scheduler and reminders.
 A chat message that quoted a passage keeps the words already stored on that message;
-only the link back into a book goes away. Together time can only schedule a game.
-New projects get the same end state from `schema.sql`. Do not run `verify-books.sql`;
-that check belonged to the retired feature.
+only the link back into a book goes away. New projects get the same end state from
+`schema.sql`. Do not run `verify-books.sql`; that check belonged to the retired feature.
 
 ## Together tab: Our next visit & the someday list
 
 Before deploying to an **existing** project, apply
-`supabase/migrations/202610180007_together_visits_and_someday_list.sql` and then
-`supabase/migrations/202610180008_someday_details_order_and_visit_link.sql`, and run
-`supabase/verify.sql` again. Both migrations are additive and safe to rerun. New projects
+`supabase/migrations/202610180007_together_visits_and_someday_list.sql`,
+`supabase/migrations/202610180008_someday_details_order_and_visit_link.sql`, and
+`supabase/migrations/202610190007_someday_notebook_and_remove_together_time.sql`, then run
+`supabase/verify.sql` again. New projects
 get the same tables and functions from `schema.sql`.
 
-### The list
+### The notebook
 
-- **Adding** — “Add to our list” takes one line (up to 500 characters) and drops it at the
-  top of the couple's list. There is no practical limit on how many ideas a couple keeps.
-- **Visibility** — each idea is either **Shared** (open to both partners) or **Just you**.
-  Private ideas and their votes are hidden from the other partner by RLS, not merely by the
-  interface. Only the author can change an idea's visibility.
-- **“I want this”** — either partner can mark an idea privately. Individual votes are not
-  called out; a shared idea becomes **It’s a match** only when both partners want it, and
-  matches rise to the top. The old manual ordering function remains for existing records,
-  but the Together tab no longer has reorder controls.
-- **More about it** — the optional note holds up to **1,000 characters** of context (the
-  request was “at least 500”): the place, the plan, who mentioned it.
-- **Deleting** — the trash button on the row and the Delete button in the sheet both ask
-  first, then remove the idea for both partners.
+- **Adding** — write a single task title (up to 500 characters); new tasks go to the end
+  until either partner moves them. The notebook has no practical item limit.
+- **Numbering and order** — numbered paper-like lines follow the couple's saved order.
+  Accessible up/down arrows work on phones and keyboards; changes are saved for both.
+- **Completion and deletion** — either partner can check off, restore, or delete any task.
+  No vote or agreement is required before removing something. There are no private items,
+  context/notes fields, or “I want this” controls.
+- **Migration** — old private entries are retained and become shared tasks. Legacy note text
+  remains in storage but is not displayed in the notebook.
 
 ### Planning the next visit
 
@@ -1500,48 +1492,24 @@ get the same tables and functions from `schema.sql`.
   countdown were removed from the tab; their tables stay in the schema (and under RLS),
   so no existing data was deleted — the client simply no longer reads or writes them.
 
-### Together time
+### Removed feature
 
-- Suggest a time for **Word Wheel** or another game. Nobody can fix a
-  time on the other person: a Together time starts as one partner's suggestion and only
-  locks in when the other partner agrees to that exact time. While it waits, either
-  partner can tap **Talk about it** (the suggestion's details land in the chat, ready to
-  deliberate over) or **Suggest another time**, which hands the suggestion back the other
-  way. Moving a locked-in time reopens it the same way, and the reminder sweep only ever
-  claims locked-in dates, so an un-agreed suggestion never buzzes either phone. The
-  database's guard trigger holds the line: it refuses a directly-scheduled insert, an
-  agreement from the partner who suggested the time, an "agreement" that quietly moves
-  the time, and any client-written agreement stamp. Once locked in, the scheduled push
-  reminder opens that game from a single tap.
-- Scheduled notifications require the deployed `send-push` Edge Function, enabled
-  `pg_cron` and `pg_net`, and two Supabase Vault secrets named `nooki_send_push_url` and
-  `nooki_push_webhook_secret`. The first is the HTTPS function URL; the second must match
-  the Edge Function's `PUSH_WEBHOOK_SECRET`. Never put either value in frontend code or a
-  migration. Enable `pg_cron` and `pg_net` in Supabase → Database → Extensions before
-  applying the migration. Then, in the SQL Editor, save the URL and same webhook secret:
-
-  ```sql
-  select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'nooki_send_push_url');
-  select vault.create_secret('<PUSH_WEBHOOK_SECRET>', 'nooki_push_webhook_secret');
-  ```
-
-  If the extensions were enabled after applying the migration, rerun its final cron-schedule
-  `DO` block. Both partners still need to enable notifications on their own devices.
+Together time scheduling, due-time push reminders, private Someday visibility, and yes-votes
+are retired. The latest database migration drops the scheduling table and reminder functions;
+it also converts all existing private list entries to shared items so the couple has one
+notebook. Existing visit dates and the other visit-planning tools are unchanged.
 
 ### Data and privacy
 
-The tables are couple-scoped with row-level security, and the database—not the interface—
-hides private ideas and holds the Together-time agreement line. Realtime keeps the
-countdown, matches and sessions in step.
+The shared notebook and visit data remain couple-scoped with row-level security. Both partners
+can read and arrange every notebook task; Realtime keeps their list in step.
 
-Local coverage: `node --test --test-force-exit tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs tests/together-restructure.test.mjs tests/together-time-agreement.test.mjs tests/together-hooks.test.mjs tests/together-tab.test.mjs`. The force-exit flag closes the existing Supabase/Vite test handles after all assertions finish.
+Local coverage: `node --test tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs tests/together-restructure.test.mjs tests/together-time-removal.test.mjs tests/together-hooks.test.mjs tests/together-tab.test.mjs`.
 
 Before release, use two real paired accounts: set a next visit, then clear it and confirm
-the countdown disappears on both phones; vote yes on the same open idea from both accounts;
-propose a Together time
-from one phone, talk it over in the chat, agree to it from the other and tap its push
-notification. Check that private ideas stay hidden from the partner,
-and a third account sees none of the couple's data.
+the countdown disappears on both phones; add and reorder tasks from each phone and check
+that both see the same numbering; complete and delete an item from either account. Check
+that a third account sees none of the couple's data.
 
 ## Everyday status + mood (Home)
 
