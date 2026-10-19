@@ -18,6 +18,7 @@ import { bootRaceElapsedMs } from './lib/bootRace';
 import { GamesView } from './components/games/GamesView';
 import { DuelLeaveDialog } from './components/games/DuelLeaveDialog';
 import { useGames } from './hooks/useGames';
+import type { GameId } from './lib/gamesService';
 import { HomeView } from './components/home/HomeView';
 import { DailyDecisionModal } from './components/home/DailyDecisionModal';
 import { MissYouReveal } from './components/home/MissYouReveal';
@@ -31,6 +32,9 @@ import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
 import { useVisits } from './hooks/useVisits';
+import { useVisitPlanning } from './hooks/useVisitPlanning';
+import { useTogetherTime } from './hooks/useTogetherTime';
+import { useVisitMemories } from './hooks/useVisitMemories';
 import { useSomedayList } from './hooks/useSomedayList';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
@@ -52,7 +56,7 @@ import {
   signOutUser,
   type AuthUser,
 } from './lib/authService';
-import type { Profile, Couple, DailyDecisionQuestion, SomedayItem } from './types/database';
+import type { Profile, Couple, DailyDecisionQuestion, TogetherTimeSession } from './types/database';
 
 type TabKey = 'chat' | 'together' | 'home' | 'discuss' | 'games';
 
@@ -148,11 +152,15 @@ interface AppProps {
    * straight onto the chat instead of painting Home first.
    */
   initialTab?: TabKey | null;
+  /** The scheduled Together time to open after the session list loads on a cold notification tap. */
+  initialSessionId?: string | null;
 }
 
-export const App: React.FC<AppProps> = ({ initialTab = null }) => {
+export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = null }) => {
   // Navigation & Modal State
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab ?? 'home');
+  const [openTogetherSessionId, setOpenTogetherSessionId] = useState<string | null>(initialSessionId);
+  const [scheduledGame, setScheduledGame] = useState<GameId | null>(null);
   // A tab the couple asked for while a ranked snake run was live: the run cannot be
   // paused, so leaving the Games tab is a forfeit and they get asked first.
   const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
@@ -163,9 +171,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const [showCalendar, setShowCalendar] = useState(false);
   // Visit planning modal for the Together tab
   const [showVisitPlanning, setShowVisitPlanning] = useState(false);
-  // A someday idea waiting for the visit being planned: when the visit is saved,
-  // the idea joins it straight away ("Add to our next visit" with no visit yet).
-  const [somedayItemForVisit, setSomedayItemForVisit] = useState<string | null>(null);
   // A message is only "read" while the Chat tab is on screen *and* the app is awake.
   const [appVisible, setAppVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
 
@@ -243,11 +248,16 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     partnerId: partner?.id ?? null,
   });
 
-  // Visits for the Together tab: next visit countdown and planning
+  // Visits for the Together tab: countdown, shared plan, wishes and checklist.
   const visits = useVisits(couple?.id ?? null, currentUser?.id ?? null);
+  const visitPlanning = useVisitPlanning(couple?.id ?? null, visits.visit?.id ?? null, currentUser?.id ?? null);
 
-  // Someday list for the Together tab: shared list of things to experience together
+  // Shared ideas can be private, voted on, and attached to a day in the next visit.
   const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
+
+  // Scheduled date nights and the photo/one-line memory timeline.
+  const togetherTime = useTogetherTime(couple?.id ?? null, currentUser?.id ?? null);
+  const memories = useVisitMemories(couple?.id ?? null, currentUser?.id ?? null);
 
   // This device's notification switch, and the deep link a tapped notification carries.
   // App-level like the chat: the home-screen badge is cleared from here, and a
@@ -498,7 +508,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const onServiceWorkerMessage = (event: MessageEvent) => {
       if (!isPushOpenTabMessage(event.data)) return;
-      const { tab } = event.data;
+      const { tab, sessionId } = event.data;
+      if (tab === 'together' && typeof sessionId === 'string') setOpenTogetherSessionId(sessionId);
       if ((PUSH_DEEP_LINK_TABS as readonly string[]).includes(tab)) {
         requestTabRef.current(tab as TabKey);
       }
@@ -556,20 +567,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     } catch (err) {
       setSessionError(err instanceof Error ? err.message : 'Sign out failed. Please try again.');
     }
-  };
-
-  const handleAddSomedayItemToVisit = async (item: SomedayItem) => {
-    if (visits.visit) {
-      await somedayList.attachToVisit(item, visits.visit.id);
-      return;
-    }
-    // No visit yet: plan one, then pin this idea to it once it is saved.
-    setSomedayItemForVisit(item.id);
-    setShowVisitPlanning(true);
-  };
-
-  const handleRemoveSomedayItemFromVisit = async (item: SomedayItem) => {
-    await somedayList.attachToVisit(item, null);
   };
 
   // Backend failures are not missing profiles and must never silently restart onboarding.
@@ -699,7 +696,14 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onSayMore={handleSayMore}
           />
         ) : activeTab === 'games' ? (
-          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} partnerOnline={partnerOnline} />
+          <GamesView
+            games={games}
+            userId={currentUser.id}
+            partnerName={partner.name}
+            partnerOnline={partnerOnline}
+            initialGame={scheduledGame}
+            onInitialGameHandled={() => setScheduledGame(null)}
+          />
         ) : isHome ? (
           <HomeView
             everyday={<EverydayStatusCards coupleId={couple.id} userId={currentUser.id} partnerId={partner.id} partnerName={partner.name} onMessage={() => { setChatContextStored(null); setActiveTab('chat'); }} />}
@@ -729,27 +733,50 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             state={books}
             userId={currentUser.id}
             userName={profile.name}
+            partnerId={partner.id}
             partnerName={partner.name}
-            onOpenReader={(bookId) => openReader(bookId)}
             visit={visits.visit}
+            visits={visits.visits}
             onPlanVisit={() => setShowVisitPlanning(true)}
-            onViewVisitPlans={() => {
-              // For now, just open the planning modal to edit
-              setShowVisitPlanning(true);
-            }}
+            onViewVisitPlans={() => setShowVisitPlanning(true)}
+            onOpenReader={(bookId) => openReader(bookId)}
             somedayItems={somedayList.items}
             somedayError={somedayList.error}
+            somedaySaving={somedayList.saving}
             onAddSomedayItem={somedayList.addItem}
             onUpdateSomedayItem={somedayList.updateItem}
-            onToggleSomedayItem={somedayList.toggleItem}
+            onToggleSomedayWant={somedayList.toggleWant}
             onDeleteSomedayItem={somedayList.deleteItem}
-            onReorderSomedayItems={somedayList.reorderItems}
-            onAddSomedayItemToVisit={handleAddSomedayItemToVisit}
-            onRemoveSomedayItemFromVisit={handleRemoveSomedayItemFromVisit}
-            onPlanSomedayItemVisit={(item) => {
-              setSomedayItemForVisit(item.id);
-              setShowVisitPlanning(true);
+            onAttachSomedayItemToVisit={somedayList.attachToVisit}
+            visitWishes={visitPlanning.wishes}
+            visitChecklist={visitPlanning.checklist}
+            visitPlanningError={visitPlanning.error}
+            visitPlanningSaving={visitPlanning.saving}
+            onSaveVisitWish={visitPlanning.saveWish}
+            onAddVisitChecklistItem={visitPlanning.addChecklistItem}
+            onUpdateVisitChecklistItem={visitPlanning.updateChecklistItem}
+            onDeleteVisitChecklistItem={visitPlanning.deleteChecklistItem}
+            togetherTimeSessions={togetherTime.sessions}
+            togetherTimeError={togetherTime.error}
+            togetherTimeSaving={togetherTime.saving}
+            timezone={profile.timezone}
+            onScheduleTogetherTime={togetherTime.schedule}
+            onUpdateTogetherTime={(session: TogetherTimeSession, status: 'done' | 'cancelled') => status === 'done' ? togetherTime.complete(session) : togetherTime.cancel(session)}
+            onOpenActivity={(session) => {
+              if (session.activity_type === 'book') openReader(session.activity_id);
+              else {
+                setScheduledGame(session.activity_id as GameId);
+                setActiveTab('games');
+              }
             }}
+            memories={memories.entries}
+            memoriesLoading={memories.loading}
+            memoriesError={memories.error}
+            memoriesSaving={memories.saving}
+            onSaveVisitMemory={memories.save}
+            initialSessionId={openTogetherSessionId}
+            onClearInitialSession={() => setOpenTogetherSessionId(null)}
+            remindersEnabled={push.enabled}
           />
         ) : (
           <ChatView
@@ -987,11 +1014,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
         {showVisitPlanning && couple && (
           <VisitPlanningModal
             isOpen={showVisitPlanning}
-            onClose={() => {
-              setShowVisitPlanning(false);
-              // Cancelling the planner leaves the idea right where it was.
-              setSomedayItemForVisit(null);
-            }}
+            onClose={() => setShowVisitPlanning(false)}
             onSave={async (startDate, endDate, location, timezone, isTentative) => {
               try {
                 if (visits.visit) {
@@ -1004,13 +1027,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
                     is_tentative: isTentative,
                   });
                 } else {
-                  // Create new visit, then let the idea that asked for one join it.
-                  const created = await visits.planVisit(startDate, endDate, location, timezone, isTentative);
-                  if (somedayItemForVisit) {
-                    const item = somedayList.items.find((entry) => entry.id === somedayItemForVisit);
-                    if (item) await somedayList.attachToVisit(item, created.id);
-                    setSomedayItemForVisit(null);
-                  }
+                  await visits.planVisit(startDate, endDate, location, timezone, isTentative);
                 }
               } catch {
                 // The modal shows the save error beside the form.

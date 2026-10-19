@@ -3,108 +3,195 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 
-// The Together tab's shelf card states, and the chat's quote card for shared highlights.
-// Both are presentational: the database rules are covered in books-database.test.mjs.
-test('together tab: read-together card, both progress bars, and the two-book shelf limit', async () => {
-  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
-  for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'File', 'FileReader']) {
+// Together's visit planning, Together-time scheduler, private/matched ideas, memories,
+// and the book shelf's joint-progress copy are exercised through the real component.
+test('Together tab: private wishes reveal together, plans are actionable, and memories/sessions open from one tap', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
+  for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'MouseEvent', 'File', 'FileReader']) {
     globalThis[key] = dom.window[key];
   }
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const { default: React, act } = await import('react');
   const { createRoot } = await import('react-dom/client');
-  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false, ws: false },
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://test-project.supabase.co'),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('sb_publishable_test_only'),
+    },
+  });
   const root = createRoot(document.getElementById('root'));
   try {
     const { TogetherView } = await server.ssrLoadModule('/src/components/together/TogetherView.tsx');
-
     const calls = [];
-    const makeState = (overrides = {}) => ({
-      books: [],
-      progress: [],
-      highlights: [],
-      loading: false,
-      busy: false,
-      error: null,
-      upload: async (file) => { calls.push(['upload', file?.name]); return null; },
-      continueReading: async (id) => calls.push(['continue', id]),
-      leave: async (id) => calls.push(['leave', id]),
-      finish: async (id) => calls.push(['finish', id]),
-      remove: async (book) => calls.push(['delete', book.id]),
-      addHighlight: async () => { throw new Error('unused'); },
-      saveProgress: async () => { throw new Error('unused'); },
-      clearError: () => calls.push(['clearError']),
+    const visit = {
+      id: 'v1', couple_id: 'c1', start_date: '2099-01-10', end_date: '2099-01-11',
+      location: 'Lagos', timezone: 'Africa/Lagos', is_tentative: false,
+      created_by: 'me', created_at: '', updated_at: '',
+    };
+    const pastVisit = {
+      ...visit, id: 'v-old', start_date: '2020-05-01', end_date: '2020-05-02', location: 'Abuja',
+    };
+    const idea = (id, text, overrides = {}) => ({
+      id, couple_id: 'c1', text, details: null, sort_order: 0, visibility: 'open',
+      visit_date: null, visit_id: null, wanters: [], completed: false, completed_at: null,
+      created_by: 'me', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
       ...overrides,
     });
-
-    const openReader = (id) => calls.push(['openReader', id]);
-    const render = (state) => act(async () => root.render(React.createElement(TogetherView, {
-      state,
-      userId: 'me',
-      userName: 'Alice',
-      partnerName: 'Ana',
-      onOpenReader: openReader,
-    })));
-    const button = (text) => [...document.querySelectorAll('button')].find((item) => item.textContent.includes(text));
-    const body = () => document.body.textContent.replace(/\u2019/g, "'");
-
-    // --- No book: "Read together" with the upload button -----------------------------
-    await render(makeState());
-    assert(body().includes('Read together'));
-    assert(body().includes('DRM-free EPUB or PDF only'));
-    assert(body().includes('40 MB'));
-    assert(button('Upload book'));
-    assert(document.querySelector('[data-upload-input]'), 'the file picker is wired');
-    assert(body().includes('up to 2 at a time'), 'the empty shelf mentions the limit');
-
-    // --- One book in play: title, both progress bars, Continue reading ---------------
+    const sharedMatch = idea('idea-match', 'Try the night market', { wanters: ['me', 'partner'] });
+    const privateIdea = idea('idea-private', 'A surprise for later', { visibility: 'private', wanters: ['me'] });
     const reading = {
-      id: 'b1', couple_id: 'c1', title: 'The Hobbit', file_path: 'books/c1/b1.epub',
+      id: 'book-1', couple_id: 'c1', title: 'The Hobbit', file_path: 'books/c1/book-1.epub',
       file_type: 'epub', status: 'reading', uploaded_by: 'me', created_at: '', updated_at: '',
     };
-    const paused = { ...reading, id: 'b2', title: 'Dune', status: 'left' };
-    await render(makeState({
+    const state = {
       books: [reading],
       progress: [
-        { book_id: 'b1', user_id: 'me', location: 'x', percent: 42, updated_at: '' },
-        { book_id: 'b1', user_id: 'you', location: 'y', percent: 37, updated_at: '' },
+        { book_id: reading.id, user_id: 'me', location: 'chapter six', percent: 42, updated_at: '' },
+        { book_id: reading.id, user_id: 'partner', location: 'chapter six', percent: 40, updated_at: '' },
       ],
-    }));
-    assert(body().includes('Currently reading together'));
-    assert(body().includes('The Hobbit'));
-    const bars = [...document.querySelectorAll('[role="progressbar"]')].map((bar) => bar.getAttribute('aria-label'));
-    assert(bars.includes('Alice is at 42 percent'), "the reader's own place is on the card");
-    assert(bars.includes('Ana is at 37 percent'), "and the partner's place too");
-    assert(document.querySelector('[data-upload-book]'), 'upload button shows when shelf has room');
-    await act(async () => button('Continue reading').click());
-    assert.deepEqual(calls.pop(), ['openReader', 'b1'], 'Continue reading opens the reader');
+      highlights: [], loading: false, busy: false, error: null,
+      upload: async (file) => { calls.push(['upload', file?.name]); return null; },
+      continueReading: async () => {}, leave: async () => {}, finish: async () => {},
+      remove: async () => {}, addHighlight: async () => { throw new Error('unused'); },
+      saveProgress: async () => { throw new Error('unused'); }, clearError: () => {},
+    };
+    const session = {
+      id: 'session-1', couple_id: 'c1', created_by: 'me', activity_type: 'game',
+      activity_id: 'word-wheel', activity_name: 'Word Wheel', scheduled_at: '2099-01-10T18:00:00.000Z',
+      timezone: 'Africa/Lagos', status: 'scheduled', reminder_sent_at: null, created_at: '', updated_at: '',
+    };
+    const openReader = (id) => calls.push(['reader', id]);
+    const onOpenActivity = (value) => calls.push(['openActivity', value.id]);
+    const defaults = {
+      state, userId: 'me', userName: 'Alice', partnerId: 'partner', partnerName: 'Ana', timezone: 'Africa/Lagos',
+      visit, visits: [visit, pastVisit], onOpenReader: openReader,
+      somedayItems: [sharedMatch, privateIdea],
+      visitWishes: [{ id: 'wish-me', couple_id: 'c1', visit_id: 'v1', user_id: 'me', wish: 'A private answer', created_at: '', updated_at: '' }],
+      visitChecklist: [], togetherTimeSessions: [session], memories: [],
+      remindersEnabled: false,
+      onPlanVisit: () => calls.push(['planVisit']),
+      onSaveVisitWish: async (text) => calls.push(['saveWish', text]),
+      onAddVisitChecklistItem: async (text, owner) => calls.push(['addChecklist', text, owner]),
+      onUpdateVisitChecklistItem: async (id, update) => calls.push(['updateChecklist', id, update]),
+      onDeleteVisitChecklistItem: async (id) => calls.push(['deleteChecklist', id]),
+      onAttachSomedayItemToVisit: async (...args) => calls.push(['attach', args[0].id, args[1], args[2] ?? null]),
+      onAddSomedayItem: async (...args) => calls.push(['addSomeday', ...args]),
+      onUpdateSomedayItem: async (...args) => calls.push(['updateSomeday', args[0].id, args[3]]),
+      onToggleSomedayWant: async (item) => calls.push(['want', item.id]),
+      onDeleteSomedayItem: async (item) => calls.push(['deleteSomeday', item.id]),
+      onScheduleTogetherTime: async (input) => calls.push(['schedule', input]),
+      onUpdateTogetherTime: async (item, status) => calls.push(['updateSession', item.id, status]),
+      onOpenActivity,
+      onSaveVisitMemory: async (...args) => calls.push(['memory', ...args]),
+      onClearInitialSession: () => calls.push(['clearDeepLink']),
+    };
+    const render = (overrides = {}) => act(async () => root.render(React.createElement(TogetherView, { ...defaults, ...overrides })));
+    const setValue = async (element, value) => {
+      const setter = Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value').set;
+      await act(async () => {
+        setter.call(element, value);
+        element.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+        element.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      });
+    };
+    const click = async (element) => act(async () => element.click());
+    const body = () => document.body.textContent.replace(/\u2019/g, "'");
 
-    // --- Two books on the shelf: the two-book limit kicks in -------------------------
-    // With 2 books (reading + paused), Upload new is hidden on cards and at the bottom.
-    await render(makeState({
-      books: [reading, paused],
-      progress: [],
-    }));
-    assert(body().includes('Paused'));
-    assert.equal(document.querySelector('[data-upload-new]'), null,
-      'Upload new is hidden on the paused card when shelf is full');
-    assert.equal(document.querySelector('[data-upload-book]'), null,
-      'the bottom upload button is hidden when shelf is full');
+    // The countdown and day-by-day plan sit first; a submitted wish itself is not shown.
+    await render();
+    assert(document.querySelector('[data-visit-card="upcoming"]'));
+    assert(document.querySelector('[data-visit-day="2099-01-10"]'));
+    assert(document.querySelector('[data-visit-day="2099-01-11"]'));
+    assert(body().includes('Your answer is tucked away'));
+    assert(!body().includes('A private answer'), 'an unanswered partner cannot see the submitted text');
+    assert(body().includes('Shared checklist'));
+    assert(body().includes('Tickets booked'));
 
-    // --- Delete asks first, then removes --------------------------------------------
-    let confirmations = [];
-    dom.window.confirm = (message) => { confirmations.push(message); return true; };
-    await act(async () => document.querySelector('[data-delete-book="b2"]').click());
-    assert.equal(confirmations.length, 1);
-    assert(confirmations[0].includes('Dune'));
-    assert.deepEqual(calls.pop(), ['delete', 'b2']);
+    // An open someday idea can be placed on a specific visit day; a private one is never offered.
+    const daySelect = document.querySelector('[aria-label="Choose a someday idea for Sun, Jan 10"]')
+      || document.querySelector('[aria-label^="Choose a someday idea for"]');
+    assert(daySelect);
+    assert([...daySelect.options].some((option) => option.textContent === 'Try the night market'));
+    assert(![...daySelect.options].some((option) => option.textContent === 'A surprise for later'));
+    await setValue(daySelect, 'idea-match');
+    const addIdeaButton = document.querySelector('[aria-label^="Add idea to"]');
+    await click(addIdeaButton);
+    assert.deepEqual(calls.pop(), ['attach', 'idea-match', 'v1', '2099-01-10']);
 
-    // --- An upload failure surfaces on the card --------------------------------------
-    await render(makeState({
-      books: [reading],
-      error: 'Books can be up to 40 MB. Try a smaller file.',
-    }));
-    assert(body().includes('Books can be up to 40 MB'));
+    // Checklist rows have one owner; both partners can be chosen when adding an item.
+    await setValue(document.querySelector('[aria-label="New checklist item"]'), 'Book the train');
+    await setValue(document.querySelector('[aria-label="Assign checklist item to"]'), 'partner');
+    const checklistForm = document.querySelector('[data-visit-checklist] form');
+    await act(async () => checklistForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+    assert.deepEqual(calls.pop(), ['addChecklist', 'Book the train', 'partner']);
+
+    // After both wishes exist, both texts are revealed together.
+    await render({ visitWishes: [
+      ...defaults.visitWishes,
+      { id: 'wish-partner', couple_id: 'c1', visit_id: 'v1', user_id: 'partner', wish: 'A quiet breakfast', created_at: '', updated_at: '' },
+    ] });
+    assert(document.querySelector('[data-wishes-revealed]'));
+    assert(body().includes('A private answer'));
+    assert(body().includes('A quiet breakfast'));
+
+    // A matched idea is explicit; single-vote ideas do not announce the other person's yes.
+    assert.equal(document.querySelectorAll('[data-someday-match]').length, 1);
+    assert(document.querySelector('[data-someday-item="idea-private"]'));
+    assert.equal(document.querySelector('[data-someday-item="idea-private"]').getAttribute('data-someday-visibility'), 'private');
+    await click(document.querySelector('[data-someday-want="idea-match"]'));
+    assert.deepEqual(calls.pop(), ['want', 'idea-match']);
+
+    // Read together lives inside Together time and never compares separate percentages.
+    const togetherTime = document.querySelector('[data-section="together-time"]');
+    assert(togetherTime.querySelector('[data-card="read-together"]'));
+    assert(togetherTime.textContent.includes('The Hobbit'));
+    assert(togetherTime.textContent.includes('around the middle of the story'));
+    assert(!togetherTime.textContent.includes('%'));
+
+    // One tap on a scheduled session opens that activity; scheduling is available for tonight or any time this week.
+    await click(document.querySelector('[data-open-scheduled-activity="session-1"]'));
+    assert.deepEqual(calls.pop(), ['openActivity', 'session-1']);
+    const typeSelect = document.querySelector('[aria-label="Together time activity type"]');
+    await setValue(typeSelect, 'game');
+    const activitySelect = document.querySelector('[aria-label="Choose a book or game"]');
+    await setValue(activitySelect, 'word-wheel');
+    const scheduleForm = document.querySelector('[data-together-time-scheduler] form');
+    await act(async () => scheduleForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+    const scheduled = calls.pop();
+    assert.equal(scheduled[0], 'schedule');
+    assert.equal(scheduled[1].activityType, 'game');
+    assert.equal(scheduled[1].activityId, 'word-wheel');
+    assert.equal(scheduled[1].activityName, 'Word Wheel');
+    assert(new Date(scheduled[1].scheduledAt).getTime() > Date.now());
+    assert.equal(scheduled[1].timezone, 'Africa/Lagos');
+    const pickedWallClock = document.querySelector('input[type="datetime-local"]').value;
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(scheduled[1].scheduledAt)).map((part) => [part.type, part.value]));
+    assert.equal(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`, pickedWallClock,
+      'a datetime-local value is interpreted in the profile timezone saved with the reminder');
+    assert(body().includes('Turn on notifications on both phones'));
+
+    // Every completed visit prompts for the user's contribution and shows the shared timeline lane.
+    const memoriesSection = document.querySelector('[data-section="memories"]');
+    assert(memoriesSection.querySelector('[data-visit-memory="v-old"]'));
+    assert(memoriesSection.textContent.includes('Add one photo'));
+    assert(memoriesSection.textContent.includes('Waiting for Ana'));
+
+    // A cold push can open the precise activity once the shared schedule has loaded.
+    calls.length = 0;
+    await render({ initialSessionId: 'session-1' });
+    assert.deepEqual(calls, [['openActivity', 'session-1'], ['clearDeepLink']]);
+
+    // With no upcoming visit, choosing a date is the dominant empty-state action.
+    await render({ visit: null, visitWishes: [], visitChecklist: [] });
+    const emptyVisit = document.querySelector('[data-visit-card="empty"]');
+    assert(emptyVisit);
+    assert(emptyVisit.textContent.includes('Pick your next visit date'));
+    await click(emptyVisit.querySelector('[data-action="plan-next-visit"]'));
+    assert.deepEqual(calls.pop(), ['planVisit']);
   } finally {
     await act(() => root.unmount());
     await server.close();

@@ -11,6 +11,7 @@ export async function installTestBackend(client) {
   await db.exec(`
     CREATE ROLE authenticated NOLOGIN;
     CREATE ROLE anon NOLOGIN;
+    CREATE ROLE service_role NOLOGIN BYPASSRLS;
     CREATE SCHEMA auth;
     CREATE TABLE auth.users (id UUID PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE SQL STABLE AS $$
@@ -20,7 +21,7 @@ export async function installTestBackend(client) {
   `);
   await db.exec(await readFile(new URL('../../supabase/schema.sql', import.meta.url), 'utf8'));
   await db.exec(`
-    GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
+    GRANT USAGE ON SCHEMA public, auth TO authenticated, anon, service_role;
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles, public.couples, public.couple_events TO authenticated;
     GRANT SELECT, INSERT, DELETE ON public.push_subscriptions TO authenticated;
     -- The miss-you taps and the Daily Decisions assignments/responses are read by
@@ -104,6 +105,8 @@ export async function installTestBackend(client) {
       'shared_books', 'reading_progress', 'highlights', 'push_subscriptions', 'miss_you_taps',
       'daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses',
       'couple_photo', 'everyday_status', 'visits', 'someday_items',
+      'visit_wishes', 'visit_checklist_items', 'someday_item_votes',
+      'together_time_sessions', 'visit_memory_entries',
     ].includes(table)) throw new Error('Unexpected table in test');
     let writeData;
     let writeMode;

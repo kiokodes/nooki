@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
 import { clearLegacyLocalData } from './lib/clearLegacyLocalData';
-import { registerNookiServiceWorker, takePushDeepLink } from './lib/pushService';
+import { registerNookiServiceWorker, takePushDeepLink, takeTogetherTimeSessionDeepLink } from './lib/pushService';
 
 clearLegacyLocalData();
 
@@ -17,9 +17,10 @@ registerNookiServiceWorker();
 // URL) once, before the first render, so the app opens on that tab rather than painting
 // Home and jumping; a later reload then lands wherever the couple actually was.
 const pushStartTab = takePushDeepLink();
+const pushStartSession = takeTogetherTimeSessionDeepLink();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App initialTab={pushStartTab} />
+    <App initialTab={pushStartTab ?? (pushStartSession ? 'together' : null)} initialSessionId={pushStartSession} />
   </StrictMode>,
 );

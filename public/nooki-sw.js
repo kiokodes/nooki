@@ -70,6 +70,16 @@ function urlOf(payload, tab) {
   }
 }
 
+/** A scheduled Together-time notification may deep-link to the exact activity. */
+function sessionOf(payload) {
+  if (typeof payload.sessionId === 'string' && payload.sessionId) return payload.sessionId;
+  try {
+    return new URL(urlOf(payload, tabOf(payload))).searchParams.get('session') || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The unread count on the app icon (Badging API). Chromium and Safari both implement it
  * in the worker, and both throw when the platform has no badge concept — neither the
@@ -104,7 +114,7 @@ self.addEventListener('push', (event) => {
       badge: BADGE_ICON_URL,
       // Tapping has to know where to go, and it has to survive the notification being
       // read on a different day than it was sent.
-      data: { url: urlOf(payload, tab), tab },
+      data: { url: urlOf(payload, tab), tab, sessionId: sessionOf(payload) },
       // iOS ignores `timestamp`; Android shows it under the content when present.
       timestamp: Date.now(),
     }),
@@ -137,7 +147,7 @@ self.addEventListener('notificationclick', (event) => {
         await client.focus();
         // The window is already loaded, so the tab is switched by message rather than by
         // navigation: nothing reloads, and the splash is not replayed.
-        client.postMessage({ type: 'nooki-open-tab', tab });
+        client.postMessage({ type: 'nooki-open-tab', tab, sessionId: typeof data.sessionId === 'string' ? data.sessionId : null });
         return;
       }
     } catch {

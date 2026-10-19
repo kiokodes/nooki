@@ -310,7 +310,31 @@ export function takePushDeepLink(href?: string): PushDeepLinkTab | null {
   }
 }
 
+/**
+ * Consumes the optional `session` parameter carried by a Together-time push. It is only
+ * an opaque UUID; the app still loads the session through its normal couple-scoped RLS.
+ */
+export function takeTogetherTimeSessionDeepLink(href?: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const url = new URL(href ?? window.location.href);
+    const value = url.searchParams.get('session');
+    if (value === null) return null;
+    url.searchParams.delete('session');
+    const cleaned = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(window.history.state, '', cleaned || '/');
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A tapped notification's `nooki-open-tab` message, once the worker focuses this window. */
-export function isPushOpenTabMessage(data: unknown): data is { type: 'nooki-open-tab'; tab: string } {
-  return Boolean(data) && (data as { type?: string }).type === 'nooki-open-tab';
+export function isPushOpenTabMessage(data: unknown): data is { type: 'nooki-open-tab'; tab: PushDeepLinkTab; sessionId?: string | null } {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const message = data as Record<string, unknown>;
+  return message.type === 'nooki-open-tab'
+    && typeof message.tab === 'string'
+    && (PUSH_DEEP_LINK_TABS as readonly string[]).includes(message.tab)
+    && (message.sessionId === undefined || message.sessionId === null || typeof message.sessionId === 'string');
 }

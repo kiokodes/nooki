@@ -18,7 +18,8 @@
  *                                (Discuss tab) — only while the session is still open
  *   game_matches UPDATE        → tell the player whose *turn_id* just arrived it is
  *                                their move (Games tab) — only while the game is live
- *
+ *   scheduled sweep            → remind both partners that a Together time is due
+
  * Every event is something the recipient must act on, so a Nooki notification is always
  * meaningful: a new message, a question waiting for your answer, a move waiting for you.
  * Nothing fires for "read", "finished", or "both answered" — that would just be noise.
@@ -70,6 +71,15 @@ interface WebhookPayload {
   old_record?: Record<string, unknown>;
 }
 
+interface TogetherTimeReminder {
+  id: string;
+  couple_id: string;
+  activity_type: 'book' | 'game';
+  activity_id: string;
+  activity_name: string;
+  scheduled_at: string;
+}
+
 interface SubscriptionRow {
   id: string;
   endpoint: string;
@@ -84,7 +94,8 @@ interface PushNotification {
   tag: string;
   tab: string;
   url: string;
-  badge: number;
+  /** Absent for non-chat reminders so they do not clear the unread-chat app badge. */
+  badge?: number;
   messageId: string | null;
 }
 
@@ -374,6 +385,45 @@ async function handleGameTurn(
   return deliver(admin, newTurn, notification);
 }
 
+/** Due-time sweep → remind both partners, with a cold/deep link to this activity. */
+async function handleTogetherTimeReminderSweep(admin: Admin): Promise<Response> {
+  const { data, error } = await admin.rpc('claim_due_together_time_reminders');
+  if (error) return json({ error: `Could not claim due Together times: ${error.message}` }, 500);
+
+  const sessions = (data ?? []) as TogetherTimeReminder[];
+  let delivered = 0;
+  let failed = 0;
+  for (const session of sessions) {
+    const { data: partners, error: partnerError } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('couple_id', session.couple_id);
+    if (partnerError) {
+      failed += 1;
+      console.error(`send-push: could not read partners for Together time ${session.id}`);
+      continue;
+    }
+    const notification: PushNotification = {
+      title: 'Together time is here',
+      body: `It’s time for ${truncate(session.activity_name, 90)}. Tap to open it together.`,
+      tag: `nooki-together-time-${session.id}`,
+      tab: 'together',
+      url: `/?nooki=together&session=${encodeURIComponent(session.id)}`,
+      // Do not set `badge`: this is not a chat message and must not clear a chat badge.
+      messageId: null,
+    };
+    const results = await Promise.all(((partners ?? []) as Array<{ id: string }>).map(async ({ id }) => {
+      const response = await deliver(admin, id, notification);
+      if (!response.ok) return { sent: 0, failed: true };
+      const result = await response.json() as { sent?: number; failed?: number };
+      return { sent: result.sent ?? 0, failed: (result.failed ?? 0) > 0 };
+    }));
+    delivered += results.reduce((sum, result) => sum + result.sent, 0);
+    failed += results.some((result) => result.failed) ? 1 : 0;
+  }
+  return json({ claimed: sessions.length, delivered, failed });
+}
+
 const PONG = json({ ok: true });
 
 Deno.serve(async (request: Request): Promise<Response> => {
@@ -403,11 +453,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const record = payload.record;
+  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const scheduledSweep = payload.type === 'SCHEDULED' && payload.table === 'together_time_sessions';
+  if (scheduledSweep) return handleTogetherTimeReminderSweep(admin);
   if (!record || payload.table !== 'messages' && payload.table !== 'answers' && payload.table !== 'game_matches') {
     return json({ skipped: 'not a watched table' });
   }
-
-  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
   switch (payload.table) {
     case 'messages':
