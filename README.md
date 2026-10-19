@@ -78,7 +78,9 @@ apply and verify the database migrations separately.
    Games feature, Tic Tac Toe and their match history), then
    `202610180006_connect_four.sql` (adds Connect Four with database-refereed turns), then
    `202610180007_together_visits_and_someday_list.sql` (the Together tab's planned visits
-   and shared someday list).
+   and shared someday list), then
+   `202610180008_someday_details_order_and_visit_link.sql` (the list's notes, its manual
+   drag order, and the "Add to our next visit" link).
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -873,7 +875,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
 migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
@@ -1173,6 +1175,20 @@ Use your actual accounts; there is no automatic user creation.
       and jumping still work.
 - [ ] A third account cannot read the couple's books, bookmarks or highlights, and no
       book file is reachable without the couple's own signed URL.
+- [ ] Adding a someday idea puts it at the top of the Together tab on both phones; adding
+      several never replaces or reorders the others.
+- [ ] Drag the dots on an idea (or focus the dots and press ↑/↓) and the list reorders;
+      after a reload both phones show the same order.
+- [ ] Tapping an idea opens its sheet: the 500-character idea, a notes box that accepts
+      well over 500 characters (up to 1,000), and a save that both partners see. Delete
+      asks first, then removes it for both.
+- [ ] With a visit planned, **Add to our next visit** marks the idea "Next visit", puts it
+      under "What we'll do" on the visit card, and **Remove from this visit** takes it back
+      off without deleting the idea.
+- [ ] With no visit planned, **Plan our next visit** opens the planner; saving the visit
+      pins the idea to it automatically. Cancelling leaves the idea untouched.
+- [ ] Deleting a visit keeps its pinned ideas and simply returns them to the someday list;
+      a third account can neither read nor reorder the list.
 - [ ] Couple Settings shows **Notifications**; on Android/desktop the switch turns on after
       the browser's permission prompt, and says "On this device" afterwards.
 - [ ] With both apps closed, a message from device A produces a notification on device B
@@ -1223,7 +1239,10 @@ tab, and an unread count on the installed app's icon; the chat is the only thing
 so far. Together hosts **Read together** (shared books:
 one EPUB or PDF in play per couple, a full-screen reader, saved places for both
 partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
-back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes
+back-to-the-passage loop), **Our next visit** (a countdown, the visit planner, and the
+ideas pinned from the someday list) and **Our someday list** (a shared, manually ordered
+list of things to experience together, each with 1,000 characters of notes and a one-tap
+move into the next visit); synced music and scrapbooks are still to come. Games includes
 Rock Paper Scissors, Chess, Sudoku, the asynchronous Snake Duel and the
 asynchronous Tetris Duel (five minutes each, in either a sprint or a survival), and
 voice/video calling is still a "coming soon" toast. No sample conversations or questions
@@ -1436,6 +1455,63 @@ both devices at once, jump to each other, highlight with and without comments, j
 from a chat quote back into the passage, then Leave / Finish / Delete (checking the
 chat quote after Delete). Upload a scanned PDF and confirm the no-selectable-text
 note. Finally, check a third account cannot reach any of it in its network responses.
+
+## Together tab: Our next visit & the someday list
+
+Before deploying to an **existing** project, apply
+`supabase/migrations/202610180007_together_visits_and_someday_list.sql` and then
+`supabase/migrations/202610180008_someday_details_order_and_visit_link.sql`, and run
+`supabase/verify.sql` again. Both migrations are additive and safe to rerun. New projects
+get the same tables and functions from `schema.sql`.
+
+### The list
+
+- **Adding** — “Add to our list” takes one line (up to 500 characters) and drops it at the
+  top of the couple's list. There is no practical limit on how many ideas a couple keeps.
+- **Order** — the dots on the left drag a row anywhere in the list; the grip is also a
+  button, so focusing it and pressing ↑/↓ moves the idea one slot. The whole order is saved
+  in one database call (`reorder_someday_items`), so the two phones always read the same
+  list after the next load or Realtime update. New ideas join above the list, and completed
+  ideas move into the collapsed “completed” group.
+- **Opening an idea** — tapping the words opens a bottom sheet. The idea stays editable,
+  and **More about it** holds up to **1,000 characters** of context (the request was “at
+  least 500”): the place, the plan, who mentioned it. Notes show as a one-line preview on
+  the row and update for both partners.
+- **Deleting** — the trash button on the row and the Delete button in the sheet both ask
+  first, then remove the idea for both partners.
+
+### Moving an idea into a visit
+
+**Add to our next visit** is the bridge between the list and a real plan:
+
+- With a next visit planned, the button pins the idea to it. The row gets a small **Next
+  visit** pill and the idea appears under **What we'll do** on the visit card. This is the
+  same row, not a copy; **Remove from this visit** takes the pin off and leaves the idea on
+  the someday list. If the idea belongs to a visit that has already passed, the sheet also
+  offers **Take it off that visit**.
+- Without a visit, the button becomes **Plan our next visit**: it opens the visit planner
+  and remembers the idea, then pins it to the visit the couple saves. Closing the planner
+  without saving leaves the idea exactly where it was.
+- Deleting the visit does **not** delete its ideas: `visit_id` goes back to NULL and every
+  pinned idea simply returns to the unplanned someday list.
+- A visit from another couple can never be linked, even with a forged request; a database
+  trigger enforces that the idea and the visit belong to the same couple.
+
+### Data and privacy
+
+The list and its visits are couple-scoped tables with row-level security (read, insert,
+update and delete each check `get_user_couple_id`). The notes ceiling and non-empty title
+are database constraints, not just form limits. The reorder function is callable only by a
+signed-in member, rejects duplicate ids, and refuses any id that is not on the caller's own
+list. Realtime keeps both phones' rows, visit card, and completed group in step.
+
+Local coverage: `node --test tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs`
+(plus the existing Together/book tests).
+
+Before release, use two real paired accounts: add several ideas, reorder them on both
+phones (including while the other phone is open), add a long note, delete one, pin one to
+the next visit, remove it, then delete the visit and confirm the idea is still there. Check
+a third account sees none of it in its network responses.
 
 ## Everyday status + mood (Home)
 

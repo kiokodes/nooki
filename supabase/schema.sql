@@ -5158,3 +5158,148 @@ END $$;
 REVOKE ALL ON FUNCTION public.start_connect_four(), public.connect_four_move(uuid,integer,integer) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.start_connect_four(), public.connect_four_move(uuid,integer,integer) TO authenticated;
 COMMIT;
+-- Together tab: planned visits and the shared someday list.
+-- The same statements live in 202610180007_together_visits_and_someday_list.sql
+-- and 202610180008_someday_details_order_and_visit_link.sql for existing projects.
+BEGIN;
+CREATE TABLE IF NOT EXISTS public.visits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  couple_id UUID NOT NULL REFERENCES public.couples(id) ON DELETE CASCADE,
+  start_date DATE NOT NULL,
+  end_date DATE,
+  location TEXT,
+  timezone TEXT DEFAULT 'UTC',
+  is_tentative BOOLEAN NOT NULL DEFAULT false,
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT valid_dates CHECK (end_date IS NULL OR end_date >= start_date)
+);
+CREATE INDEX IF NOT EXISTS idx_visits_couple_id ON public.visits(couple_id);
+CREATE INDEX IF NOT EXISTS idx_visits_start_date ON public.visits(start_date);
+ALTER TABLE public.visits ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS visits_read ON public.visits;
+CREATE POLICY visits_read ON public.visits FOR SELECT TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()));
+DROP POLICY IF EXISTS visits_insert ON public.visits;
+CREATE POLICY visits_insert ON public.visits FOR INSERT TO authenticated
+WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()));
+DROP POLICY IF EXISTS visits_update ON public.visits;
+CREATE POLICY visits_update ON public.visits FOR UPDATE TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()))
+WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()));
+DROP POLICY IF EXISTS visits_delete ON public.visits;
+CREATE POLICY visits_delete ON public.visits FOR DELETE TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()));
+REVOKE ALL ON public.visits FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.visits TO authenticated;
+
+CREATE TABLE IF NOT EXISTS public.someday_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  couple_id UUID NOT NULL REFERENCES public.couples(id) ON DELETE CASCADE,
+  text TEXT NOT NULL CHECK (char_length(text) > 0 AND char_length(text) <= 500),
+  details TEXT,
+  sort_order DOUBLE PRECISION NOT NULL DEFAULT 0,
+  visit_id UUID REFERENCES public.visits(id) ON DELETE SET NULL,
+  completed BOOLEAN NOT NULL DEFAULT false,
+  completed_at TIMESTAMPTZ,
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT completed_at_check CHECK (
+    (completed = false AND completed_at IS NULL) OR
+    (completed = true AND completed_at IS NOT NULL)
+  ),
+  CONSTRAINT someday_details_length_check CHECK (details IS NULL OR char_length(details) <= 1000)
+);
+CREATE INDEX IF NOT EXISTS idx_someday_items_couple_id ON public.someday_items(couple_id);
+CREATE INDEX IF NOT EXISTS idx_someday_items_completed ON public.someday_items(completed);
+CREATE INDEX IF NOT EXISTS idx_someday_items_created_at ON public.someday_items(created_at);
+CREATE INDEX IF NOT EXISTS idx_someday_items_order ON public.someday_items(couple_id, sort_order, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_someday_items_visit_id ON public.someday_items(visit_id) WHERE visit_id IS NOT NULL;
+ALTER TABLE public.someday_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS someday_items_read ON public.someday_items;
+CREATE POLICY someday_items_read ON public.someday_items FOR SELECT TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()));
+DROP POLICY IF EXISTS someday_items_insert ON public.someday_items;
+CREATE POLICY someday_items_insert ON public.someday_items FOR INSERT TO authenticated
+WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()));
+DROP POLICY IF EXISTS someday_items_update ON public.someday_items;
+CREATE POLICY someday_items_update ON public.someday_items FOR UPDATE TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()))
+WITH CHECK (couple_id = public.get_user_couple_id(auth.uid()));
+DROP POLICY IF EXISTS someday_items_delete ON public.someday_items;
+CREATE POLICY someday_items_delete ON public.someday_items FOR DELETE TO authenticated
+USING (couple_id = public.get_user_couple_id(auth.uid()));
+REVOKE ALL ON public.someday_items FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.someday_items TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.guard_someday_item_visit()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public
+AS $$
+BEGIN
+  IF NEW.visit_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.visits
+    WHERE id = NEW.visit_id AND couple_id = NEW.couple_id
+  ) THEN
+    RAISE EXCEPTION 'That visit is not part of your plans.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS guard_someday_item_visit ON public.someday_items;
+CREATE TRIGGER guard_someday_item_visit
+BEFORE INSERT OR UPDATE OF visit_id, couple_id ON public.someday_items
+FOR EACH ROW EXECUTE FUNCTION public.guard_someday_item_visit();
+
+CREATE OR REPLACE FUNCTION public.reorder_someday_items(p_ids UUID[])
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  cid UUID := public.get_user_couple_id(auth.uid());
+  distinct_count INTEGER;
+  owned_count INTEGER;
+BEGIN
+  IF cid IS NULL THEN
+    RAISE EXCEPTION 'Pair with your partner first.';
+  END IF;
+  IF p_ids IS NULL OR cardinality(p_ids) = 0 THEN
+    RETURN;
+  END IF;
+  SELECT count(DISTINCT id) INTO distinct_count FROM unnest(p_ids) AS id;
+  IF distinct_count <> cardinality(p_ids) THEN
+    RAISE EXCEPTION 'A list item can only appear once.';
+  END IF;
+  SELECT count(*) INTO owned_count
+  FROM public.someday_items
+  WHERE couple_id = cid AND id = ANY(p_ids);
+  IF owned_count <> cardinality(p_ids) THEN
+    RAISE EXCEPTION 'That someday list is not yours.';
+  END IF;
+  UPDATE public.someday_items AS item
+  SET sort_order = ordered.position - 1,
+      updated_at = now()
+  FROM unnest(p_ids) WITH ORDINALITY AS ordered(id, position)
+  WHERE item.id = ordered.id AND item.couple_id = cid;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.reorder_someday_items(UUID[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.reorder_someday_items(UUID[]) TO authenticated;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'visits'
+    ) THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.visits;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'someday_items'
+    ) THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.someday_items;
+    END IF;
+  END IF;
+END $$;
+COMMIT;

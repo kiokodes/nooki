@@ -1,13 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
+  CalendarHeart,
   CheckCircle2,
   Clock,
+  GripVertical,
   Heart,
   MapPin,
   Play,
   Plus,
   Sparkles,
+  StickyNote,
   Trash2,
   Upload,
   UserRound,
@@ -18,6 +21,13 @@ import {
 } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { MAX_BOOKS_ON_SHELF, SHELF_FULL_HELP, isBookFileType } from '../../lib/booksService';
+import {
+  SOMEDAY_DETAILS_MAX,
+  SOMEDAY_TEXT_MAX,
+  moveSomedayItem,
+  somedayItemsForVisit,
+} from '../../lib/somedayService';
+import { SomedayItemModal } from './SomedayItemModal';
 import type { BooksState } from '../../hooks/useBooks';
 import type { SharedBook, Visit, SomedayItem } from '../../types/database';
 
@@ -43,9 +53,19 @@ interface TogetherViewProps {
   onViewVisitPlans?: () => void;
   // Someday list props
   somedayItems?: SomedayItem[];
-  onAddSomedayItem?: (text: string) => Promise<unknown>;
+  somedayError?: string | null;
+  onAddSomedayItem?: (text: string, details?: string | null) => Promise<unknown>;
+  onUpdateSomedayItem?: (item: SomedayItem, text: string, details: string | null) => Promise<void>;
   onToggleSomedayItem?: (item: SomedayItem) => Promise<void>;
   onDeleteSomedayItem?: (item: SomedayItem) => Promise<void>;
+  /** Save the dragged order, ids top to bottom. */
+  onReorderSomedayItems?: (orderedIds: string[]) => Promise<void>;
+  /** Pin an idea to the couple's next visit. */
+  onAddSomedayItemToVisit?: (item: SomedayItem) => Promise<void>;
+  /** Take an idea back off the visit it is pinned to. */
+  onRemoveSomedayItemFromVisit?: (item: SomedayItem) => Promise<void>;
+  /** No visit yet: plan one and pin this idea to it. */
+  onPlanSomedayItemVisit?: (item: SomedayItem) => void;
 }
 
 function ProgressBar({ label, percent, ink }: { label: string; percent: number; ink: string }) {
@@ -355,11 +375,13 @@ function BookCard({
 
 function VisitCard({
   visit,
+  visitItems,
   userName,
   partnerName,
   onViewPlans,
 }: {
   visit: Visit;
+  visitItems: SomedayItem[];
   userName: string;
   partnerName: string;
   onViewPlans: () => void;
@@ -419,6 +441,7 @@ function VisitCard({
             {visit.location}
           </p>
         )}
+        <VisitIdeas items={visitItems} />
       </article>
     );
   }
@@ -536,6 +559,7 @@ function VisitCard({
           {formatDateRange(visit.start_date, visit.end_date)}
         </span>
       </div>
+      <VisitIdeas items={visitItems} />
       <button
         type="button"
         onClick={onViewPlans}
@@ -561,6 +585,66 @@ function VisitCard({
         <Pencil size={16} aria-hidden="true" />
       </button>
     </article>
+  );
+}
+
+function VisitIdeas({ items }: { items: SomedayItem[] }) {
+  if (items.length === 0) return null;
+  const shown = items.slice(0, 4);
+  return (
+    <div
+      data-visit-ideas
+      style={{
+        width: '100%',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        padding: '11px 13px',
+        borderRadius: tokens.radii.md,
+        backgroundColor: tokens.colors.bgSurfaceSubtle,
+        textAlign: 'left',
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          fontSize: '0.68rem',
+          fontWeight: 800,
+          letterSpacing: '0.03em',
+          textTransform: 'uppercase',
+          color: tokens.colors.primaryPinkDeep,
+        }}
+      >
+        <CalendarHeart size={12} aria-hidden="true" />
+        What we'll do
+      </p>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {shown.map((item) => (
+          <li
+            key={item.id}
+            data-visit-idea={item.id}
+            style={{
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              lineHeight: 1.4,
+              color: item.completed ? tokens.colors.textMuted : tokens.colors.textPrimary,
+              textDecoration: item.completed ? 'line-through' : 'none',
+            }}
+          >
+            • {item.text}
+          </li>
+        ))}
+      </ul>
+      {items.length > shown.length && (
+        <p style={{ margin: 0, fontSize: '0.7rem', fontWeight: 600, color: tokens.colors.textMuted }}>
+          +{items.length - shown.length} more on our someday list
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -666,30 +750,153 @@ function formatDateRange(startDate: string, endDate: string | null): string {
 // Our Someday List Section
 // ============================================================================
 
-function SomedayList({
-  items,
-  onAddItem,
-  onToggleItem,
-  onDeleteItem,
-}: {
+interface SomedayListProps {
   items: SomedayItem[];
-  onAddItem: (text: string) => Promise<unknown>;
+  error: string | null;
+  nextVisit: Visit | null;
+  onAddItem: (text: string, details?: string | null) => Promise<unknown>;
+  onUpdateItem: (item: SomedayItem, text: string, details: string | null) => Promise<void>;
   onToggleItem: (item: SomedayItem) => Promise<void>;
   onDeleteItem: (item: SomedayItem) => Promise<void>;
-}) {
+  onReorderItems: (orderedIds: string[]) => Promise<void>;
+  onAddToVisit: (item: SomedayItem) => Promise<void>;
+  onRemoveFromVisit: (item: SomedayItem) => Promise<void>;
+  onPlanVisit: (item: SomedayItem) => void;
+}
+
+function SomedayList({
+  items,
+  error,
+  nextVisit,
+  onAddItem,
+  onUpdateItem,
+  onToggleItem,
+  onDeleteItem,
+  onReorderItems,
+  onAddToVisit,
+  onRemoveFromVisit,
+  onPlanVisit,
+}: SomedayListProps) {
   const [newItemText, setNewItemText] = useState('');
   const [adding, setAdding] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [dragOrder, setDragOrder] = useState<SomedayItem[] | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+
+  // The order the rows are painted in while a drag is happening. The stored list
+  // takes over again the moment the pointer lifts.
+  const dragOrderRef = useRef<SomedayItem[] | null>(null);
+  const dragIdRef = useRef<string | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const completedItems = items.filter((item) => item.completed);
+  const activeFromProps = items.filter((item) => !item.completed);
+  const activeItems = dragOrder ?? activeFromProps;
+  const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
+
+  // Realtime can replace the stored list at any moment. Never yank the rows out
+  // from under an active drag; otherwise follow the server.
+  useEffect(() => {
+    if (dragIdRef.current === null) {
+      dragOrderRef.current = null;
+      setDragOrder(null);
+    }
+  }, [items]);
+
+  useEffect(() => {
+    if (selectedId && !items.some((item) => item.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [items, selectedId]);
 
   const handleAdd = async () => {
     if (!newItemText.trim()) return;
     setAdding(true);
-    await onAddItem(newItemText.trim());
-    setNewItemText('');
-    setAdding(false);
+    try {
+      await onAddItem(newItemText.trim(), null);
+      setNewItemText('');
+      setAdding(false);
+    } catch {
+      // The section shows the hook's error; keep what was typed.
+      setAdding(false);
+    }
   };
 
-  const completedItems = items.filter((item) => item.completed);
-  const activeItems = items.filter((item) => !item.completed);
+  const registerRow = (id: string, element: HTMLDivElement | null) => {
+    if (element) rowRefs.current.set(id, element);
+    else rowRefs.current.delete(id);
+  };
+
+  const commitOrder = (item: SomedayItem, order: SomedayItem[], before: SomedayItem[]) => {
+    const ids = order.map((entry) => entry.id);
+    if (ids.join('|') === before.map((entry) => entry.id).join('|')) return;
+    setAnnouncement(`Moved “${item.text}” to position ${ids.indexOf(item.id) + 1} of ${ids.length}.`);
+    void onReorderItems(ids);
+  };
+
+  const startDrag = (item: SomedayItem, event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    const initial = itemsRef.current.filter((entry) => !entry.completed);
+    dragOrderRef.current = initial;
+    dragIdRef.current = item.id;
+    setDragOrder(initial);
+    setAnnouncement(`Moving “${item.text}”. Release to drop it.`);
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const order = dragOrderRef.current;
+      if (!order) return;
+      // Measure the rows as they are laid out right now; the first row whose middle
+      // the pointer has crossed is the slot the dragged idea wants.
+      let target = order.length - 1;
+      for (let index = 0; index < order.length; index += 1) {
+        const element = rowRefs.current.get(order[index].id);
+        if (!element) continue;
+        const rect = element.getBoundingClientRect();
+        if (moveEvent.clientY < rect.top + rect.height / 2) {
+          target = index;
+          break;
+        }
+      }
+      const currentIndex = order.findIndex((entry) => entry.id === item.id);
+      if (target === currentIndex) return;
+      const next = moveSomedayItem(order, item.id, target);
+      dragOrderRef.current = next;
+      setDragOrder(next);
+    };
+
+    const finishDrag = () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointercancel', finishDrag);
+      const order = dragOrderRef.current;
+      dragIdRef.current = null;
+      dragOrderRef.current = null;
+      setDragOrder(null);
+      if (!order) return;
+      if (order.map((entry) => entry.id).join('|') === initial.map((entry) => entry.id).join('|')) {
+        setAnnouncement('');
+        return;
+      }
+      commitOrder(item, order, initial);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
+  };
+
+  const moveByKeyboard = (item: SomedayItem, direction: -1 | 1) => {
+    const order = itemsRef.current.filter((entry) => !entry.completed);
+    const index = order.findIndex((entry) => entry.id === item.id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    const next = moveSomedayItem(order, item.id, target);
+    setAnnouncement(`Moved “${item.text}” to position ${target + 1} of ${next.length}.`);
+    void onReorderItems(next.map((entry) => entry.id));
+  };
 
   return (
     <section
@@ -700,9 +907,10 @@ function SomedayList({
         gap: '12px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
         <h2
           style={{
+            margin: 0,
             fontSize: '0.88rem',
             fontWeight: 800,
             color: tokens.colors.textPrimary,
@@ -724,6 +932,48 @@ function SomedayList({
         </span>
       </div>
 
+      {activeItems.length > 0 && (
+        <p
+          style={{
+            margin: '-4px 2px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            fontSize: '0.72rem',
+            lineHeight: 1.5,
+            fontWeight: 600,
+            color: tokens.colors.textMuted,
+          }}
+        >
+          <GripVertical size={12} aria-hidden="true" />
+          {activeItems.length > 1 ? 'Drag the dots to set what matters most. ' : ''}
+          Tap an idea for notes (up to {SOMEDAY_DETAILS_MAX.toLocaleString('en-US')} characters).
+        </p>
+      )}
+
+      {error && (
+        <p
+          role="alert"
+          data-someday-error
+          style={{
+            margin: 0,
+            padding: '10px 14px',
+            borderRadius: tokens.radii.md,
+            backgroundColor: tokens.colors.primaryPinkSoft,
+            color: tokens.colors.primaryPinkDeep,
+            fontSize: '0.8rem',
+            fontWeight: 700,
+          }}
+        >
+          {error}
+        </p>
+      )}
+
+      {/* Screen readers hear where a dragged or nudged idea landed. */}
+      <p role="status" aria-live="polite" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
+        {announcement}
+      </p>
+
       {/* Add new item */}
       {adding ? (
         <div
@@ -740,10 +990,13 @@ function SomedayList({
           <input
             type="text"
             value={newItemText}
+            maxLength={SOMEDAY_TEXT_MAX}
             onChange={(e) => setNewItemText(e.target.value)}
             placeholder="Add something you want to do together..."
+            aria-label="A new someday idea"
             style={{
               flex: 1,
+              minWidth: 0,
               border: 'none',
               background: 'transparent',
               fontSize: '0.88rem',
@@ -764,14 +1017,16 @@ function SomedayList({
           />
           <button
             type="button"
-            onClick={handleAdd}
+            onClick={() => { void handleAdd(); }}
             disabled={!newItemText.trim() || adding}
+            aria-label="Add to our someday list"
             style={{
               background: 'none',
               border: 'none',
               color: tokens.colors.primaryPinkDeep,
               cursor: !newItemText.trim() ? 'default' : 'pointer',
               padding: '4px',
+              opacity: !newItemText.trim() ? 0.5 : 1,
             }}
           >
             <Check size={18} />
@@ -782,6 +1037,7 @@ function SomedayList({
               setAdding(false);
               setNewItemText('');
             }}
+            aria-label="Cancel"
             style={{
               background: 'none',
               border: 'none',
@@ -820,7 +1076,7 @@ function SomedayList({
         </button>
       )}
 
-      {/* Active items */}
+      {/* Active items, in the couple's own order */}
       {activeItems.length > 0 && (
         <div
           style={{
@@ -833,8 +1089,15 @@ function SomedayList({
             <SomedayItemRow
               key={item.id}
               item={item}
+              canReorder
+              dragging={dragIdRef.current === item.id && dragOrder !== null}
+              isPinnedToNextVisit={Boolean(nextVisit && item.visit_id === nextVisit.id)}
+              registerRow={registerRow}
+              onOpen={(entry) => setSelectedId(entry.id)}
               onToggle={onToggleItem}
               onDelete={onDeleteItem}
+              onStartDrag={startDrag}
+              onMoveByKeyboard={moveByKeyboard}
             />
           ))}
         </div>
@@ -871,8 +1134,15 @@ function SomedayList({
               <SomedayItemRow
                 key={item.id}
                 item={item}
+                canReorder={false}
+                dragging={false}
+                isPinnedToNextVisit={Boolean(nextVisit && item.visit_id === nextVisit.id)}
+                registerRow={registerRow}
+                onOpen={(entry) => setSelectedId(entry.id)}
                 onToggle={onToggleItem}
                 onDelete={onDeleteItem}
+                onStartDrag={startDrag}
+                onMoveByKeyboard={moveByKeyboard}
               />
             ))}
           </div>
@@ -891,34 +1161,111 @@ function SomedayList({
           Your shared list will appear here. Add things you want to experience together!
         </p>
       )}
+
+      {selected && (
+        <SomedayItemModal
+          key={selected.id}
+          item={selected}
+          visit={nextVisit}
+          onClose={() => setSelectedId(null)}
+          onSave={onUpdateItem}
+          onDelete={onDeleteItem}
+          onAddToVisit={onAddToVisit}
+          onRemoveFromVisit={onRemoveFromVisit}
+          onPlanVisit={(entry) => {
+            setSelectedId(null);
+            onPlanVisit(entry);
+          }}
+        />
+      )}
     </section>
   );
 }
 
 function SomedayItemRow({
   item,
+  canReorder,
+  dragging,
+  isPinnedToNextVisit,
+  registerRow,
+  onOpen,
   onToggle,
   onDelete,
+  onStartDrag,
+  onMoveByKeyboard,
 }: {
   item: SomedayItem;
+  canReorder: boolean;
+  dragging: boolean;
+  isPinnedToNextVisit: boolean;
+  registerRow: (id: string, element: HTMLDivElement | null) => void;
+  onOpen: (item: SomedayItem) => void;
   onToggle: (item: SomedayItem) => Promise<void>;
   onDelete: (item: SomedayItem) => Promise<void>;
+  onStartDrag: (item: SomedayItem, event: React.PointerEvent<HTMLButtonElement>) => void;
+  onMoveByKeyboard: (item: SomedayItem, direction: -1 | 1) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
 
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete “${item.text}”?`)) return;
+    setDeleting(true);
+    try {
+      await onDelete(item);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div
+      ref={(element) => registerRow(item.id, element)}
       data-someday-item={item.id}
+      data-someday-dragging={dragging ? 'true' : undefined}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        padding: '10px 14px',
+        gap: '7px',
+        padding: canReorder ? '8px 10px 8px 3px' : '10px 14px',
         borderRadius: tokens.radii.md,
-        backgroundColor: tokens.colors.bgSurface,
-        boxShadow: tokens.shadows.card,
+        backgroundColor: dragging ? tokens.colors.accentLavenderSoft : tokens.colors.bgSurface,
+        border: `1.5px solid ${dragging ? tokens.colors.accentLavender : 'transparent'}`,
+        boxShadow: dragging ? tokens.shadows.soft : tokens.shadows.card,
+        transition: 'background-color 0.15s ease, border-color 0.15s ease',
       }}
     >
+      {canReorder && (
+        <button
+          type="button"
+          data-someday-grip
+          aria-label={`Reorder “${item.text}”. Use the up and down arrow keys.`}
+          title="Drag to reorder"
+          onPointerDown={(event) => onStartDrag(item, event)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              onMoveByKeyboard(item, -1);
+            }
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              onMoveByKeyboard(item, 1);
+            }
+          }}
+          style={{
+            flexShrink: 0,
+            padding: '6px 2px',
+            background: 'none',
+            border: 'none',
+            color: tokens.colors.textMuted,
+            cursor: dragging ? 'grabbing' : 'grab',
+            touchAction: 'none',
+            lineHeight: 0,
+          }}
+        >
+          <GripVertical size={17} aria-hidden="true" />
+        </button>
+      )}
+
       <button
         type="button"
         onClick={() => onToggle(item)}
@@ -939,24 +1286,96 @@ function SomedayItemRow({
       >
         {item.completed && <Check size={14} style={{ color: tokens.colors.textWhite }} />}
       </button>
-      <span
-        style={{
-          flex: 1,
-          fontSize: '0.88rem',
-          color: item.completed ? tokens.colors.textMuted : tokens.colors.textPrimary,
-          textDecoration: item.completed ? 'line-through' : 'none',
-          textDecorationColor: tokens.colors.textMuted,
-        }}
-      >
-        {item.text}
-      </span>
+
       <button
         type="button"
-        onClick={async () => {
-          setDeleting(true);
-          await onDelete(item);
-          setDeleting(false);
+        data-someday-open={item.id}
+        onClick={() => onOpen(item)}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '3px',
+          alignItems: 'flex-start',
+          padding: '3px 0',
+          background: 'none',
+          border: 'none',
+          textAlign: 'left',
+          fontFamily: tokens.typography.fontFamily,
+          cursor: 'pointer',
         }}
+      >
+        <span
+          style={{
+            maxWidth: '100%',
+            overflowWrap: 'anywhere',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            color: item.completed ? tokens.colors.textMuted : tokens.colors.textPrimary,
+            textDecoration: item.completed ? 'line-through' : 'none',
+            textDecorationColor: tokens.colors.textMuted,
+          }}
+        >
+          {item.text}
+        </span>
+        {(item.details || isPinnedToNextVisit) && (
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '4px 6px',
+              maxWidth: '100%',
+            }}
+          >
+            {item.details && (
+              <span
+                data-someday-detail-preview
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  maxWidth: '100%',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  color: tokens.colors.textMuted,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                }}
+              >
+                <StickyNote size={11} aria-hidden="true" style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.details}</span>
+              </span>
+            )}
+            {isPinnedToNextVisit && (
+              <span
+                data-someday-pinned
+                style={{
+                  flexShrink: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: '2px 7px',
+                  borderRadius: tokens.radii.pill,
+                  backgroundColor: tokens.colors.primaryPinkSoft,
+                  color: tokens.colors.primaryPinkDeep,
+                  fontSize: '0.64rem',
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <CalendarHeart size={10} aria-hidden="true" />
+                Next visit
+              </span>
+            )}
+          </span>
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => { void handleDelete(); }}
         disabled={deleting}
         style={{
           background: 'none',
@@ -964,8 +1383,9 @@ function SomedayItemRow({
           color: tokens.colors.textMuted,
           cursor: 'pointer',
           padding: '4px',
+          flexShrink: 0,
         }}
-        aria-label="Delete"
+        aria-label={`Delete “${item.text}”`}
       >
         <Trash2 size={16} />
       </button>
@@ -989,9 +1409,15 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
   onViewVisitPlans,
   // Someday list props (optional for now)
   somedayItems = [],
+  somedayError = null,
   onAddSomedayItem,
+  onUpdateSomedayItem,
   onToggleSomedayItem,
   onDeleteSomedayItem,
+  onReorderSomedayItems,
+  onAddSomedayItemToVisit,
+  onRemoveSomedayItemFromVisit,
+  onPlanSomedayItemVisit,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1105,7 +1531,13 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
           Our next visit
         </h2>
         {visit ? (
-          <VisitCard visit={visit} userName={userName} partnerName={partnerName} onViewPlans={onViewVisitPlans || (() => {})} />
+          <VisitCard
+            visit={visit}
+            visitItems={somedayItemsForVisit(somedayItems, visit.id)}
+            userName={userName}
+            partnerName={partnerName}
+            onViewPlans={onViewVisitPlans || (() => {})}
+          />
         ) : (
           <NoVisitCard onPlanVisit={onPlanVisit || (() => {})} />
         )}
@@ -1292,12 +1724,25 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
           gap: '12px',
         }}
       >
-        {onAddSomedayItem && onToggleSomedayItem && onDeleteSomedayItem ? (
+        {onAddSomedayItem &&
+        onUpdateSomedayItem &&
+        onToggleSomedayItem &&
+        onDeleteSomedayItem &&
+        onReorderSomedayItems &&
+        onAddSomedayItemToVisit &&
+        onRemoveSomedayItemFromVisit ? (
           <SomedayList
             items={somedayItems}
+            error={somedayError}
+            nextVisit={visit ?? null}
             onAddItem={onAddSomedayItem}
+            onUpdateItem={onUpdateSomedayItem}
             onToggleItem={onToggleSomedayItem}
             onDeleteItem={onDeleteSomedayItem}
+            onReorderItems={onReorderSomedayItems}
+            onAddToVisit={onAddSomedayItemToVisit}
+            onRemoveFromVisit={onRemoveSomedayItemFromVisit}
+            onPlanVisit={onPlanSomedayItemVisit ?? (() => onPlanVisit?.())}
           />
         ) : (
           <article

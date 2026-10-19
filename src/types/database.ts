@@ -379,13 +379,25 @@ export interface Visit {
 
 /* ---------------------------------------------------------------------------
    Together tab: Someday list - shared list of things to experience together.
-   See supabase/migrations/202610180007_together_visits_and_someday_list.sql.
+   See supabase/migrations/202610180007_together_visits_and_someday_list.sql and
+   supabase/migrations/202610180008_someday_details_order_and_visit_link.sql.
    --------------------------------------------------------------------------- */
 
 export interface SomedayItem {
   id: string;
   couple_id: string;
+  /** The idea, at most 500 characters: the line the Together tab shows. */
   text: string;
+  /** Extra context added after tapping the idea, up to 1000 characters. */
+  details: string | null;
+  /** The couple's manual order, ascending; lower numbers sit higher on the list. */
+  sort_order: number;
+  /**
+   * The visit this idea was added to ("Add to our next visit"), or null while it is
+   * still only a someday idea. Deleting the visit puts the idea back on the list
+   * rather than deleting it.
+   */
+  visit_id: string | null;
   completed: boolean;
   completed_at: string | null;
   created_by: string | null;

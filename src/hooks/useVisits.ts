@@ -12,7 +12,7 @@ interface VisitsState {
 }
 
 export function useVisits(coupleId: string | null, userId: string | null): VisitsState & {
-  planVisit: (startDate: string, endDate: string | null, location: string | null, timezone: string | null, isTentative: boolean) => Promise<void>;
+  planVisit: (startDate: string, endDate: string | null, location: string | null, timezone: string | null, isTentative: boolean) => Promise<Visit>;
   updateVisit: (visitId: string, updates: Partial<Omit<Visit, 'id' | 'couple_id' | 'created_at' | 'updated_at'>>) => Promise<void>;
   deleteVisit: (visitId: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -107,12 +107,12 @@ export function useVisits(coupleId: string | null, userId: string | null): Visit
   }, [coupleId, loadVisits]);
 
   const planVisit = useCallback(async (startDate: string, endDate: string | null, location: string | null, timezone: string | null, isTentative: boolean) => {
-    if (!coupleId) return;
+    if (!coupleId) throw new Error('Pair with your partner first.');
 
     try {
       setState((prev) => ({ ...prev, saving: true, error: null }));
       
-      const { error } = await requireSupabase()
+      const { data, error } = await requireSupabase()
         .from('visits')
         .insert({
           couple_id: coupleId,
@@ -122,14 +122,21 @@ export function useVisits(coupleId: string | null, userId: string | null): Visit
           timezone,
           is_tentative: isTentative,
           created_by: userId,
-        });
+        })
+        .select()
+        .single();
 
       if (error) {
         throw new Error(describeDatabaseError(error));
       }
+      if (!data) {
+        throw new Error('This visit could not be saved. Please try again.');
+      }
 
-      // Refresh the visits
+      // Refresh the visits, then hand the new row back so a someday idea the
+      // couple was adding can be pinned to it straight away.
       await loadVisits();
+      return data as Visit;
     } catch (err) {
       setState((prev) => ({
         ...prev,
