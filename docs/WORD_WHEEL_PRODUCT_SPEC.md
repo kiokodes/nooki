@@ -24,7 +24,7 @@ verify it. The code lives in:
 | Curated base words | `scripts/word-puzzle-bases.json` |
 | Optional service-role uploader | `scripts/upload-word-puzzles.mjs` |
 | Tests | `tests/word-wheel-logic.test.mjs`, `word-wheel-database.test.mjs`, `word-wheel-ui.test.mjs` |
-| Backend-free preview | `src/preview/PreviewWordWheel.tsx` (`/preview.html` → Games → Word Wheel) |
+| Backend-free preview | `src/preview/PreviewWordWheel.tsx` (`/preview.html` → Games → Word Wheel) — settings first, then a sample lobby |
 
 ---
 
@@ -401,7 +401,15 @@ and do not alter the submitted score.
 - `submitWord` refreshes the snapshot after writing, so the partner's submission can settle the
   round on the next poll.
 
-### 8.5 Motion and mobile layout
+### 8.5 The library tab is settings, never a running clock
+
+Selecting the Word Wheel chip in the Games rail only ever shows choices: difficulty,
+duration, and the button that creates the round. No timer starts, no clock is armed, and
+no hidden word is dealt until **Set the wheel** is pressed and both sides ready up. The
+in-app panel and the design preview both follow this rule; the preview's sample round
+opens in the lobby too, so a reviewer swiping the rail never lands on a ticking board.
+
+### 8.6 Motion and mobile layout
 
 - Tiles animate position over 220 ms on shuffle; the line updates immediately.
 - A wrong word shakes the wheel for 420 ms; `prefers-reduced-motion` disables the shake and the

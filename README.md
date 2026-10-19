@@ -630,11 +630,16 @@ add/edit/delete work in memory. The Chat tab is the real component over an in-me
 transcript, so you can send a message, watch one check turn into two, make Ana type, make
 her reply, and see the unread badge. Couple Settings opens here too — the real sheet,
 over sample state — which is where its scrolling gets looked at, since it is the longest
-surface in the app. The Games tab is the real snake board over a
-simulated duel: deal a run, steer it with the arrow keys, the WASD keys, a swipe or the
-D-pad, watch the leave-and-forfeit question, and see the reveal against a sample partner
-score; a toggle above the board switches to the Tetris Duel, where you can play five
-minutes of it with the on-screen pad. It reuses the real header, chat and board components
+surface in the app. The Games tab is the same carousel the app uses — Snake, Chess,
+Tetris and Word Wheel in a rail — and each chip is a settings panel first: pick the mode,
+difficulty and clock, then press its button to open the real board. Nothing ticks or
+starts while you are only reading the tab: the Snake gate waits for **Start my run**, the
+Tetris gate for **Start my 5 minutes**, Chess for its duel picker, and Word Wheel for
+**Set the wheel** followed by both sides readying up. From there you can steer the snake
+with the arrow keys, the WASD keys, a swipe or the D-pad, watch the leave-and-forfeit
+question and see the reveal against a sample partner score; play five minutes of Tetris
+with the on-screen pad; play both sides of a Chess duel; or swipe a Word Wheel round and
+watch its blanks fill. It reuses the real header, chat and board components
 so it cannot drift from the
 app — but the preview's duel is played out on the page, since the ranked one depends on the
 database dealing the food and replaying the run. It is a dev-server route only: `npm run build` still publishes

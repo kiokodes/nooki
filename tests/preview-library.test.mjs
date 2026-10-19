@@ -50,7 +50,24 @@ test('design preview: every game is a chip in the rail, Chess included', async (
     // Leaving Chess for another chip puts the board away again.
     await act(async () => document.querySelector('[data-preview-game="word"]').click());
     assert.equal(document.querySelectorAll('.chess-cell').length, 0, 'the chess board leaves with its chip');
-    assert.ok(document.querySelector('.word-wheel-card'), 'and the Word Wheel panel arrives');
+
+    // The Word Wheel tab is settings, not a running round: no wheel, no clock, until
+    // the player sets it up and both sides are ready.
+    const settings = document.querySelector('[data-preview-word-wheel="settings"]');
+    assert.ok(settings, 'the Word Wheel tab opens on its settings');
+    assert.equal(document.querySelector('.word-wheel'), null, 'no wheel before the round is opened');
+    assert.equal(document.querySelector('.word-timer'), null, 'and no clock running');
+    assert.ok(settings.textContent.includes('Choose the difficulty'));
+    assert.ok(settings.textContent.includes('How long is the round?'));
+
+    await act(async () => settings.querySelector('[data-preview-word-level="hard"]').click());
+    await act(async () => settings.querySelector('[data-preview-word-duration="180"]').click());
+    await act(async () => buttonText('Set the wheel for Ana →').click());
+    assert.ok(document.querySelector('.word-wheel-card.word-lobby'), 'setting the wheel opens its lobby, not a live clock');
+    assert.equal(document.querySelector('.word-timer'), null, 'still nothing ticking in the lobby');
+    await act(async () => buttonText('I’m ready').click());
+    await waitFor(() => document.querySelectorAll('.word-letter').length === 7, 'once both are ready the wheel opens');
+    assert.ok(document.querySelector('.word-timer'), 'and only now does the round clock run');
   } finally {
     await act(async () => root.unmount());
     await server.close();
