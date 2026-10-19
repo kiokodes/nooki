@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
+import { openGameTab } from './helpers/gameLibrary.mjs';
 
 test('chess UI: library starts a refereed duel; the board plays one out', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
@@ -17,7 +18,8 @@ test('chess UI: library starts a refereed duel; the board plays one out', async 
     const games = { data: { matches: [] }, error: null, busy: false, match: undefined, select: () => {}, start: () => {}, play: () => {}, refresh: () => {}, startChess: (mode) => calls.push(mode), playChess: () => {} };
     await act(async () => root.render(React.createElement(GamesView, { games, userId: 'a', partnerName: 'Bob' })));
     const button = (text) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(text));
-    const chessCard = [...document.querySelectorAll('article')].find((c) => c.textContent.includes('Chess'));
+    await openGameTab(document, 'chess', act);
+    const chessCard = document.querySelector('[data-game="chess"]');
     assert.ok(chessCard, 'chess has a library card');
     assert.ok(chessCard.textContent.includes('first-to-7-captures'));
     // The library card picks the situational duel, then starts it through the database.

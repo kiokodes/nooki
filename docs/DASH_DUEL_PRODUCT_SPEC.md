@@ -147,7 +147,7 @@ interface DashMatchState {
 - When both runs are done, the server sets `finished` and `winner_id` from the replayed result; draw leaves winner null. Reveal both final scores and provide access to the history row/rematch.
 - An ongoing match where the run on both sides is done should be hidden from the “ongoing” swipe carousel, following `runDuelConcluded()` for Snake/Tetris.
 - Add Dash to pending count while the user has not yet finished their own run. Once done, it should not keep the Games tab badge active while waiting on the partner.
-- Add Dash to the duel bookkeeping/history path so **Last duel** can show the name, result, verified distances and hearts. Avoid reporting stale/missing data as zero unless that is in fact the server result.
+- Add Dash to the duel bookkeeping path so a settled duel's name, result, verified distances and hearts are recorded. Avoid reporting stale/missing data as zero unless that is in fact the server result.
 
 ## 5. Database/API implementation contract
 
@@ -241,7 +241,7 @@ Dash Duel is ready for a release candidate only when all are true:
 - [ ] A finished run cannot be restarted in the same match; other partner may still play later.
 - [ ] Async challenge settles to higher verified distance, hearts tie-break or draw without premature victory; live mode waits for both ready and awards the other active runner on crash.
 - [ ] Retry/reload/overlap, forfeit, expiry, invalid move, nonparticipant, and RLS/privilege cases are covered.
-- [ ] Pending badge, ongoing carousel, last-duel history, and rematch behavior agree with state.
+- [ ] Pending badge, ongoing carousel, and rematch behavior agree with state.
 - [ ] `supabase/verify-games.sql`, full test suite, TypeScript, lint (no new warnings/errors), and production build pass.
 - [ ] README deployment sequence documents `202610180009_dash_duel.sql` after `202610180008_someday_details_order_and_visit_link.sql` and lists Dash verification.
 - [ ] At least one browser-level test plays a full run on mobile-sized viewport and one server test validates replay/settlement.

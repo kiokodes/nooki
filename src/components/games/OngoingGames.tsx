@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
 import './games.css';
 
 /** One entry in the "Ongoing games" card: a match this couple can still play. */
@@ -6,6 +7,8 @@ export interface OngoingSlide {
   id: string;
   /** The game's name, e.g. "Tetris Duel". */
   name: string;
+  /** Whose move the match is waiting on: this phone, or the partner's. */
+  waitingOn: 'me' | 'partner';
   /** The line under it: whose move it is, and where the match opens. */
   statusLine: string;
 }
@@ -17,9 +20,16 @@ export interface OngoingSlide {
  * past four full cards to reach the library. This card holds them at one card's height:
  * the thumb swipes (or the trackpad drags, or the arrows are pressed) from one to the
  * next, so ten ongoing games take the same room as one. Only matches that are still to
- * be played live here; a finished duel is history and sits below, in its own row.
+ * be played live here; a finished duel is history and is not listed at all — the Games
+ * tab holds exactly two things, this card and the game catalogue under it.
+ *
+ * A slide waiting on this phone wears a bell, so a thumb walking the card can see at a
+ * glance which one wants them, and which is waiting on the partner instead.
  */
-export function OngoingGames({ slides, onOpen }: { slides: OngoingSlide[]; onOpen: (id: string) => void }) {
+export function OngoingGames({ slides, onOpen }: {
+  slides: OngoingSlide[];
+  onOpen: (id: string) => void;
+}) {
   const [active, setActive] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
   const count = slides.length;
@@ -48,7 +58,7 @@ export function OngoingGames({ slides, onOpen }: { slides: OngoingSlide[]; onOpe
     <section className="game-card ongoing-games" aria-label="Ongoing games" data-ongoing-games>
       <div className="ongoing-head">
         <h2>Ongoing games</h2>
-        {count > 1 && <span className="ongoing-count">{count} open</span>}
+        <span className="ongoing-count" data-ongoing-count>{count} open</span>
       </div>
       <div
         className="ongoing-track"
@@ -67,11 +77,19 @@ export function OngoingGames({ slides, onOpen }: { slides: OngoingSlide[]; onOpe
           <button
             key={slide.id}
             type="button"
-            className="game-resume ongoing-slide"
+            className={`game-resume ongoing-slide${slide.waitingOn === 'me' ? ' is-my-move' : ''}`}
             data-ongoing-slide={slide.id}
+            data-waiting-on={slide.waitingOn}
             onClick={() => onOpen(slide.id)}
           >
-            <strong>Resume {slide.name}</strong>
+            <span className="ongoing-slide-head">
+              <strong>{slide.name}</strong>
+              {slide.waitingOn === 'me' && (
+                <span className="ongoing-bell" data-ongoing-bell aria-label="Waiting for you">
+                  <Bell size={13} strokeWidth={2.4} aria-hidden="true" />
+                </span>
+              )}
+            </span>
             <small>{slide.statusLine}</small>
           </button>
         ))}
@@ -95,20 +113,3 @@ export function OngoingGames({ slides, onOpen }: { slides: OngoingSlide[]; onOpe
 }
 
 export default OngoingGames;
-
-/**
- * The last settled duel, in its own quiet row.
- *
- * Finished duels stay reachable — but as history, below the ongoing card and nothing
- * like a resumable game. (They used to wear the same card as the live matches, which is
- * how a couple who had both played their Tetris duel came home to find it still standing
- * among their "ongoing games".)
- */
-export function LastDuelRow({ name, outcome, onOpen }: { name: string; outcome: string; onOpen: () => void }) {
-  return (
-    <button type="button" className="game-last-duel" data-last-duel onClick={onOpen}>
-      <small>Last duel</small>
-      {name} <small>{outcome}</small>
-    </button>
-  );
-}

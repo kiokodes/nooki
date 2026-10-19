@@ -1,0 +1,30 @@
+{
+  "note": "Curated seven-letter base words (the grand prize) for Word Wheel. Every word is common, gentle and safe for a couples game. The generator checks that each base can supply enough common 2-7 letter subwords; bases that cannot fill a pack are skipped for that pack.",
+  "bases": [
+    "actress", "actions", "amounts", "battles", "blanket", "bedroom",
+    "cameras", "candles", "capture", "carrots", "cashier", "central",
+    "certain", "chamber", "chapter", "charges", "chatter", "clients",
+    "clothes", "cookies", "cooking", "costume", "country", "crusade",
+    "dancers", "dancing", "darling", "dearest", "details", "dragons",
+    "drawing", "eastern", "elegant", "embrace", "fathers", "feather",
+    "flowers", "forever", "friends", "gardens", "gambler", "handles",
+    "harvest", "history", "holiday", "honesty", "hunters", "jackets",
+    "journey", "kitchen", "knights", "lawyers", "leaders", "leopard",
+    "letters", "longest", "markets", "masters", "matters", "message",
+    "methods", "minutes", "moments", "morning", "mothers", "motives",
+    "nations", "nearest", "options", "organic", "orphans", "painter",
+    "parents", "parties", "partner", "peaches", "peanuts", "picture",
+    "pigeons", "pirates", "planets", "players", "portion", "prayers",
+    "profits", "provide", "reactor", "reading", "remains", "reports",
+    "respond", "richest", "romance", "samples", "scarlet", "section",
+    "seminar", "servant", "shorter", "showers", "singing", "smarter",
+    "special", "stories", "strange", "streams", "stripes", "studies",
+    "sweater", "talents", "targets", "teacher", "theatre", "theater",
+    "toaster", "toilets", "travels", "trouble", "wedding", "weekend",
+    "wonders", "witches", "blacket", "breathe", "brought", "crusade",
+    "declare", "consult", "farther", "neutral", "tension", "replace",
+    "screams", "shelves", "sparkle", "sunrise", "cuddles", "mornings",
+    "singing", "smiling", "laughing", "dreamer", "cooking", "baking",
+    "letters", "romance", "blankets", "flowers"
+  ]
+}

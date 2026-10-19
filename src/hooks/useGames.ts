@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  beatDashRun, beatSnakeRun, beatTetrisRun, fetchGames, finishDashRun, finishSnakeRun, finishTetrisRun,
-  forfeitDashRun, forfeitSnakeRun, forfeitTetrisRun, playChess, playConnectFour, playGame, startChess,
-  startConnectFour, startDash, startDashRun, startGame, startSnakeRun, startTetris, startTetrisRun,
-  type DashMatchMode, type DashRun, type GameId, type GameMatch, type GamesSnapshot, type SnakeRun, type TetrisRun,
+  beatDashRun, beatSnakeRun, beatTetrisRun, cancelWordRound, fetchGames, finishDashRun, finishSnakeRun,
+  finishTetrisRun, forfeitDashRun, forfeitSnakeRun, forfeitTetrisRun, playChess, playConnectFour, playGame,
+  readyWordRound, startChess, startConnectFour, startDash, startDashRun, startGame, startSnakeRun, startTetris,
+  startTetrisRun, startWordRound, submitWordRound,
+  type DashMatchMode, type DashRun, type GameId, type GameMatch, type GamesSnapshot, type SnakeRun,
+  type TetrisRun, type WordRound,
 } from '../lib/gamesService';
 import type { ChessMode } from '../lib/chess';
 import type { SnakeChange } from '../lib/snake';
 import type { TetrisInput, TetrisMode } from '../lib/tetris';
 import type { DashLevel, DashAction } from '../lib/dash';
+import type { WordDuration, WordLevel } from '../lib/wordWheel';
 
 /**
  * True while this phone still owes a move in a match: the Games tab badge.
@@ -24,6 +27,12 @@ export function needsMyMove(match: GameMatch, userId: string | null): boolean {
   if (match.game === 'snake') return !match.snake?.mine || match.snake.mine.status === 'running';
   if (match.game === 'tetris') return !match.tetris?.mine || match.tetris.mine.status === 'running';
   if (match.game === 'dash-duel') return !match.dash?.mine || match.dash.mine.status === 'running';
+  if (match.game === 'word-wheel') {
+    const round = match.word;
+    if (!round) return true;
+    // Still to accept the invite, or still to finish my timed attempt.
+    return !round.mine.ready || (round.status === 'running' && !round.mine.submitted);
+  }
   if (match.game === 'connect-four') return match.turn_id === userId;
   return !match.my_pick;
 }
@@ -185,6 +194,23 @@ export function useGames(coupleId: string | null, userId: string | null) {
     beatDash,
     finishDash,
     forfeitDash: (matchId: string) => run(async () => { await forfeitDashRun(matchId); }, 'dash-duel'),
+    /** Set or resume the couple's open Word Wheel lobby with these settings. */
+    startWordRound: (level: WordLevel, seconds: WordDuration) => run(async () => {
+      const id = await startWordRound(level, seconds);
+      if (current.current === scope) setSelected({ scope, id });
+    }, 'word-wheel'),
+    /** Lobby handshake. The second ready sets one shared start time on the server. */
+    readyWord: (matchId: string) => run(async () => { await readyWordRound(matchId); }, 'word-wheel'),
+    /**
+     * A timed-round result is submitted behind the board's back, like a duel
+     * heartbeat: it must not take the shared lock or disable the exit button.
+     */
+    submitWord: useCallback(async (matchId: string, words: string[], finishedMs: number): Promise<WordRound> => {
+      const round = await submitWordRound(matchId, words, finishedMs);
+      await refresh();
+      return round;
+    }, [refresh]),
+    cancelWord: (matchId: string) => run(async () => { await cancelWordRound(matchId); }, 'word-wheel'),
   };
 }
 export type GamesState = ReturnType<typeof useGames>;

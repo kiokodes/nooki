@@ -84,7 +84,8 @@ test('games tab: a match waiting on this phone badges the tab and clears once it
     // --- The Games tab itself points at the match that needs you ----------------------
     await click('[data-nav-tab="games"]');
     await waitFor(() => document.querySelector('.game-resume'), 'the games list should show the match');
-    assert(document.querySelector('.game-resume')?.textContent.includes('Your turn'), 'the match says it is waiting on you');
+    assert(document.querySelector('.game-resume')?.textContent.includes('Your move'), 'the match says it is waiting on you');
+    assert(document.querySelector('.game-resume [data-ongoing-bell]'), 'and flags it with a bell');
     await act(async () => { document.querySelector('.game-resume').click(); });
     await waitFor(() => document.querySelector('.rps-picks'), 'the match should open');
     await act(async () => {

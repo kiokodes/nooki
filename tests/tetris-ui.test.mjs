@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
+import { openGameTab } from './helpers/gameLibrary.mjs';
 
 /**
  * The Tetris duel as the couple meets it: the card in the library with its two ways of
@@ -53,9 +54,10 @@ test('tetris UI: the gate, a playable board, the leave question, warm-ups and th
 
     // --- The library offers the duel in both modes, and a warm-up that never leaves ----
     await render(React.createElement(GamesView, { games: games(), userId: 'a', partnerName: 'Bob' }));
-    assert(document.body.textContent.includes('Tetris Duel'));
+    assert(document.body.textContent.includes('Tetris Duel'), 'the game rail names the duel');
+    await openGameTab(document, 'tetris', act);
     assert(document.body.textContent.includes('Five minutes each, same pieces'), 'the rule is on the card');
-    const tetrisCard = [...document.querySelectorAll('article')].find((card) => card.textContent.includes('Tetris Duel'));
+    const tetrisCard = document.querySelector('[data-game="tetris"]');
     const picker = [...tetrisCard.querySelectorAll('button')].filter((item) => item.dataset.tetrisModeOption);
     assert.deepEqual(picker.map((item) => item.dataset.tetrisModeOption), ['sprint', 'survival'], 'both modes are offered');
     // Both duels invite you the same way, so the button has to be found inside the card.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { GAMES, type GameMatch } from '../../lib/gamesService';
 import { needsMyMove, type GamesState } from '../../hooks/useGames';
 import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
@@ -11,10 +11,18 @@ import { Sudoku } from './Sudoku';
 import { ChessDuel } from './ChessDuel';
 import { ConnectFour } from './ConnectFour';
 import { DashDuel, DashFreePlay } from './DashDuel';
-import { LastDuelRow, OngoingGames, type OngoingSlide } from './OngoingGames';
+import { WordWheel } from './WordWheel';
+import { OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import { DASH_LEVELS, dashLevelLabel, type DashLevel } from '../../lib/dash';
+import {
+  WORD_DURATIONS, WORD_LEVELS, WORD_LEVEL_LABELS, WORD_LEVEL_HINTS, wordDurationLabel,
+  type WordDuration, type WordLevel,
+} from '../../lib/wordWheel';
 import './games.css';
+
+/** One game in the library rail. */
+type GameEntry = typeof GAMES[number];
 
 /** A practice run in progress: its own pieces or food, dealt on this phone and never reported. */
 interface WarmUp {
@@ -44,9 +52,19 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   const [sudokuOpen, setSudokuOpen] = useState(false);
   const [chessMode, setChessMode] = useState<ChessMode>('classic');
   const [dashLevel, setDashLevel] = useState<DashLevel>('steady');
+  const [wordLevel, setWordLevel] = useState<WordLevel>('easy');
+  const [wordSeconds, setWordSeconds] = useState<WordDuration>(60);
+  const [libraryIndex, setLibraryIndex] = useState(0);
+  const [libraryDirection, setLibraryDirection] = useState<'next' | 'prev'>('next');
   const [dashFreePlay, setDashFreePlay] = useState(false);
   const [dashFreeSeed, setDashFreeSeed] = useState(0);
   const startDashFreePlay = () => { setDashFreeSeed(Date.now()); setDashFreePlay(true); };
+  const activeGame = GAMES[libraryIndex] ?? GAMES[0];
+  const selectGame = (index: number) => {
+    if (index === libraryIndex) return;
+    setLibraryDirection(index > libraryIndex ? 'next' : 'prev');
+    setLibraryIndex(index);
+  };
   const m = games.match;
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
@@ -55,15 +73,21 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   const startSnakeWarmUp = () => setWarmUp({ game: 'snake', foods: dealPracticeFoods(), pieces: [], nonce: Date.now() });
   // Keep failed starts beside the button that was tapped, not above an offscreen header.
   const inlineErrorGame = !m && !sudokuOpen && !warmUp ? games.errorGame : null;
-  /** The most recent *settled* duel of either kind, so its result stays reachable below the library. */
-  const lastDuel = games.data?.matches?.find((match) => (match.game === 'snake' || match.game === 'tetris' || match.game === 'dash-duel') && match.finished);
-  /** The couple's live matches: still to be played, one swipe away in their own card. */
+  /**
+   * The couple's live matches: games still to be played, one swipe away in their own
+   * card. A duel whose two runs are in is waiting on the referee, not on a player, and
+   * a settled one is history — neither belongs here.
+   */
   const ongoing = (games.data?.matches ?? []).filter((match) => !match.finished && !runDuelConcluded(match));
-  const ongoingSlides: OngoingSlide[] = ongoing.map((match) => ({
-    id: match.id,
-    name: GAMES.find(g => g.id === match.game)?.name ?? 'Game',
-    statusLine: `${needsMyMove(match, userId) ? 'Your turn · ' : ''}With your partner →`,
-  }));
+  const ongoingSlides: OngoingSlide[] = ongoing.map((match) => {
+    const mine = needsMyMove(match, userId);
+    return {
+      id: match.id,
+      name: GAMES.find(g => g.id === match.game)?.name ?? 'Game',
+      waitingOn: mine ? 'me' : 'partner',
+      statusLine: mine ? 'Your move' : `Waiting for ${partnerName}`,
+    };
+  });
   // A warm-up stands in for whatever the Games tab was showing: the duel panel, or the
   // whole library. It is the same board either way, and it never touches the database.
   // It yields the moment the duel is decided: nobody wants to be practising through the
@@ -74,18 +98,104 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       : <SnakeBoard key={warmUp.nonce} foods={warmUp.foods} warmUp onExit={() => setWarmUp(null)} onRestart={startSnakeWarmUp} />}
     <p className="game-hint">A warm-up is yours alone: it is never reported, and it never scores.</p>
   </> : null;
-  /** The name and score line for the "last duel" row, whichever game it was. */
-  const lastDuelLine = lastDuel?.finished ? {
-    name: GAMES.find(g => g.id === lastDuel.game)?.name ?? 'Duel',
-    won: lastDuel.winner_id === userId,
-    drawn: lastDuel.winner_id === null,
-    mine: lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? lastDuel.dash?.mine?.distance ?? 0,
-    // Optional chaining all the way down: each duel's own column is absent until its
-    // migration is installed, and a missing field is never shown as a claimed score.
-    theirs: lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? lastDuel.dash?.partner?.distance ?? 0,
-    mineHearts: lastDuel.dash?.mine?.hearts ?? null,
-    theirHearts: lastDuel.dash?.partner?.hearts ?? null,
-  } : null;
+  /** One game's settings and call to action, shown for the game picked in the rail. */
+  const renderGameCard = (game: GameEntry) => (
+    <article
+      className="game-card game-panel"
+      key={game.id}
+      data-game={game.id}
+      data-direction={libraryDirection}
+      role="tabpanel"
+      id={`game-panel-${game.id}`}
+      aria-labelledby={`game-tab-${game.id}`}
+    >
+      <div className="game-icon" aria-hidden="true">{game.icon}</div>
+      <h2>{game.name}</h2>
+      <p>{game.description}</p>
+      {game.id === 'rock-paper-scissors' && (
+        <fieldset>
+          <legend>Match length</legend>
+          {[3, 5].map(n => <button key={n} type="button" aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}
+        </fieldset>
+      )}
+      {game.id === 'chess' && (
+        <fieldset>
+          <legend>Choose your duel</legend>
+          {CHESS_MODES.map(modeOption => (
+            <button key={modeOption.id} type="button" aria-pressed={chessMode === modeOption.id} onClick={() => setChessMode(modeOption.id)}>
+              {modeOption.icon} {modeOption.name}
+            </button>
+          ))}
+        </fieldset>
+      )}
+      {game.id === 'tetris' && (
+        <fieldset>
+          <legend>How the duel is decided</legend>
+          {(['sprint','survival'] as TetrisMode[]).map(option => <button key={option} type="button" aria-pressed={mode === option} onClick={() => setMode(option)} data-tetris-mode-option={option}>{tetrisModeLabel(option)}</button>)}
+        </fieldset>
+      )}
+      {game.id === 'dash-duel' && (
+        <fieldset className="dash-level-picker">
+          <legend>Choose the course difficulty</legend>
+          {DASH_LEVELS.map(option => <button key={option} type="button" aria-pressed={dashLevel === option} onClick={() => setDashLevel(option)}>{dashLevelLabel(option)}</button>)}
+        </fieldset>
+      )}
+      {game.id === 'word-wheel' && (
+        <>
+          <fieldset className="word-level-picker">
+            <legend>Choose the difficulty</legend>
+            {WORD_LEVELS.map(option => (
+              <button key={option} type="button" aria-pressed={wordLevel === option} onClick={() => setWordLevel(option)}>
+                {WORD_LEVEL_LABELS[option]}
+              </button>
+            ))}
+          </fieldset>
+          <p className="game-hint word-level-hint">{WORD_LEVEL_HINTS[wordLevel]}</p>
+          <fieldset className="word-duration-picker">
+            <legend>How long is the round?</legend>
+            {WORD_DURATIONS.map(option => (
+              <button key={option} type="button" aria-pressed={wordSeconds === option} onClick={() => setWordSeconds(option)}>
+                {wordDurationLabel(option)}
+              </button>
+            ))}
+          </fieldset>
+        </>
+      )}
+      {games.error && inlineErrorGame === game.id && <GameError games={games} />}
+      {game.id === 'dash-duel' ? (
+        <div className="game-actions dash-library-actions">
+          <button type="button" disabled={games.busy || !games.data} aria-busy={games.pendingGame === game.id} onClick={() => void games.startDashDuel('challenge', dashLevel)}>
+            {games.pendingGame === game.id ? 'Setting course…' : 'Set a challenge →'}
+          </button>
+          {partnerOnline && <button type="button" className="dash-together-button" disabled={games.busy || !games.data} onClick={() => void games.startDashDuel('together', dashLevel)}>
+            Play together · online →
+          </button>}
+          <button type="button" className="snake-secondary" onClick={startDashFreePlay} data-action="dash-free-play">Free run · just for fun</button>
+        </div>
+      ) : <div className="game-actions">
+        <button
+          type="button"
+          disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
+          aria-busy={games.pendingGame === game.id}
+          onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : game.id === 'connect-four' ? void games.startConnectFour() : game.id === 'word-wheel' ? void games.startWordRound(wordLevel, wordSeconds) : void games.start(game.id, bestOf)}
+        >
+          {games.pendingGame === game.id
+            ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : game.id === 'word-wheel' ? 'Setting the wheel…' : 'Opening game…'
+            : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'word-wheel' ? `Set the wheel for ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
+        </button>
+        {game.id === 'snake' && (
+          <button type="button" className="snake-secondary" disabled={games.busy} onClick={startSnakeWarmUp} data-action="library-warm-up">
+            Warm-up run (not counted)
+          </button>
+        )}
+        {game.id === 'tetris' && (
+          <button type="button" className="tetris-secondary" disabled={games.busy} onClick={startTetrisWarmUp} data-action="library-warm-up-tetris">
+            Warm-up run (not counted)
+          </button>
+        )}
+      </div>}
+    </article>
+  );
 
   return <section className="games-view" aria-label="Games">
     <header><span className="games-eyebrow">A little lovers rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : dashFreePlay ? 'Dash Duel · Free run' : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
@@ -95,6 +205,8 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       {!(m.game === 'dash-duel' && m.dash?.mine?.status === 'running') && <button className="game-back" onClick={() => openMatch(null)}>← All games</button>}
       {practice ?? (m.game === 'dash-duel' ? (
         <DashDuel match={m} userId={userId} partnerName={partnerName} partnerOnline={partnerOnline} games={games} onExit={() => openMatch(null)} />
+      ) : m.game === 'word-wheel' ? (
+        <WordWheel match={m} userId={userId} partnerName={partnerName} games={games} onExit={() => openMatch(null)} />
       ) : m.game === 'connect-four' ? (
         <ConnectFour match={m} userId={userId} partnerName={partnerName} busy={games.busy} onMove={(column) => void games.playConnectFour(m, column)} onExit={() => openMatch(null)} />
       ) : m.game === 'chess' ? (
@@ -147,85 +259,141 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       <button className="game-back" onClick={() => setWarmUp(null)}>← All games</button>
       {practice}
     </> : <>
-      {/* Ongoing games live in their own swipeable card — ten open matches are ten
-          swipes, not ten screens. Finished duels are history and sit below the library,
-          never among the games that can still be played. */}
+      {/* Exactly two things on this tab: the couple's live matches (one swipeable card
+          however many are open) and the game catalogue under it. A settled duel, or one
+          whose two runs are both in, is history and is not listed here at all. */}
       <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
-      {lastDuelLine && <LastDuelRow
-        name={lastDuelLine.name}
-        outcome={`${lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You ${lastDuelLine.mine}${lastDuelLine.mineHearts === null ? '' : ` 💗 ${lastDuelLine.mineHearts}`} — ${lastDuelLine.theirs}${lastDuelLine.theirHearts === null ? '' : ` 💗 ${lastDuelLine.theirHearts}`} ${partnerName} →`}
-        onOpen={() => openMatch(lastDuel?.id ?? null)}
-      />}
-      {GAMES.map(game => (
-        <article className="game-card" key={game.id} data-game={game.id}>
-          <div className="game-icon" aria-hidden="true">{game.icon}</div>
-          <h2>{game.name}</h2>
-          <p>{game.description}</p>
-          {game.id === 'rock-paper-scissors' && (
-            <fieldset>
-              <legend>Match length</legend>
-              {[3, 5].map(n => <button key={n} type="button" aria-pressed={bestOf === n} onClick={() => setBestOf(n)}>Best of {n}</button>)}
-            </fieldset>
-          )}
-          {game.id === 'chess' && (
-            <fieldset>
-              <legend>Choose your duel</legend>
-              {CHESS_MODES.map(modeOption => (
-                <button key={modeOption.id} type="button" aria-pressed={chessMode === modeOption.id} onClick={() => setChessMode(modeOption.id)}>
-                  {modeOption.icon} {modeOption.name}
-                </button>
-              ))}
-            </fieldset>
-          )}
-          {game.id === 'tetris' && (
-            <fieldset>
-              <legend>How the duel is decided</legend>
-              {(['sprint','survival'] as TetrisMode[]).map(option => <button key={option} type="button" aria-pressed={mode === option} onClick={() => setMode(option)} data-tetris-mode-option={option}>{tetrisModeLabel(option)}</button>)}
-            </fieldset>
-          )}
-          {game.id === 'dash-duel' && (
-            <fieldset className="dash-level-picker">
-              <legend>Choose the course difficulty</legend>
-              {DASH_LEVELS.map(option => <button key={option} type="button" aria-pressed={dashLevel === option} onClick={() => setDashLevel(option)}>{dashLevelLabel(option)}</button>)}
-            </fieldset>
-          )}
-          {games.error && inlineErrorGame === game.id && <GameError games={games} />}
-          {game.id === 'dash-duel' ? (
-            <div className="game-actions dash-library-actions">
-              <button type="button" disabled={games.busy || !games.data} aria-busy={games.pendingGame === game.id} onClick={() => void games.startDashDuel('challenge', dashLevel)}>
-                {games.pendingGame === game.id ? 'Setting course…' : 'Set a challenge →'}
-              </button>
-              {partnerOnline && <button type="button" className="dash-together-button" disabled={games.busy || !games.data} onClick={() => void games.startDashDuel('together', dashLevel)}>
-                Play together · online →
-              </button>}
-              <button type="button" className="snake-secondary" onClick={startDashFreePlay} data-action="dash-free-play">Free run · just for fun</button>
-            </div>
-          ) : <div className="game-actions">
-            <button
-              type="button"
-              disabled={games.busy || (game.id !== 'sudoku' && !games.data)}
-              aria-busy={games.pendingGame === game.id}
-              onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : game.id === 'connect-four' ? void games.startConnectFour() : void games.start(game.id, bestOf)}
-            >
-              {games.pendingGame === game.id
-                ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : 'Opening game…'
-                : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
-            </button>
-            {game.id === 'snake' && (
-              <button type="button" className="snake-secondary" disabled={games.busy} onClick={startSnakeWarmUp} data-action="library-warm-up">
-                Warm-up run (not counted)
-              </button>
-            )}
-            {game.id === 'tetris' && (
-              <button type="button" className="tetris-secondary" disabled={games.busy} onClick={startTetrisWarmUp} data-action="library-warm-up-tetris">
-                Warm-up run (not counted)
-              </button>
-            )}
-          </div>}
-        </article>
-      ))}
-      <p className="game-hint">Games are always open for a rematch.</p>
+      <GameLibrary activeIndex={libraryIndex} onSelect={selectGame}>
+        {renderGameCard(activeGame)}
+      </GameLibrary>
     </>}
+  </section>;
+}
+
+/** How far a panel has to travel before the swipe counts as a change of game. */
+const SWIPE_COMMIT_PX = 48;
+
+/**
+ * The game library as a carousel: one row of game titles, one settings panel.
+ *
+ * The library used to be a single column of six full cards — every game's rules and
+ * buttons stacked, so finding the one you wanted meant scrolling past five others. Now
+ * the titles ride in a rail at the top (tapping one, or swiping the panel under it,
+ * brings that game's settings and start button in) and only the chosen game takes up
+ * room. The rail scrolls sideways when it outgrows the phone, keeps the chosen chip
+ * centred, and answers the arrow keys.
+ */
+function GameLibrary({ activeIndex, onSelect, children }: {
+  activeIndex: number;
+  onSelect: (index: number) => void;
+  children: ReactNode;
+}) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState(0);
+  const dragRef = useRef(0);
+  const gesture = useRef<{ x: number; y: number; id: number | null; moved: boolean }>({ x: 0, y: 0, id: null, moved: false });
+  /** A swipe ends on top of the panel's buttons; the click it would fire is not wanted. */
+  const swallowed = useRef(false);
+  const clamp = (index: number) => Math.min(Math.max(index, 0), GAMES.length - 1);
+
+  /* Keep the chosen chip in view as the thumb walks the rail. */
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || typeof rail.scrollTo !== 'function') return;
+    const chip = rail.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!chip) return;
+    rail.scrollTo({ left: Math.max(0, chip.offsetLeft - (rail.clientWidth - chip.clientWidth) / 2), behavior: 'smooth' });
+  }, [activeIndex]);
+
+  const endGesture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const current = gesture.current;
+    if (current.id === null) return;
+    gesture.current = { x: 0, y: 0, id: null, moved: false };
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!current.moved) return;
+    const travelled = dragRef.current;
+    dragRef.current = 0;
+    setDrag(0);
+    // A drag that ends on a button is not that button's tap, whether or not it went far
+    // enough to change the game.
+    swallowed.current = true;
+    window.setTimeout(() => { swallowed.current = false; }, 400);
+    if (Math.abs(travelled) < SWIPE_COMMIT_PX) return;
+    onSelect(clamp(activeIndex + (travelled < 0 ? 1 : -1)));
+  };
+
+  return <section className="game-library" aria-label="Game library">
+    <div
+      className="game-rail"
+      data-game-rail
+      ref={railRef}
+      role="tablist"
+      aria-label="Choose a game"
+      onKeyDown={(event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0
+          : event.key === 'End' ? GAMES.length - 1
+            : clamp(activeIndex + (event.key === 'ArrowRight' ? 1 : -1));
+        onSelect(next);
+        document.getElementById(`game-tab-${GAMES[next].id}`)?.focus();
+      }}
+    >
+      {GAMES.map((game, index) => (
+        <button
+          key={game.id}
+          type="button"
+          role="tab"
+          id={`game-tab-${game.id}`}
+          className="game-rail-tab"
+          data-game-tab={game.id}
+          aria-selected={index === activeIndex}
+          aria-controls={index === activeIndex ? `game-panel-${game.id}` : undefined}
+          tabIndex={index === activeIndex ? 0 : -1}
+          onClick={() => onSelect(index)}
+        >
+          <span className="game-rail-icon" aria-hidden="true">{game.icon}</span>
+          <span>{game.name}</span>
+        </button>
+      ))}
+    </div>
+    <div
+      className={`game-panel-track${drag ? ' is-swiping' : ''}`}
+      data-game-panel-track
+      style={drag ? { transform: `translateX(${drag}px)` } : undefined}
+      onPointerDown={(event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        gesture.current = { x: event.clientX, y: event.clientY, id: event.pointerId, moved: false };
+      }}
+      onPointerMove={(event) => {
+        const current = gesture.current;
+        if (current.id !== event.pointerId) return;
+        const dx = event.clientX - current.x;
+        const dy = event.clientY - current.y;
+        if (!current.moved) {
+          // Vertical drags belong to the page, and a small wobble is still a tap.
+          if (Math.abs(dx) < 12 || Math.abs(dx) <= Math.abs(dy)) return;
+          current.moved = true;
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+        }
+        const edge = (dx > 0 && activeIndex === 0) || (dx < 0 && activeIndex === GAMES.length - 1);
+        const next = edge ? dx * 0.3 : dx;
+        dragRef.current = next;
+        setDrag(next);
+      }}
+      onPointerUp={endGesture}
+      onPointerCancel={endGesture}
+      onClickCapture={(event) => {
+        if (!swallowed.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
+      {children}
+    </div>
+    <p className="game-hint game-library-hint">Tap a game above, or swipe the card for the next one.</p>
   </section>;
 }
 

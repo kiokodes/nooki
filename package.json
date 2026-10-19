@@ -14,7 +14,9 @@
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
     "preview": "vite preview",
-    "check:functions": "tsc -p tsconfig.functions.json"
+    "check:functions": "tsc -p tsconfig.functions.json",
+    "build:word-puzzles": "node scripts/build-word-puzzles.mjs",
+    "upload:word-puzzles": "node scripts/upload-word-puzzles.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
@@ -35,8 +37,10 @@
     "country-state-city": "^3.2.1",
     "jsdom": "^30.1.2",
     "oxlint": "^1.81.0",
+    "subtlex-word-frequencies": "^2.0.0",
     "typescript": "~6.0.2",
     "tz-lookup": "^6.1.25",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "word-list-json": "^0.2.0"
   }
 }
