@@ -32,9 +32,7 @@ import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
 import { useVisits } from './hooks/useVisits';
-import { useVisitPlanning } from './hooks/useVisitPlanning';
 import { useTogetherTime } from './hooks/useTogetherTime';
-import { useVisitMemories } from './hooks/useVisitMemories';
 import { useSomedayList } from './hooks/useSomedayList';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
@@ -248,16 +246,14 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     partnerId: partner?.id ?? null,
   });
 
-  // Visits for the Together tab: countdown, shared plan, wishes and checklist.
+  // Visits for the Together tab: the next-visit countdown.
   const visits = useVisits(couple?.id ?? null, currentUser?.id ?? null);
-  const visitPlanning = useVisitPlanning(couple?.id ?? null, visits.visit?.id ?? null, currentUser?.id ?? null);
 
-  // Shared ideas can be private, voted on, and attached to a day in the next visit.
+  // Shared ideas can be private and voted on.
   const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
 
-  // Scheduled date nights and the photo/one-line memory timeline.
+  // Suggested-then-agreed date nights.
   const togetherTime = useTogetherTime(couple?.id ?? null, currentUser?.id ?? null);
-  const memories = useVisitMemories(couple?.id ?? null, currentUser?.id ?? null);
 
   // This device's notification switch, and the deep link a tapped notification carries.
   // App-level like the chat: the home-screen badge is cleared from here, and a
@@ -351,6 +347,35 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     setShowDailyDecision(false);
     setActiveTab('chat');
   }, [sendChatMessage]);
+
+  // "Talk about it" on a Together time: share the exact activity and time as a normal
+  // message and land in the chat, so the couple can deliberate there before anyone
+  // agrees (or suggest a different time back on the Together tab).
+  const handleTalkAboutTogetherTime = useCallback(async (session: TogetherTimeSession) => {
+    const date = new Date(session.scheduled_at);
+    let when: string;
+    try {
+      when = new Intl.DateTimeFormat(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        timeZone: session.timezone || undefined,
+      }).format(date);
+    } catch {
+      when = date.toLocaleString();
+    }
+    const suggester = session.proposed_by ?? session.created_by;
+    const content = session.status === 'scheduled'
+      ? [
+        `About our Together time: ${session.activity_name}`,
+        `We’re locked in for ${when} (${session.timezone}).`,
+      ].join('\n')
+      : [
+        `Together time idea: ${session.activity_name}`,
+        `${suggester === currentUser?.id ? 'I suggested' : 'You suggested'} ${when} (${session.timezone}).`,
+        'Does that work for you, or shall we find another time?',
+      ].join('\n');
+    await sendChatMessage(content);
+    setActiveTab('chat');
+  }, [sendChatMessage, currentUser?.id]);
 
   // The quote on a linked bubble: jump back to that question and its answers.
   const handleOpenQuestion = useCallback((sessionId: string) => {
@@ -733,11 +758,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
           <TogetherView
             state={books}
             userId={currentUser.id}
-            userName={profile.name}
-            partnerId={partner.id}
             partnerName={partner.name}
             visit={visits.visit}
-            visits={visits.visits}
             onPlanVisit={() => setShowVisitPlanning(true)}
             onViewVisitPlans={() => setShowVisitPlanning(true)}
             onOpenReader={(bookId) => openReader(bookId)}
@@ -748,20 +770,14 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
             onUpdateSomedayItem={somedayList.updateItem}
             onToggleSomedayWant={somedayList.toggleWant}
             onDeleteSomedayItem={somedayList.deleteItem}
-            onAttachSomedayItemToVisit={somedayList.attachToVisit}
-            visitWishes={visitPlanning.wishes}
-            visitChecklist={visitPlanning.checklist}
-            visitPlanningError={visitPlanning.error}
-            visitPlanningSaving={visitPlanning.saving}
-            onSaveVisitWish={visitPlanning.saveWish}
-            onAddVisitChecklistItem={visitPlanning.addChecklistItem}
-            onUpdateVisitChecklistItem={visitPlanning.updateChecklistItem}
-            onDeleteVisitChecklistItem={visitPlanning.deleteChecklistItem}
             togetherTimeSessions={togetherTime.sessions}
             togetherTimeError={togetherTime.error}
             togetherTimeSaving={togetherTime.saving}
             timezone={profile.timezone}
-            onScheduleTogetherTime={togetherTime.schedule}
+            onProposeTogetherTime={togetherTime.propose}
+            onAgreeTogetherTime={togetherTime.agree}
+            onSuggestTogetherTime={togetherTime.suggestTime}
+            onTalkAboutTogetherTime={handleTalkAboutTogetherTime}
             onUpdateTogetherTime={(session: TogetherTimeSession, status: 'done' | 'cancelled') => status === 'done' ? togetherTime.complete(session) : togetherTime.cancel(session)}
             onOpenActivity={(session) => {
               if (session.activity_type === 'book') openReader(session.activity_id);
@@ -770,11 +786,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
                 setActiveTab('games');
               }
             }}
-            memories={memories.entries}
-            memoriesLoading={memories.loading}
-            memoriesError={memories.error}
-            memoriesSaving={memories.saving}
-            onSaveVisitMemory={memories.save}
             initialSessionId={openTogetherSessionId}
             onClearInitialSession={() => setOpenTogetherSessionId(null)}
             remindersEnabled={push.enabled}
@@ -1033,6 +1044,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
               } catch {
                 // The modal shows the save error beside the form.
               }
+            }}
+            onClearVisit={async () => {
+              // Let a failed clear throw, so the modal can show it and stay open.
+              if (visits.visit) await visits.deleteVisit(visits.visit.id);
             }}
             existingVisit={visits.visit}
             userTimezone={profile?.timezone || 'UTC'}

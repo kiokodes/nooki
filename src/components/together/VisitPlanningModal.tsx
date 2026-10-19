@@ -13,6 +13,12 @@ interface VisitPlanningModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (startDate: string, endDate: string | null, location: string | null, timezone: string | null, isTentative: boolean) => Promise<void>;
+  /**
+   * Take the existing visit off the calendar entirely — plans change. Only shown
+   * while editing an existing visit; someday ideas pinned to it keep their place
+   * on the someday list (the database unlinks them rather than deleting them).
+   */
+  onClearVisit?: () => Promise<void>;
   existingVisit?: {
     id: string;
     start_date: string;
@@ -29,6 +35,7 @@ export const VisitPlanningModal: React.FC<VisitPlanningModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onClearVisit,
   existingVisit,
   userTimezone,
   partnerName,
@@ -40,6 +47,9 @@ export const VisitPlanningModal: React.FC<VisitPlanningModalProps> = ({
   const [isTentative, setIsTentative] = useState(existingVisit?.is_tentative || false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Clearing a visit is two steps: ask once, in place, before anything is removed.
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   // Reset form when modal opens with no existing visit
   useEffect(() => {
@@ -51,6 +61,7 @@ export const VisitPlanningModal: React.FC<VisitPlanningModalProps> = ({
       setIsTentative(false);
       setError(null);
     }
+    if (isOpen) setConfirmingClear(false);
   }, [isOpen, existingVisit, userTimezone]);
 
   // Populate form when existing visit changes
@@ -87,6 +98,21 @@ export const VisitPlanningModal: React.FC<VisitPlanningModalProps> = ({
       setError(err instanceof Error ? err.message : 'Failed to save visit');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleClearVisit = async () => {
+    if (!onClearVisit || clearing) return;
+    setError(null);
+    try {
+      setClearing(true);
+      await onClearVisit();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'This visit could not be cleared');
+    } finally {
+      setClearing(false);
+      setConfirmingClear(false);
     }
   };
 
@@ -414,6 +440,103 @@ export const VisitPlanningModal: React.FC<VisitPlanningModalProps> = ({
                 >
                   {formatDate(startDate)} {endDate && `– ${formatDate(endDate)}`}
                 </p>
+              </div>
+            )}
+            {/* Plans change: an existing visit can come off the calendar altogether */}
+            {existingVisit && onClearVisit && (
+              <div
+                data-clear-visit-section
+                style={{
+                  borderTop: `1px solid ${tokens.colors.borderSubtle}`,
+                  paddingTop: '16px',
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                    color: tokens.colors.textPrimary,
+                  }}
+                >
+                  Plans changed?
+                </p>
+                <p
+                  style={{
+                    margin: '5px 0 12px',
+                    fontSize: '0.78rem',
+                    lineHeight: 1.5,
+                    color: tokens.colors.textSecondary,
+                  }}
+                >
+                  Take this visit off the calendar — no hard feelings. Any someday ideas
+                  pinned to it go back to your someday list.
+                </p>
+                {confirmingClear ? (
+                  <div data-clear-visit-confirm style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: tokens.colors.primaryPinkDeep }}>
+                      Clear this visit for both of you?
+                    </span>
+                    <button
+                      type="button"
+                      data-confirm-clear-visit
+                      disabled={clearing}
+                      onClick={() => { void handleClearVisit(); }}
+                      style={{
+                        padding: '9px 16px',
+                        borderRadius: tokens.radii.pill,
+                        border: 'none',
+                        backgroundColor: tokens.colors.primaryPinkDeep,
+                        color: tokens.colors.textWhite,
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        fontFamily: tokens.typography.fontFamily,
+                        cursor: clearing ? 'default' : 'pointer',
+                        opacity: clearing ? 0.6 : 1,
+                      }}
+                    >
+                      {clearing ? 'Clearing…' : 'Yes, clear it'}
+                    </button>
+                    <button
+                      type="button"
+                      data-keep-visit
+                      disabled={clearing}
+                      onClick={() => setConfirmingClear(false)}
+                      style={{
+                        padding: '9px 16px',
+                        borderRadius: tokens.radii.pill,
+                        border: `1.5px solid ${tokens.colors.borderSoft}`,
+                        backgroundColor: tokens.colors.bgSurface,
+                        color: tokens.colors.textSecondary,
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        fontFamily: tokens.typography.fontFamily,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Keep it
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    data-clear-visit
+                    onClick={() => { setError(null); setConfirmingClear(true); }}
+                    style={{
+                      padding: '9px 16px',
+                      borderRadius: tokens.radii.pill,
+                      border: `1.5px solid ${tokens.colors.primaryPink}`,
+                      backgroundColor: tokens.colors.bgSurface,
+                      color: tokens.colors.primaryPinkDeep,
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      fontFamily: tokens.typography.fontFamily,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Clear this visit
+                  </button>
+                )}
               </div>
             )}
           </main>

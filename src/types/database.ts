@@ -377,34 +377,14 @@ export interface Visit {
   updated_at: string;
 }
 
-/** One partner's private wish for a visit. The RLS policy reveals rows only after both answer. */
-export interface VisitWish {
-  id: string;
-  couple_id: string;
-  visit_id: string;
-  user_id: string;
-  wish: string;
-  created_at: string;
-  updated_at: string;
-}
-
-/** One short prep task for a visit, assigned to one partner. */
-export interface VisitChecklistItem {
-  id: string;
-  couple_id: string;
-  visit_id: string;
-  text: string;
-  assigned_to: string;
-  completed: boolean;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export type TogetherActivityType = 'book' | 'game';
-export type TogetherDateStatus = 'scheduled' | 'done' | 'cancelled';
+export type TogetherDateStatus = 'proposed' | 'scheduled' | 'done' | 'cancelled';
 
-/** A shared, timed date: an activity to open together at a particular time. */
+/**
+ * A shared, timed date: an activity to open together at a particular time.
+ * It starts as one partner's suggestion ('proposed') and only becomes
+ * 'scheduled' — locked in, reminder and all — when the other partner agrees.
+ */
 export interface TogetherTimeSession {
   id: string;
   couple_id: string;
@@ -415,23 +395,14 @@ export interface TogetherTimeSession {
   scheduled_at: string;
   timezone: string;
   status: TogetherDateStatus;
+  /** Who suggested the current time; the other partner is the one who can agree to it. */
+  proposed_by: string | null;
+  /** The partner who agreed and locked the time in, stamped by the database. */
+  agreed_by: string | null;
+  agreed_at: string | null;
   reminder_sent_at: string | null;
   created_at: string;
   updated_at: string;
-}
-
-/** One partner's photo and best-moment line for a completed visit. */
-export interface VisitMemoryEntry {
-  id: string;
-  couple_id: string;
-  visit_id: string;
-  user_id: string;
-  photo_path: string;
-  note: string;
-  created_at: string;
-  updated_at: string;
-  /** Short-lived URL; created by the client for display, never persisted. */
-  photo_url?: string | null;
 }
 
 /* ---------------------------------------------------------------------------

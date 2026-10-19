@@ -586,6 +586,11 @@ BEGIN
      OR to_regclass('public.visit_memory_entries') IS NULL THEN
     RAISE EXCEPTION 'Together planning tables are missing. Apply supabase/migrations/202610190004_together_tab_restructure.sql.';
   END IF;
+  IF (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'together_time_sessions'
+        AND column_name IN ('proposed_by', 'agreed_by', 'agreed_at')) <> 3 THEN
+    RAISE EXCEPTION 'together_time_sessions is missing the two-partner agreement columns. Apply supabase/migrations/202610190005_together_time_agreement.sql.';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'

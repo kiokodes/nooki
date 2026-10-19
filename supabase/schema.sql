@@ -7025,7 +7025,9 @@ USING (couple_id = public.get_user_couple_id(auth.uid()) AND user_id = auth.uid(
 GRANT SELECT, INSERT, DELETE ON public.someday_item_votes TO authenticated;
 REVOKE ALL ON public.someday_item_votes FROM anon;
 
--- A shared activity scheduled for a specific time, with one reminder for both partners.
+-- A shared activity at a specific time. It starts as a suggestion ('proposed') from
+-- one partner and only locks in ('scheduled', with one reminder for both partners)
+-- when the other partner agrees to the exact time suggested.
 CREATE TABLE IF NOT EXISTS public.together_time_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   couple_id UUID NOT NULL REFERENCES public.couples(id) ON DELETE CASCADE,
@@ -7035,7 +7037,10 @@ CREATE TABLE IF NOT EXISTS public.together_time_sessions (
   activity_name TEXT NOT NULL CHECK (char_length(btrim(activity_name)) BETWEEN 1 AND 120),
   scheduled_at TIMESTAMPTZ NOT NULL,
   timezone TEXT NOT NULL DEFAULT 'UTC',
-  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'done', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed', 'scheduled', 'done', 'cancelled')),
+  proposed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  agreed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  agreed_at TIMESTAMPTZ,
   reminder_sent_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
@@ -7060,6 +7065,9 @@ REVOKE ALL ON public.together_time_sessions FROM anon;
 CREATE OR REPLACE FUNCTION public.guard_together_time_session()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public
 AS $$
+DECLARE
+  actor UUID := auth.uid();
+  plan_changed BOOLEAN;
 BEGIN
   IF NEW.activity_type = 'game' AND NEW.activity_id NOT IN (
     'rock-paper-scissors', 'snake', 'chess', 'sudoku', 'tetris',
@@ -7073,12 +7081,68 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Choose a book from your shared shelf.';
   END IF;
-  IF TG_OP = 'UPDATE' AND (NEW.couple_id <> OLD.couple_id OR NEW.created_by IS DISTINCT FROM OLD.created_by) THEN
+
+  IF TG_OP = 'INSERT' THEN
+    IF actor IS NOT NULL THEN
+      IF NEW.status <> 'proposed' THEN
+        RAISE EXCEPTION 'A Together time starts as a suggestion. It locks in when your partner agrees.';
+      END IF;
+      NEW.proposed_by := actor;
+      NEW.agreed_by := NULL;
+      NEW.agreed_at := NULL;
+      NEW.reminder_sent_at := NULL;
+    ELSIF NEW.proposed_by IS NULL THEN
+      NEW.proposed_by := NEW.created_by;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF NEW.couple_id <> OLD.couple_id OR NEW.created_by IS DISTINCT FROM OLD.created_by THEN
     RAISE EXCEPTION 'A scheduled date stays with the couple who made it.';
   END IF;
-  IF TG_OP = 'UPDATE' AND auth.uid() IS NOT NULL
+  IF actor IS NOT NULL
      AND NEW.reminder_sent_at IS DISTINCT FROM OLD.reminder_sent_at THEN
     RAISE EXCEPTION 'Only the reminder service can change reminder status.';
+  END IF;
+
+  IF actor IS NOT NULL THEN
+    plan_changed := NEW.scheduled_at IS DISTINCT FROM OLD.scheduled_at
+      OR NEW.timezone IS DISTINCT FROM OLD.timezone
+      OR NEW.activity_type IS DISTINCT FROM OLD.activity_type
+      OR NEW.activity_id IS DISTINCT FROM OLD.activity_id
+      OR NEW.activity_name IS DISTINCT FROM OLD.activity_name;
+
+    IF OLD.status IN ('done', 'cancelled') AND NEW.status <> OLD.status THEN
+      RAISE EXCEPTION 'That Together time is over. Suggest a new one instead.';
+    END IF;
+    IF OLD.status = 'proposed' AND NEW.status = 'done' THEN
+      RAISE EXCEPTION 'Agree on a time together before marking it done.';
+    END IF;
+
+    IF OLD.status = 'proposed' AND NEW.status = 'scheduled' THEN
+      IF actor IS NOT DISTINCT FROM OLD.proposed_by THEN
+        RAISE EXCEPTION 'Your partner needs to agree before this locks in.';
+      END IF;
+      IF plan_changed THEN
+        RAISE EXCEPTION 'Agree to the suggested time as it is, or suggest a different one.';
+      END IF;
+      NEW.proposed_by := OLD.proposed_by;
+      NEW.agreed_by := actor;
+      NEW.agreed_at := now();
+    ELSIF NEW.status = 'proposed' AND (OLD.status = 'scheduled' OR plan_changed) THEN
+      -- Whoever just (re)suggested now waits for the other partner to agree.
+      NEW.proposed_by := actor;
+      NEW.agreed_by := NULL;
+      NEW.agreed_at := NULL;
+      NEW.reminder_sent_at := NULL;
+    ELSIF OLD.status = 'scheduled' AND NEW.status = 'scheduled' AND plan_changed THEN
+      RAISE EXCEPTION 'This time is locked in. Suggest a different time and let your partner agree.';
+    ELSE
+      -- Done/cancelled and no-op updates keep the agreement record as it was.
+      NEW.proposed_by := OLD.proposed_by;
+      NEW.agreed_by := OLD.agreed_by;
+      NEW.agreed_at := OLD.agreed_at;
+    END IF;
   END IF;
   RETURN NEW;
 END;

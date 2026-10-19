@@ -304,6 +304,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const togetherMigration = await readFile(new URL('../supabase/migrations/202610180007_together_visits_and_someday_list.sql', import.meta.url), 'utf8');
   const somedayDetailsMigration = await readFile(new URL('../supabase/migrations/202610180008_someday_details_order_and_visit_link.sql', import.meta.url), 'utf8');
   const togetherRestructureMigration = await readFile(new URL('../supabase/migrations/202610190004_together_tab_restructure.sql', import.meta.url), 'utf8');
+  const togetherAgreementMigration = await readFile(new URL('../supabase/migrations/202610190005_together_time_agreement.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -385,6 +386,10 @@ test('verify.sql spots a live project that is missing a migration', async () => 
       'the preflight asks for the Together tab redesign after the original visit and Someday migrations');
     try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
     await db.exec(togetherRestructureMigration);
+    await assert.rejects(db.exec(verification), /202610190005_together_time_agreement\.sql/,
+      'and then for the two-partner Together-time agreement on top of the redesign');
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(togetherAgreementMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -416,6 +421,7 @@ async function server_paths() {
   const together = await read('../supabase/migrations/202610180007_together_visits_and_someday_list.sql');
   const somedayDetails = await read('../supabase/migrations/202610180008_someday_details_order_and_visit_link.sql');
   const togetherRestructure = await read('../supabase/migrations/202610190004_together_tab_restructure.sql');
+  const togetherAgreement = await read('../supabase/migrations/202610190005_together_time_agreement.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -499,7 +505,7 @@ async function server_paths() {
   check('schema.sql on a project with no auto-grant', freshNew, true);
   await freshNew.db.close();
 
-  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure];
+  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement];
   const existingOld = await run({
     defaults: legacyDefaults,
     // Every migration twice: a live project may have run any of them before.
@@ -518,8 +524,8 @@ async function server_paths() {
   const upgraded = await run({
     defaults: legacyDefaults,
     steps: [schemaBeforeCalendar, pairing, legacyCalendar,
-            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure,
-            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure],
+            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement,
+            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -598,6 +604,10 @@ async function server_paths() {
     'and then until the Together tab redesign migration lands');
   try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
   await missingLinks.db.exec(togetherRestructure);
+  await assert.rejects(missingLinks.db.exec(verify), /202610190005_together_time_agreement\.sql/,
+    'and then until the Together-time agreement migration lands');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(togetherAgreement);
   await missingLinks.db.exec(verify);
   await missingLinks.db.close();
 
@@ -619,6 +629,7 @@ async function server_paths() {
   await missingPush.db.exec(together);
   await missingPush.db.exec(somedayDetails);
   await missingPush.db.exec(togetherRestructure);
+  await missingPush.db.exec(togetherAgreement);
   await missingPush.db.exec(verify);
   await missingPush.db.close();
 

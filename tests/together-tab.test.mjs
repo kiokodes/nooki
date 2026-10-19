@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 
-// Together's visit planning, Together-time scheduler, private/matched ideas, memories,
+// Together's next-visit countdown, Together-time scheduler, private/matched ideas,
 // and the book shelf's joint-progress copy are exercised through the real component.
-test('Together tab: private wishes reveal together, plans are actionable, and memories/sessions open from one tap', async () => {
+test('Together tab: the countdown leads, ideas match quietly, and sessions open from one tap', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
   for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'MouseEvent', 'File', 'FileReader']) {
     globalThis[key] = dom.window[key];
@@ -28,9 +28,6 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
       id: 'v1', couple_id: 'c1', start_date: '2099-01-10', end_date: '2099-01-11',
       location: 'Lagos', timezone: 'Africa/Lagos', is_tentative: false,
       created_by: 'me', created_at: '', updated_at: '',
-    };
-    const pastVisit = {
-      ...visit, id: 'v-old', start_date: '2020-05-01', end_date: '2020-05-02', location: 'Abuja',
     };
     const idea = (id, text, overrides = {}) => ({
       id, couple_id: 'c1', text, details: null, sort_order: 0, visibility: 'open',
@@ -59,31 +56,28 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     const session = {
       id: 'session-1', couple_id: 'c1', created_by: 'me', activity_type: 'game',
       activity_id: 'word-wheel', activity_name: 'Word Wheel', scheduled_at: '2099-01-10T18:00:00.000Z',
-      timezone: 'Africa/Lagos', status: 'scheduled', reminder_sent_at: null, created_at: '', updated_at: '',
+      timezone: 'Africa/Lagos', status: 'scheduled', proposed_by: 'me', agreed_by: 'partner',
+      agreed_at: '2026-01-01T00:00:00Z', reminder_sent_at: null, created_at: '', updated_at: '',
     };
     const openReader = (id) => calls.push(['reader', id]);
     const onOpenActivity = (value) => calls.push(['openActivity', value.id]);
     const defaults = {
-      state, userId: 'me', userName: 'Alice', partnerId: 'partner', partnerName: 'Ana', timezone: 'Africa/Lagos',
-      visit, visits: [visit, pastVisit], onOpenReader: openReader,
+      state, userId: 'me', partnerName: 'Ana', timezone: 'Africa/Lagos',
+      visit, onOpenReader: openReader,
       somedayItems: [sharedMatch, privateIdea],
-      visitWishes: [{ id: 'wish-me', couple_id: 'c1', visit_id: 'v1', user_id: 'me', wish: 'A private answer', created_at: '', updated_at: '' }],
-      visitChecklist: [], togetherTimeSessions: [session], memories: [],
+      togetherTimeSessions: [session],
       remindersEnabled: false,
       onPlanVisit: () => calls.push(['planVisit']),
-      onSaveVisitWish: async (text) => calls.push(['saveWish', text]),
-      onAddVisitChecklistItem: async (text, owner) => calls.push(['addChecklist', text, owner]),
-      onUpdateVisitChecklistItem: async (id, update) => calls.push(['updateChecklist', id, update]),
-      onDeleteVisitChecklistItem: async (id) => calls.push(['deleteChecklist', id]),
-      onAttachSomedayItemToVisit: async (...args) => calls.push(['attach', args[0].id, args[1], args[2] ?? null]),
       onAddSomedayItem: async (...args) => calls.push(['addSomeday', ...args]),
       onUpdateSomedayItem: async (...args) => calls.push(['updateSomeday', args[0].id, args[3]]),
       onToggleSomedayWant: async (item) => calls.push(['want', item.id]),
       onDeleteSomedayItem: async (item) => calls.push(['deleteSomeday', item.id]),
-      onScheduleTogetherTime: async (input) => calls.push(['schedule', input]),
+      onProposeTogetherTime: async (input) => calls.push(['propose', input]),
+      onAgreeTogetherTime: async (item) => calls.push(['agree', item.id]),
+      onSuggestTogetherTime: async (item, scheduledAt, timezone) => calls.push(['suggest', item.id, scheduledAt, timezone]),
+      onTalkAboutTogetherTime: async (item) => calls.push(['talk', item.id]),
       onUpdateTogetherTime: async (item, status) => calls.push(['updateSession', item.id, status]),
       onOpenActivity,
-      onSaveVisitMemory: async (...args) => calls.push(['memory', ...args]),
       onClearInitialSession: () => calls.push(['clearDeepLink']),
     };
     const render = (overrides = {}) => act(async () => root.render(React.createElement(TogetherView, { ...defaults, ...overrides })));
@@ -98,42 +92,17 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     const click = async (element) => act(async () => element.click());
     const body = () => document.body.textContent.replace(/\u2019/g, "'");
 
-    // The countdown and day-by-day plan sit first; a submitted wish itself is not shown.
+    // The countdown sits first. The retired sections — visit wishes, the day-by-day
+    // plan, the shared checklist and memories — are gone from the tab.
     await render();
     assert(document.querySelector('[data-visit-card="upcoming"]'));
-    assert(document.querySelector('[data-visit-day="2099-01-10"]'));
-    assert(document.querySelector('[data-visit-day="2099-01-11"]'));
-    assert(body().includes('Your answer is tucked away'));
-    assert(!body().includes('A private answer'), 'an unanswered partner cannot see the submitted text');
-    assert(body().includes('Shared checklist'));
-    assert(body().includes('Tickets booked'));
-
-    // An open someday idea can be placed on a specific visit day; a private one is never offered.
-    const daySelect = document.querySelector('[aria-label="Choose a someday idea for Sun, Jan 10"]')
-      || document.querySelector('[aria-label^="Choose a someday idea for"]');
-    assert(daySelect);
-    assert([...daySelect.options].some((option) => option.textContent === 'Try the night market'));
-    assert(![...daySelect.options].some((option) => option.textContent === 'A surprise for later'));
-    await setValue(daySelect, 'idea-match');
-    const addIdeaButton = document.querySelector('[aria-label^="Add idea to"]');
-    await click(addIdeaButton);
-    assert.deepEqual(calls.pop(), ['attach', 'idea-match', 'v1', '2099-01-10']);
-
-    // Checklist rows have one owner; both partners can be chosen when adding an item.
-    await setValue(document.querySelector('[aria-label="New checklist item"]'), 'Book the train');
-    await setValue(document.querySelector('[aria-label="Assign checklist item to"]'), 'partner');
-    const checklistForm = document.querySelector('[data-visit-checklist] form');
-    await act(async () => checklistForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
-    assert.deepEqual(calls.pop(), ['addChecklist', 'Book the train', 'partner']);
-
-    // After both wishes exist, both texts are revealed together.
-    await render({ visitWishes: [
-      ...defaults.visitWishes,
-      { id: 'wish-partner', couple_id: 'c1', visit_id: 'v1', user_id: 'partner', wish: 'A quiet breakfast', created_at: '', updated_at: '' },
-    ] });
-    assert(document.querySelector('[data-wishes-revealed]'));
-    assert(body().includes('A private answer'));
-    assert(body().includes('A quiet breakfast'));
+    assert(!document.querySelector('[data-visit-wishes]'));
+    assert(!document.querySelector('[data-visit-itinerary]'));
+    assert(!document.querySelector('[data-visit-checklist]'));
+    assert(!document.querySelector('[data-section="memories"]'));
+    assert(!body().includes('One thing I want from this visit'));
+    assert(!body().includes('Plan by day'));
+    assert(!body().includes('Shared checklist'));
 
     // A matched idea is explicit; single-vote ideas do not announce the other person's yes.
     assert.equal(document.querySelectorAll('[data-someday-match]').length, 1);
@@ -149,7 +118,9 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     assert(togetherTime.textContent.includes('around the middle of the story'));
     assert(!togetherTime.textContent.includes('%'));
 
-    // One tap on a scheduled session opens that activity; scheduling is available for tonight or any time this week.
+    // A locked-in session says both partners agreed, and one tap opens that activity.
+    assert(document.querySelector('[data-together-time-locked="session-1"]'));
+    assert(body().includes('Locked in'));
     await click(document.querySelector('[data-open-scheduled-activity="session-1"]'));
     assert.deepEqual(calls.pop(), ['openActivity', 'session-1']);
     const typeSelect = document.querySelector('[aria-label="Together time activity type"]');
@@ -159,7 +130,7 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     const scheduleForm = document.querySelector('[data-together-time-scheduler] form');
     await act(async () => scheduleForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
     const scheduled = calls.pop();
-    assert.equal(scheduled[0], 'schedule');
+    assert.equal(scheduled[0], 'propose');
     assert.equal(scheduled[1].activityType, 'game');
     assert.equal(scheduled[1].activityId, 'word-wheel');
     assert.equal(scheduled[1].activityName, 'Word Wheel');
@@ -172,13 +143,46 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     }).formatToParts(new Date(scheduled[1].scheduledAt)).map((part) => [part.type, part.value]));
     assert.equal(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`, pickedWallClock,
       'a datetime-local value is interpreted in the profile timezone saved with the reminder');
-    assert(body().includes('Turn on notifications on both phones'));
+    assert(body().includes('turn on notifications on both phones'));
+    assert(body().includes('This is a suggestion, not a fixed plan'));
 
-    // Every completed visit prompts for the user's contribution and shows the shared timeline lane.
-    const memoriesSection = document.querySelector('[data-section="memories"]');
-    assert(memoriesSection.querySelector('[data-visit-memory="v-old"]'));
-    assert(memoriesSection.textContent.includes('Add one photo'));
-    assert(memoriesSection.textContent.includes('Waiting for Ana'));
+    // A suggestion from Ana waits for my yes: I can lock it in, take it to the chat to
+    // deliberate, or counter-suggest a time that works better — it is not scheduled yet.
+    const partnerSuggestion = {
+      ...session, id: 'session-proposal', status: 'proposed', created_by: 'partner',
+      proposed_by: 'partner', agreed_by: null, agreed_at: null,
+    };
+    const mySuggestion = {
+      ...session, id: 'session-mine', status: 'proposed', agreed_by: null, agreed_at: null,
+    };
+    await render({ togetherTimeSessions: [session, partnerSuggestion, mySuggestion] });
+    const proposalCard = document.querySelector('[data-together-time-session="session-proposal"]');
+    assert(proposalCard);
+    assert.equal(proposalCard.getAttribute('data-together-time-status'), 'proposed');
+    assert(proposalCard.textContent.includes('Ana suggested this'));
+    assert(!proposalCard.querySelector('[data-open-scheduled-activity]'),
+      'an un-agreed suggestion does not open the activity as if it were scheduled');
+    await click(proposalCard.querySelector('[data-talk-about-together-time="session-proposal"]'));
+    assert.deepEqual(calls.pop(), ['talk', 'session-proposal']);
+    await click(proposalCard.querySelector('[data-agree-together-time="session-proposal"]'));
+    assert.deepEqual(calls.pop(), ['agree', 'session-proposal']);
+    await click(proposalCard.querySelector('[data-suggest-together-time="session-proposal"]'));
+    const suggestForm = document.querySelector('[data-suggest-time-form="session-proposal"]');
+    assert(suggestForm);
+    await setValue(suggestForm.querySelector('input[type="datetime-local"]'), '2099-01-12T19:30');
+    await act(async () => suggestForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+    const suggestion = calls.pop();
+    assert.equal(suggestion[0], 'suggest');
+    assert.equal(suggestion[1], 'session-proposal');
+    assert(new Date(suggestion[2]).getTime() > Date.now());
+    assert.equal(suggestion[3], 'Africa/Lagos');
+
+    // My own suggestion only waits: there is no button to agree with myself.
+    const myCard = document.querySelector('[data-together-time-session="session-mine"]');
+    assert(myCard);
+    assert(myCard.textContent.includes('Waiting for Ana to agree'));
+    assert(!myCard.querySelector('[data-agree-together-time]'));
+    assert(myCard.querySelector('[data-talk-about-together-time="session-mine"]'));
 
     // A cold push can open the precise activity once the shared schedule has loaded.
     calls.length = 0;
@@ -186,7 +190,7 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     assert.deepEqual(calls, [['openActivity', 'session-1'], ['clearDeepLink']]);
 
     // With no upcoming visit, choosing a date is the dominant empty-state action.
-    await render({ visit: null, visitWishes: [], visitChecklist: [] });
+    await render({ visit: null });
     const emptyVisit = document.querySelector('[data-visit-card="empty"]');
     assert(emptyVisit);
     assert(emptyVisit.textContent.includes('Pick your next visit date'));
@@ -274,6 +278,82 @@ test('chat tab: a shared highlight quotes the passage and jumps back into the bo
     // With no comment, the quote is not repeated as body text under the card.
     assert.equal(document.body.textContent.split(quote).length - 1, 2,
       'the quote appears once in each surviving card, never doubled in a body');
+  } finally {
+    await act(() => root.unmount());
+    await server.close();
+    dom.window.close();
+  }
+});
+
+test('visit planning modal: an existing visit can be cleared when plans change', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
+  for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'Event', 'MouseEvent']) {
+    globalThis[key] = dom.window[key];
+  }
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const { default: React, act } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false, ws: false },
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://test-project.supabase.co'),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('sb_publishable_test_only'),
+    },
+  });
+  const root = createRoot(document.getElementById('root'));
+  try {
+    const { VisitPlanningModal } = await server.ssrLoadModule('/src/components/together/VisitPlanningModal.tsx');
+    const calls = [];
+    const existingVisit = {
+      id: 'v1', start_date: '2099-01-10', end_date: '2099-01-11',
+      location: 'Lagos', timezone: 'Africa/Lagos', is_tentative: false,
+    };
+    const defaults = {
+      isOpen: true,
+      onClose: () => calls.push(['close']),
+      onSave: async () => calls.push(['save']),
+      onClearVisit: async () => calls.push(['clear']),
+      existingVisit,
+      userTimezone: 'Africa/Lagos',
+      partnerName: 'Ana',
+    };
+    const render = (overrides = {}) => act(async () => root.render(React.createElement(VisitPlanningModal, { ...defaults, ...overrides })));
+    const click = async (element) => act(async () => element.click());
+
+    // Editing a visit offers a way out, and explains what survives it.
+    await render();
+    const section = document.querySelector('[data-clear-visit-section]');
+    assert(section, 'editing an existing visit shows the clear option');
+    assert(section.textContent.includes('Plans changed?'));
+    assert(section.textContent.includes('go back to your someday list'));
+
+    // Nothing is removed on the first tap: it only asks, in place.
+    await click(document.querySelector('[data-clear-visit]'));
+    assert(document.querySelector('[data-clear-visit-confirm]'));
+    assert.deepEqual(calls, []);
+    // "Keep it" backs out with the visit untouched.
+    await click(document.querySelector('[data-keep-visit]'));
+    assert(!document.querySelector('[data-clear-visit-confirm]'));
+    assert(document.querySelector('[data-clear-visit]'));
+    assert.deepEqual(calls, []);
+
+    // Confirming clears the visit and closes the modal.
+    await click(document.querySelector('[data-clear-visit]'));
+    await click(document.querySelector('[data-confirm-clear-visit]'));
+    assert.deepEqual(calls, [['clear'], ['close']]);
+
+    // A failed clear says so and keeps the modal (and the visit) in place.
+    calls.length = 0;
+    await render({ onClearVisit: async () => { throw new Error('The visit could not be cleared.'); } });
+    await click(document.querySelector('[data-clear-visit]'));
+    await click(document.querySelector('[data-confirm-clear-visit]'));
+    assert(!calls.some((call) => call[0] === 'close'));
+    assert(document.querySelector('[role="alert"]').textContent.includes('could not be cleared'));
+    assert(document.querySelector('[data-clear-visit]'), 'the clear option is offered again after a failure');
+
+    // Planning a brand-new visit has nothing to clear.
+    await render({ existingVisit: null });
+    assert(!document.querySelector('[data-clear-visit-section]'));
   } finally {
     await act(() => root.unmount());
     await server.close();
