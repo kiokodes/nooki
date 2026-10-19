@@ -42,6 +42,28 @@ interface EpubReaderProps {
 /** How finely the book is sliced for percentage progress. */
 const LOCATIONS_CHARS = 1200;
 
+/**
+ * epubjs never settles `book.ready` when an archive cannot be opened —
+ * its open() rejection only emits `book:openFailed` — so a corrupt or
+ * truncated file (or a poisoned cache entry) would otherwise leave the
+ * reader blank forever. The open steps are raced against this timeout
+ * as the backstop that always says something.
+ */
+const OPEN_TIMEOUT_MS = 15000;
+
+const OPEN_TIMEOUT_HELP = 'The book took too long to open. The file may be corrupted — try uploading it again.';
+
+/** Settles with the promise's result, or rejects with a readable error. */
+function openWithin<T>(promise: Promise<T>, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), OPEN_TIMEOUT_MS);
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 const HIGHLIGHT_STYLES = {
   rose: { fill: tokens.highlightInk.rose, 'fill-opacity': '0.28', 'mix-blend-mode': 'multiply' },
   sage: { fill: tokens.highlightInk.sage, 'fill-opacity': '0.28', 'mix-blend-mode': 'multiply' },
@@ -83,10 +105,10 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
 
     void (async () => {
       try {
-        await book.ready;
+        await openWithin(book.ready, OPEN_TIMEOUT_HELP);
         // Locations give every CFI a percentage: "42% through" for the card and the
         // partner's bookmark. Heavy books take a few seconds here; the reader stays up.
-        await book.locations.generate(LOCATIONS_CHARS);
+        await openWithin(book.locations.generate(LOCATIONS_CHARS), OPEN_TIMEOUT_HELP);
         if (cancelled) return;
 
         const rendition = book.renderTo(holder, {
