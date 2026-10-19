@@ -1,6 +1,6 @@
 import React from 'react';
 import { TodayCard } from './TodayCard';
-import { DailyDecisionCard } from './DailyDecisionCard';
+import { DailyDecisionCard, type DailyDecisionCardProps } from './DailyDecisionCard';
 import { NookPhotoFrame, type NookPhotoFrameProps } from './NookPhotoFrame';
 import { MissYouButton, type MissYouButtonProps } from './MissYouButton';
 import { useNow } from '../../hooks/useNow';
@@ -18,6 +18,12 @@ interface HomeViewProps {
   partnerOnline?: boolean;
   onOpenDailyDecision?: () => void;
   /**
+   * Where today's decision stands, for its card's status line and glow (see
+   * `DailyDecisionCard`). The open handler above stays separate, like `photo`
+   * and `missYou` bundle the rest of their cards' props.
+   */
+  dailyDecision?: Omit<DailyDecisionCardProps, 'onPlay'>;
+  /**
    * The couple's picture filling the nook (see `useCouplePhoto`).
    * Before the first upload, the photo area invites them to choose one.
    */
@@ -34,7 +40,8 @@ interface HomeViewProps {
  *
  * It shows:
  * - The Today card: today's date, anything happening today, and what is coming within the next day.
- * - Today's shared decision.
+ * - Today's shared decision beside Our day, in the same little card shape: two ticks,
+ *   its title, and one line saying where the decision stands — glowing until it is made.
  * - A shared cozy nook, with a small top-right caption, the couple's own picture
  *   filling the space below it with a thin coloured border and two hearts, and
  *   the "I miss you" button in the top-left corner. The button belongs to the half of the
@@ -50,6 +57,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenCalendar,
   partnerOnline = false,
   onOpenDailyDecision,
+  dailyDecision,
   photo,
   missYou,
 }) => {
@@ -80,7 +88,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
       />
 
       <div className="home-daily-cards" style={{ display: 'grid', gridTemplateColumns: everyday ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap: '10px', flexShrink: 0 }}>
-        <DailyDecisionCard onPlay={onOpenDailyDecision} />
+        <DailyDecisionCard
+          onPlay={onOpenDailyDecision}
+          state={dailyDecision?.state}
+          partnerName={dailyDecision?.partnerName}
+        />
         {everyday}
       </div>
 

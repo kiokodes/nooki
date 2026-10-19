@@ -375,7 +375,10 @@ The Home tab shows:
     hairline and a small "Tomorrow" label, so today always reads first.
   - A **calendar icon** in the corner that opens the full calendar.
 - One compact **Today’s decision** card (`src/components/home/DailyDecisionCard.tsx`) opens the
-  couple's private choice. It is the only daily activity on Home.
+  couple's private choice. It mirrors the **Our day** card beside it — the two ticks, the same
+  small title, and one status line ("Make a decision", "Waiting for …'s decision", "Talk it
+  out", or "Decided") — and it glows until the couple agrees: pulsing with a little alert badge
+  while a choice is this phone's to make, glowing steadily while it waits for the partner's.
 - The **cozy nook** at the bottom of the screen — the shared room where the couple's own
   picture stands in a gift-wrapped frame (see **The framed couple picture** below), with the
   "I miss you" button in its top-left corner and the caption pinned top-right. The cartoon

@@ -259,10 +259,19 @@ test('global header: live counter, presence ticker and partner clock', async () 
 
     const dailyDecisionCard = home.querySelector('[data-card="daily-decision"]');
     assert(dailyDecisionCard, 'the daily decision is the only daily Home card');
+    // The card mirrors Our day: the whole card is the button, with its little title
+    // and one status line under it instead of the old Play pill.
+    assert.equal(dailyDecisionCard.tagName, 'BUTTON', 'the whole decision card opens it, like Our day');
+    assert.equal(dailyDecisionCard.dataset.decisionState, 'undecided', 'no choice saved yet');
+    assert.equal(dailyDecisionCard.dataset.decisionAttention, 'action', 'an unmade decision asks for attention');
+    assert(dailyDecisionCard.classList.contains('nooki-decision-card--action'), 'an unmade decision glows');
+    assert(dailyDecisionCard.querySelector('[data-decision-alert]'), 'an unmade decision carries the alert badge');
     const decisionCardCopy = dailyDecisionCard.textContent.replace(/\u2019/g, "'").trim();
-    assert.equal(decisionCardCopy, "Today's decisionPlay", 'the card shows only its eyebrow and Play button');
-    const openDecisionButton = dailyDecisionCard.querySelector('[data-action="play-daily-decision"]');
-    assert(openDecisionButton, 'the Daily decision card has a Play button');
+    assert.match(decisionCardCopy, /Today's decision/, 'the card keeps its little title');
+    assert.match(decisionCardCopy, /Make a decision/, 'an unmade decision says so under the title');
+    assert.equal(decisionCardCopy.includes('Play'), false, 'the Play pill is gone');
+    const openDecisionButton = dailyDecisionCard;
+    assert.equal(openDecisionButton.dataset.action, 'play-daily-decision', 'the card itself is the open control');
     await act(async () => { openDecisionButton.click(); });
     const decisionModal = () => document.querySelector('[data-modal="daily-decision"]');
     await waitFor(() => decisionModal()?.querySelector('[data-decision-question]'), 'today’s uploaded decision should load');
@@ -295,6 +304,16 @@ test('global header: live counter, presence ticker and partner clock', async () 
     // The shared nook stays at the bottom of Home, with its caption pinned to the top-right.
     const currentHome = document.querySelector('[data-screen="home"]');
     assert(currentHome, 'the Home tab is visible again after closing the daily decision');
+
+    // Alice's saved choice turns the card to waiting on Bob: still glowing, but the
+    // pulse and alert badge are for her own move, so both are gone while she waits.
+    const waitingCard = currentHome.querySelector('[data-card="daily-decision"]');
+    assert(waitingCard, 'the decision card is still on Home');
+    assert.equal(waitingCard.dataset.decisionState, 'waiting');
+    assert.equal(waitingCard.dataset.decisionAttention, 'waiting');
+    assert.match(waitingCard.textContent.replace(/\u2019/g, "'"), /Waiting for Bob's decision/);
+    assert.equal(waitingCard.querySelector('[data-decision-alert]'), null, 'waiting on Bob is not her alert to clear');
+    assert.equal(waitingCard.classList.contains('nooki-decision-card--action'), false, 'waiting glows steadily instead of pulsing');
     const sceneArea = currentHome.querySelector('[data-scene-placeholder]');
     assert(sceneArea, 'the Home tab includes the shared Nooki scene');
     assert.equal(currentHome.lastElementChild, sceneArea, 'the shared nook stays at the bottom of the Home screen');
