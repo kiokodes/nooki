@@ -26,12 +26,15 @@ function ownerWords(side: { words: string[] }): string[] {
   return side.words;
 }
 
-export function WordWheel({ match, userId, partnerName, games, onExit }: {
+export function WordWheel({ match, userId, partnerName, games, onExit, practice = false, onPracticeSubmit, onPracticeAgain }: {
   match: GameMatch;
   userId: string;
   partnerName: string;
   games: GamesState;
   onExit: () => void;
+  practice?: boolean;
+  onPracticeSubmit?: (words: string[], finishedMs: number) => void;
+  onPracticeAgain?: () => void;
 }) {
   const round = match.word;
   const now = useNow(250);
@@ -49,7 +52,7 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
   const dragging = useRef(false);
   const pathRef = useRef<number[]>([]);
   const foundRef = useRef<string[]>(round?.mine.words ?? []);
-  const lastFoundMs = useRef<number>(round?.mine.finished_ms ?? 0);
+  const lastFoundMs = useRef<number>(round?.mine.finished_ms ?? (round?.duration_seconds ?? 60) * 1000);
   const submittedRef = useRef(false);
   const expiredRef = useRef(false);
   const submitRef = useRef<(words: string[], finishedMs: number) => Promise<void>>(async () => {});
@@ -74,7 +77,7 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
     setTyped('');
     setMessage(null);
     setSubmitError(null);
-    lastFoundMs.current = round?.mine.finished_ms ?? 0;
+    lastFoundMs.current = round?.mine.finished_ms ?? (round?.duration_seconds ?? 60) * 1000;
     // Only the round identity resets the board.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match.id]);
@@ -96,17 +99,20 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
   }, [round?.server_now]);
 
   const serverNow = now.getTime() + offset;
-  const startAt = round?.start_at ? Date.parse(round.start_at) : null;
+  // The round-level start_at is retained for v1 history; the current clock belongs to
+  // this player and begins at their own server-recorded started_at.
+  const startAt = round?.mine.started_at ? Date.parse(round.mine.started_at) : null;
   const durationMs = (round?.duration_seconds ?? 60) * 1000;
   const countdownMs = startAt === null ? null : Math.max(0, startAt - serverNow);
   const remainingMs = startAt === null ? durationMs : Math.max(0, startAt + durationMs - serverNow);
   const elapsedMs = Math.max(0, Math.min(durationMs, durationMs - remainingMs));
   const started = startAt !== null && serverNow >= startAt;
+  const mineStarted = round?.mine.started === true || startAt !== null;
   const mySubmitted = localSubmitted || round?.mine.submitted === true;
   const running = round?.status === 'running';
   const finished = round?.status === 'finished';
   const total = round?.words.length ?? 0;
-  const disabled = !running || !started || mySubmitted || finished;
+  const disabled = !running || !mineStarted || !started || mySubmitted || finished;
 
   const flash = useCallback((kind: 'correct' | 'wrong' | 'info', text: string) => {
     setMessage({ kind, text });
@@ -131,7 +137,11 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
     setSaving(true);
     setSubmitError(null);
     try {
-      await games.submitWord(match.id, words, finishedMs);
+      if (practice) {
+        onPracticeSubmit?.(words, finishedMs);
+      } else {
+        await games.submitWord(match.id, words, finishedMs);
+      }
       setLocalSubmitted(true);
     } catch (error) {
       submittedRef.current = false;
@@ -139,20 +149,20 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
     } finally {
       setSaving(false);
     }
-  }, [games, match.id]);
+  }, [games, match.id, onPracticeSubmit, practice]);
 
   /* Time up: save what was found. The last word's time, not the clock's end, is the
      tie-break, so it is carried separately. */
   useEffect(() => {
-    if (!running || !started || mySubmitted || submittedRef.current) return;
+    if (!running || !mineStarted || !started || mySubmitted || submittedRef.current) return;
     if (remainingMs > 0) return;
     void submit(foundRef.current, lastFoundMs.current);
-  }, [running, started, mySubmitted, remainingMs, submit]);
+  }, [running, mineStarted, started, mySubmitted, remainingMs, submit]);
 
   /* The clock can expire and the player can leave in the same moment. Keep the
      submission function and the expired flag in refs so the unmount path can still
      save the words the phone found instead of letting the grace sweep count zero. */
-  useEffect(() => { submitRef.current = submit; expiredRef.current = running && started && remainingMs <= 0 && !mySubmitted; }, [submit, running, started, remainingMs, mySubmitted]);
+  useEffect(() => { submitRef.current = submit; expiredRef.current = running && mineStarted && started && remainingMs <= 0 && !mySubmitted; }, [submit, running, mineStarted, started, remainingMs, mySubmitted]);
   useEffect(() => () => {
     if (expiredRef.current) void submitRef.current(foundRef.current, lastFoundMs.current);
   }, []);
@@ -317,36 +327,31 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
   const theirAttempt = { word: '', count: round.partner.count, finishedMs: round.partner.finished_ms ?? durationMs };
   const localComparison = compareWordAttempts(myAttempt, theirAttempt);
 
-  /* ------------------------------------------------------------------ lobby -- */
-  if (!running && !finished) {
+  /* ------------------------------------------------------------ start lobby -- */
+  if (!mineStarted && !mySubmitted && !finished) {
+    const partnerStatus = round.partner.submitted ? 'Finished' : round.partner.started ? 'Playing' : 'Not started yet';
     return <section className="game-card word-wheel-card word-lobby">
       <div className="word-lobby-head">
         <div>
-          <span className="word-eyebrow">Word Wheel</span>
+          <span className="word-eyebrow">Async challenge</span>
           <h2>{WORD_LEVEL_LABELS[round.difficulty]} · {wordDurationLabel(round.duration_seconds)}</h2>
         </div>
         <span className="word-pill">{total} words</span>
       </div>
       <WheelPreview letters={round.letters} />
       <p className="word-lobby-copy">
-        You both get this exact wheel and the same {total} hidden words. {WORD_LEVEL_HINTS[round.difficulty]}
+        You both get this exact wheel and the same {total} hidden words. Your {wordDurationLabel(round.duration_seconds)} clock starts when you tap below; {partnerName} can play later. {WORD_LEVEL_HINTS[round.difficulty]}
       </p>
       <div className="word-ready-grid">
-        <div className={round.mine.ready ? 'is-ready' : ''}>
+        <div>
           <span>You</span>
-          <strong>{round.mine.ready ? 'Ready' : 'Not ready yet'}</strong>
+          <strong>Not started yet</strong>
         </div>
-        <div className={round.partner.ready ? 'is-ready' : ''}>
+        <div className={round.partner.started ? 'is-ready' : ''}>
           <span>{partnerName}</span>
-          <strong>{round.partner.ready ? 'Ready' : 'Waiting'}</strong>
+          <strong>{partnerStatus}</strong>
         </div>
       </div>
-      {round.start_at && countdownMs !== null && countdownMs > 0 && (
-        <p className="word-countdown" role="status">Starting in {Math.ceil(countdownMs / 1000)}…</p>
-      )}
-      {startAt !== null && countdownMs === 0 && (
-        <p className="word-countdown" role="status">The clock is running. Open the wheel when you are ready.</p>
-      )}
       <ul className="word-rules">
         <li>Swipe across letters to build a word; each letter once.</li>
         <li>Swipe back over the last letter to undo it.</li>
@@ -356,30 +361,27 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
       {submitError && <p className="word-error" role="alert">{submitError}</p>}
       {games.error && <p className="word-error" role="alert">{games.error}</p>}
       <div className="word-actions">
-        {!round.mine.ready ? (
-          <button type="button" disabled={games.busy} onClick={() => void games.readyWord(match.id)}>
-            {games.busy ? 'Saying ready…' : 'I’m ready'}
-          </button>
-        ) : (
-          <button type="button" className="snake-secondary" disabled={games.busy || countdownMs === 0} onClick={() => void games.readyWord(match.id)}>
-            {round.partner.ready ? 'Both ready' : `Waiting for ${partnerName}…`}
-          </button>
-        )}
+        <button type="button" disabled={games.busy} onClick={() => void games.startWordAttempt(match.id)} data-word-start-button>
+          {games.busy ? 'Starting your clock…' : `Start my ${wordDurationLabel(round.duration_seconds)} →`}
+        </button>
+        {round.status === 'waiting' && <button type="button" className="snake-secondary" disabled={games.busy} onClick={() => void games.cancelWord(match.id)}>
+          Cancel waiting challenge
+        </button>}
         <button type="button" className="snake-secondary" onClick={onExit}>← All games</button>
       </div>
-      <p className="game-hint">The round starts for both of you at the same server time, even if one phone opens late.</p>
+      <p className="game-hint">This is an asynchronous challenge. You do not need to be online together; each clock runs only on its own phone's attempt.</p>
     </section>;
   }
 
-  /* -------------------------------------------------------------- countdown -- */
-  if (running && !started) {
+  /* ----------------------------------------------------------- own countdown -- */
+  if (running && mineStarted && !started) {
     return <section className="game-card word-wheel-card word-countdown-screen">
-      <span className="word-eyebrow">Get ready</span>
+      <span className="word-eyebrow">Your attempt</span>
       <h2>{WORD_LEVEL_LABELS[round.difficulty]} · {wordDurationLabel(round.duration_seconds)}</h2>
       <WheelPreview letters={round.letters} />
       <p className="word-big-countdown" role="status">{Math.max(1, Math.ceil((countdownMs ?? 0) / 1000))}</p>
-      <p>Both clocks start together. {total} words to find.</p>
-      <p className="game-hint">The buttons unlock at zero. You can still join if the countdown has already passed — your clock is already running.</p>
+      <p>Your clock starts in {Math.max(1, Math.ceil((countdownMs ?? 0) / 1000))} seconds. {total} words to find.</p>
+      <p className="game-hint">{partnerName} has a separate clock and can start whenever they are ready.</p>
       <div className="word-actions"><button type="button" className="snake-secondary" onClick={onExit}>← All games</button></div>
     </section>;
   }
@@ -391,7 +393,7 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
       <h2>You found {found.length} of {total}</h2>
       <p className="word-saved-line">
         Last word at <strong>{formatWordTime(round.mine.finished_ms ?? lastFoundMs.current)}</strong>.
-        {' '}Waiting for {partnerName} to finish — the result is decided when both attempts are in.
+        {' '}{round.partner.started ? `Waiting for ${partnerName} to finish.` : `Waiting for ${partnerName} to start whenever they are ready.`} The result is decided when both attempts are in.
       </p>
       {submitError && <p className="word-error" role="alert">{submitError}</p>}
       <WheelPreview letters={round.letters} />
@@ -403,6 +405,34 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
   }
 
   /* ---------------------------------------------------------------- finished -- */
+  if (finished && practice) {
+    return <section className="game-card word-wheel-card word-result word-practice-result">
+      <span className="word-eyebrow">Solo practice complete</span>
+      <h2>Nice run!</h2>
+      <p className="word-result-sub">You found {found.length} of {total} words. Practice is just for you — it is not sent to the server or counted as a win.</p>
+      <div className="word-result-grid">
+        <div className="is-winner">
+          <span>Your score</span>
+          <strong>{found.length}/{total}</strong>
+          <small>last word {formatWordTime(round.mine.finished_ms ?? 0)}</small>
+        </div>
+        <div>
+          <span>Difficulty</span>
+          <strong>{WORD_LEVEL_LABELS[round.difficulty]}</strong>
+          <small>{wordDurationLabel(round.duration_seconds)}</small>
+        </div>
+      </div>
+      <div className="word-found-list">
+        <h3>Your words</h3>
+        <p>{found.length ? found.map((word) => word.toUpperCase()).join(' · ') : 'None this time.'}</p>
+      </div>
+      <div className="word-actions">
+        <button type="button" disabled={!onPracticeAgain} onClick={onPracticeAgain}>Practice another →</button>
+        <button type="button" className="snake-secondary" onClick={onExit}>← All games</button>
+      </div>
+    </section>;
+  }
+
   if (finished) {
     return <section className="game-card word-wheel-card word-result">
       <span className="word-eyebrow">Round complete</span>
@@ -453,8 +483,13 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
         <strong>{found.length}<small>/{total}</small></strong>
       </div>
       <div className="word-hud-side">
-        <span className={`word-pill ${mySubmitted ? 'is-ready' : ''}`}>{mySubmitted ? 'Saved' : 'Round live'}</span>
-        <small>{partnerName}: {round.partner.submitted ? 'finished' : 'playing'}</small>
+        {practice ? <>
+          <span className="word-pill">Solo practice</span>
+          <small>Not counted</small>
+        </> : <>
+          <span className={`word-pill ${mySubmitted ? 'is-ready' : ''}`}>{mySubmitted ? 'Saved' : 'Your clock'}</span>
+          <small>{partnerName}: {round.partner.submitted ? 'finished' : round.partner.started ? 'playing' : 'not started'}</small>
+        </>}
       </div>
     </div>
     <div className="word-progress" aria-hidden="true"><i style={{ width: `${progress}%` }} /></div>
@@ -567,7 +602,7 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
     <div className="word-actions">
       <button type="button" className="snake-secondary" onClick={onExit}>← All games</button>
     </div>
-    <p className="game-hint">Leaving does not pause the clock. You can come back before it runs out.</p>
+    <p className="game-hint">{practice ? 'Leaving ends this local practice attempt; your score is not saved.' : 'Leaving does not pause your clock. You can come back before it runs out.'}</p>
   </section>;
 }
 

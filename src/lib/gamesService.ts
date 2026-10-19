@@ -5,7 +5,7 @@ import { isSnakeDirection } from './snake';
 import type { TetrisInput, TetrisMode } from './tetris';
 import { isTetrisAction } from './tetris';
 import type { DashAction, DashCourseEvent, DashLevel } from './dash';
-import { isDashAction, isDashLevel } from './dash';
+import { isDashAction, isDashLevel, isDashReplayAction } from './dash';
 import type { WordDuration, WordLevel } from './wordWheel';
 import { isWordDuration, isWordLevel, normalizeWord } from './wordWheel';
 
@@ -46,7 +46,7 @@ export const GAMES = [
     id: 'word-wheel',
     name: 'Word Wheel',
     icon: '🔤',
-    description: 'Swipe the letters, fill the blanks. Same wheel, same clock — most words wins.',
+    description: 'Practice solo anytime, or share a puzzle for async partner attempts on separate clocks.',
   },
 ] as const;
 export type GameId = typeof GAMES[number]['id'];
@@ -137,7 +137,6 @@ export interface DashRun extends DashSide {
   hearts: number;
   ticks: number;
   lane: number;
-  jump_ticks: number;
   actions: [number, string][];
   started_at?: string;
   ready_at?: string;
@@ -158,6 +157,11 @@ export interface DashDuel {
 
 /** One phone's half of a Word Wheel round. */
 export interface WordSide {
+  /** Whether this partner has started their own asynchronous attempt. */
+  started: boolean;
+  /** This player's personal server start; a partner's timestamp stays sealed until reveal. */
+  started_at: string | null;
+  /** Kept for compatibility with v1 ready-lobby snapshots. */
   ready: boolean;
   ready_at: string | null;
   submitted: boolean;
@@ -226,8 +230,8 @@ export interface GamesSnapshot { wins: Record<string, number>; matches: GameMatc
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
 const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
 const TETRIS_SETUP_ERROR = 'Tetris Duel needs a database update. Apply migration 202610150012_tetris_duel.sql after 202610150011_chess.sql; if Tetris is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
-const DASH_SETUP_ERROR = 'Dash Duel needs a database update. Apply supabase/migrations/202610180009_dash_duel.sql after 202610180008_someday_details_order_and_visit_link.sql, then run supabase/verify-games.sql before retrying.';
-const WORD_SETUP_ERROR = 'Word Wheel needs a database update. Apply supabase/migrations/202610190001_word_wheel.sql, then run supabase/seed/word_puzzles.sql and supabase/verify-games.sql before retrying.';
+const DASH_SETUP_ERROR = 'Dash Duel needs a database update. Apply supabase/migrations/202610180009_dash_duel.sql after 202610180008_someday_details_order_and_visit_link.sql, then apply supabase/migrations/202610190002_dash_duel_dodge_speed.sql after 202610190001_word_wheel.sql. Run supabase/verify-games.sql before retrying.';
+const WORD_SETUP_ERROR = 'Word Wheel needs a database update. Apply supabase/migrations/202610190001_word_wheel.sql, then 202610190002_dash_duel_dodge_speed.sql and 202610190003_word_wheel_async_practice.sql, run supabase/seed/word_puzzles.sql, and verify with supabase/verify-games.sql.';
 
 async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args);
@@ -304,7 +308,11 @@ function dashCourseEvents(value: unknown): DashCourseEvent[] {
       if (Number.isInteger(lane) && lane >= 0 && lane <= 2) events.push({ tick, kind: 'heart', lane: lane as 0 | 1 | 2 });
     } else if (event.kind === 'barrier' && Array.isArray(event.lanes)) {
       const lanes = [...new Set(event.lanes.map(Number).filter((lane) => Number.isInteger(lane) && lane >= 0 && lane <= 2))] as (0 | 1 | 2)[];
-      if (lanes.length > 0 && lanes.length <= 2) events.push({ tick, kind: 'barrier', lanes, jumpable: event.jumpable === true });
+      if (lanes.length > 0 && lanes.length <= 2) {
+        events.push(event.jumpable === true
+          ? { tick, kind: 'barrier', lanes, jumpable: true }
+          : { tick, kind: 'barrier', lanes });
+      }
     }
   }
   return events.sort((a, b) => a.tick - b.tick);
@@ -317,19 +325,23 @@ export function dashActions(rows: [number, string][] | undefined): DashAction[] 
   for (const row of rows) {
     if (!Array.isArray(row) || row.length !== 2) continue;
     const tick = Number(row[0]);
-    if (Number.isInteger(tick) && tick >= 0 && isDashAction(row[1])) actions.push({ tick, action: row[1] });
+    if (Number.isInteger(tick) && tick >= 0 && isDashReplayAction(row[1])) actions.push({ tick, action: row[1] });
   }
   return actions.sort((a, b) => a.tick - b.tick);
 }
 
-export const dashActionRows = (actions: DashAction[]): [number, string][] => actions.map(({ tick, action }) => [tick, action]);
+export const dashActionRows = (actions: DashAction[]): [number, string][] =>
+  actions.filter(({ action }) => isDashAction(action)).map(({ tick, action }) => [tick, action]);
 
 function wordSideFromWire(value: unknown): WordSide {
   const side = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const words = Array.isArray(side.words)
     ? [...new Set(side.words.map(normalizeWord).filter((word) => word.length >= 2 && word.length <= 7))]
     : [];
+  const startedAt = typeof side.started_at === 'string' ? side.started_at : null;
   return {
+    started: side.started === true || startedAt !== null,
+    started_at: startedAt,
     ready: side.ready === true,
     ready_at: typeof side.ready_at === 'string' ? side.ready_at : null,
     submitted: side.submitted === true,
@@ -411,7 +423,6 @@ function dashDuelFromWire(value: unknown): DashDuel | null {
       hearts,
       ticks,
       lane: Math.max(0, Math.min(2, Number(side.lane) || 0)),
-      jump_ticks: Math.max(0, Number(side.jump_ticks) || 0),
       actions: dashActions(side.actions as [number, string][] | undefined).map(({ tick, action }) => [tick, action]),
       started_at: typeof side.started_at === 'string' ? side.started_at : undefined,
       ready_at: typeof side.ready_at === 'string' ? side.ready_at : undefined,
@@ -584,14 +595,15 @@ export const finishDashRun = (id: string, ticks: number, actions: DashAction[]) 
 export const forfeitDashRun = (id: string) => rpc<DashRun>('dash_forfeit', { p_id: id });
 
 /* ---------------------------------------------------------------------------
-   Word Wheel. The puzzle bank lives in word_puzzles; a round copies one pack of
-   hidden words and both phones play the same list against one server start time.
-   The database counts only words from that list, then compares count and the time
-   of each player's last found word. See 202610190001_word_wheel.sql.
+   Word Wheel. A couple shares one immutable puzzle, but each partner starts their
+   own clock and submits their own attempt whenever they are ready. Practice is local.
+   See 202610190003_word_wheel_async_practice.sql.
    --------------------------------------------------------------------------- */
 
 export const startWordRound = (difficulty: WordLevel, seconds: WordDuration) =>
   rpc<string>('start_word_round', { p_difficulty: difficulty, p_seconds: seconds });
+export const startWordAttempt = (id: string) => rpc<WordRound>('word_start', { p_id: id });
+/** Legacy alias: old clients' ready button now starts that player's own attempt. */
 export const readyWordRound = (id: string) => rpc<WordRound>('word_ready', { p_id: id });
 export const submitWordRound = (id: string, words: string[], finishedMs: number) =>
   rpc<WordRound>('word_submit', { p_id: id, p_words: words, p_finished_ms: Math.max(0, Math.round(finishedMs)) });

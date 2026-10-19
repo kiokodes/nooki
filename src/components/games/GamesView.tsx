@@ -19,6 +19,7 @@ import {
   WORD_DURATIONS, WORD_LEVELS, WORD_LEVEL_LABELS, WORD_LEVEL_HINTS, wordDurationLabel,
   type WordDuration, type WordLevel,
 } from '../../lib/wordWheel';
+import { dealPracticeWordSession, type WordPracticeSession } from '../../lib/wordWheelPractice';
 import './games.css';
 
 /** One game in the library rail. */
@@ -54,11 +55,30 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   const [dashLevel, setDashLevel] = useState<DashLevel>('steady');
   const [wordLevel, setWordLevel] = useState<WordLevel>('easy');
   const [wordSeconds, setWordSeconds] = useState<WordDuration>(60);
+  const [wordPracticeSession, setWordPracticeSession] = useState<WordPracticeSession | null>(null);
+  const [wordPracticeLoading, setWordPracticeLoading] = useState(false);
+  const [wordPracticeError, setWordPracticeError] = useState<string | null>(null);
   const [libraryIndex, setLibraryIndex] = useState(0);
   const [libraryDirection, setLibraryDirection] = useState<'next' | 'prev'>('next');
   const [dashFreePlay, setDashFreePlay] = useState(false);
   const [dashFreeSeed, setDashFreeSeed] = useState(0);
   const startDashFreePlay = () => { setDashFreeSeed(Date.now()); setDashFreePlay(true); };
+  const startWordPractice = async (level = wordLevel, seconds = wordSeconds) => {
+    if (wordPracticeLoading) return;
+    setWordPracticeLoading(true);
+    setWordPracticeError(null);
+    try {
+      const session = await dealPracticeWordSession(level, seconds);
+      setWarmUp(null);
+      setSudokuOpen(false);
+      setDashFreePlay(false);
+      setWordPracticeSession(session);
+    } catch (error) {
+      setWordPracticeError((error as Error).message);
+    } finally {
+      setWordPracticeLoading(false);
+    }
+  };
   const activeGame = GAMES[libraryIndex] ?? GAMES[0];
   const selectGame = (index: number) => {
     if (index === libraryIndex) return;
@@ -68,7 +88,7 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   const m = games.match;
   const isX = m?.player_x === userId;
   const result = m?.finished ? (!m.winner_id ? 'A draw! Well played, both of you.' : m.winner_id === userId ? 'You won! 🎉' : `${partnerName} won! 🎉`) : '';
-  const openMatch = (id: string | null) => { setWarmUp(null); setSudokuOpen(false); setDashFreePlay(false); games.select(id); };
+  const openMatch = (id: string | null) => { setWarmUp(null); setSudokuOpen(false); setDashFreePlay(false); setWordPracticeSession(null); games.select(id); };
   const startTetrisWarmUp = () => setWarmUp({ game: 'tetris', foods: [], pieces: dealPracticePieces(), nonce: Date.now() });
   const startSnakeWarmUp = () => setWarmUp({ game: 'snake', foods: dealPracticeFoods(), pieces: [], nonce: Date.now() });
   // Keep failed starts beside the button that was tapped, not above an offscreen header.
@@ -98,6 +118,39 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       : <SnakeBoard key={warmUp.nonce} foods={warmUp.foods} warmUp onExit={() => setWarmUp(null)} onRestart={startSnakeWarmUp} />}
     <p className="game-hint">A warm-up is yours alone: it is never reported, and it never scores.</p>
   </> : null;
+  const practiceMatch: GameMatch | null = wordPracticeSession ? {
+    id: wordPracticeSession.id,
+    game: 'word-wheel',
+    player_x: userId,
+    player_o: 'practice-partner',
+    turn_id: userId,
+    best_of: 1,
+    round: 1,
+    score_x: 0,
+    score_o: 0,
+    my_pick: null,
+    partner_locked: false,
+    finished: wordPracticeSession.round.status === 'finished',
+    winner_id: null,
+    rounds: [],
+    word: wordPracticeSession.round,
+  } : null;
+  const finishWordPractice = (words: string[], finishedMs: number) => {
+    setWordPracticeSession((current) => current ? {
+      ...current,
+      round: {
+        ...current.round,
+        status: 'finished',
+        mine: {
+          ...current.round.mine,
+          submitted: true,
+          words,
+          count: words.length,
+          finished_ms: finishedMs,
+        },
+      },
+    } : current);
+  };
   /** One game's settings and call to action, shown for the game picked in the rail. */
   const renderGameCard = (game: GameEntry) => (
     <article
@@ -161,6 +214,7 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
           </fieldset>
         </>
       )}
+      {game.id === 'word-wheel' && wordPracticeError && <p className="word-error" role="alert">{wordPracticeError}</p>}
       {games.error && inlineErrorGame === game.id && <GameError games={games} />}
       {game.id === 'dash-duel' ? (
         <div className="game-actions dash-library-actions">
@@ -180,9 +234,14 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
           onClick={() => game.id === 'sudoku' ? setSudokuOpen(true) : game.id === 'chess' ? void games.startChess(chessMode) : game.id === 'tetris' ? void games.startTetrisDuel(mode) : game.id === 'connect-four' ? void games.startConnectFour() : game.id === 'word-wheel' ? void games.startWordRound(wordLevel, wordSeconds) : void games.start(game.id, bestOf)}
         >
           {games.pendingGame === game.id
-            ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : game.id === 'word-wheel' ? 'Setting the wheel…' : 'Opening game…'
-            : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'word-wheel' ? `Set the wheel for ${partnerName} →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
+            ? game.id === 'snake' || game.id === 'tetris' ? 'Opening duel…' : game.id === 'word-wheel' ? 'Setting async challenge…' : 'Opening game…'
+            : game.id === 'snake' || game.id === 'tetris' ? `Duel ${partnerName} →` : game.id === 'word-wheel' ? `Challenge ${partnerName} asynchronously →` : game.id === 'sudoku' ? 'Play →' : game.id === 'chess' ? `Play Chess with ${partnerName} →` : `Play with ${partnerName} →`}
         </button>
+        {game.id === 'word-wheel' && (
+          <button type="button" className="snake-secondary" disabled={wordPracticeLoading} aria-busy={wordPracticeLoading} onClick={() => void startWordPractice()} data-action="word-wheel-practice">
+            {wordPracticeLoading ? 'Loading practice puzzle…' : 'Practice solo · not counted'}
+          </button>
+        )}
         {game.id === 'snake' && (
           <button type="button" className="snake-secondary" disabled={games.busy} onClick={startSnakeWarmUp} data-action="library-warm-up">
             Warm-up run (not counted)
@@ -198,7 +257,7 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   );
 
   return <section className="games-view" aria-label="Games">
-    <header><span className="games-eyebrow">A little lovers rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : dashFreePlay ? 'Dash Duel · Free run' : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
+    <header><span className="games-eyebrow">A little lovers rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : wordPracticeSession ? 'Word Wheel · Practice' : dashFreePlay ? 'Dash Duel · Free run' : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
     {games.error && !inlineErrorGame && <GameError games={games} card />}
     {!games.data && !games.error && <p role="status">Loading your games…</p>}
     {m ? <>
@@ -249,6 +308,18 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
           {m.finished && <button disabled={games.busy} onClick={() => void games.start(m.game, m.best_of)}>Play again</button>}
         </div>
       ))}
+    </> : wordPracticeSession && practiceMatch ? <>
+      <button className="game-back" onClick={() => setWordPracticeSession(null)}>← All games</button>
+      <WordWheel
+        match={practiceMatch}
+        userId={userId}
+        partnerName={partnerName}
+        games={games}
+        practice
+        onPracticeSubmit={finishWordPractice}
+        onPracticeAgain={() => void startWordPractice(wordPracticeSession.round.difficulty, wordPracticeSession.round.duration_seconds)}
+        onExit={() => setWordPracticeSession(null)}
+      />
     </> : dashFreePlay ? <>
       <button className="game-back" onClick={() => setDashFreePlay(false)}>← All games</button>
       <DashFreePlay level={dashLevel} seed={dashFreeSeed} onExit={() => setDashFreePlay(false)} />

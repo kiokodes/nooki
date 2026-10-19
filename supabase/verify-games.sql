@@ -166,6 +166,13 @@ BEGIN
  IF to_regprocedure('public.dash_replay(jsonb,jsonb,integer,integer)') IS NULL THEN
    RAISE EXCEPTION 'Missing the Dash replay that derives distance and hearts: apply migration 202610180009_dash_duel.sql.';
  END IF;
+ IF to_regprocedure('public.dash_tick_duration(integer)') IS NULL
+    OR to_regprocedure('public.dash_elapsed_ms(integer)') IS NULL THEN
+   RAISE EXCEPTION 'Dash Duel needs its dodge-only speed ramp: apply supabase/migrations/202610190002_dash_duel_dodge_speed.sql.';
+ END IF;
+ IF position('jumpable' IN pg_get_functiondef('public.dash_deal_course(text)'::regprocedure)) > 0 THEN
+   RAISE EXCEPTION 'Dash Duel is still dealing jumpable barriers: apply supabase/migrations/202610190002_dash_duel_dodge_speed.sql.';
+ END IF;
  IF position('dash_view' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0
     OR position('dash_sweep' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0 THEN
    RAISE EXCEPTION 'games_state is missing the Dash snapshot or seven-day expiry sweep: rerun migration 202610180009_dash_duel.sql.';
@@ -176,7 +183,8 @@ BEGIN
      RAISE EXCEPTION 'Unsafe Dash Duel RPC permissions: %',fn;
    END IF;
  END LOOP;
- FOREACH fn IN ARRAY ARRAY['public.dash_max_ticks()','public.dash_budget(timestamptz)','public.dash_deal_course(text)',
+ FOREACH fn IN ARRAY ARRAY['public.dash_tick_duration(integer)','public.dash_elapsed_ms(integer)',
+   'public.dash_max_ticks()','public.dash_budget(timestamptz)','public.dash_deal_course(text)',
    'public.dash_replay(jsonb,jsonb,integer,integer)','public.dash_settle(uuid)','public.dash_sweep(uuid)',
    'public.dash_commit(uuid,integer,jsonb,boolean)','public.dash_view(jsonb,uuid,boolean,uuid,uuid,text,text)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Dash Duel internals: %',fn; END IF;
@@ -199,11 +207,21 @@ BEGIN
  IF NOT EXISTS (
    SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='word_one_open_round'
  ) THEN RAISE EXCEPTION 'Word Wheel needs a single open round per couple: rerun migration 202610190001_word_wheel.sql.'; END IF;
+ IF NOT EXISTS (
+   SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+     AND table_name='word_round_results' AND column_name='started_at'
+ ) THEN RAISE EXCEPTION 'Word Wheel needs independent attempt clocks: apply migration 202610190003_word_wheel_async_practice.sql.'; END IF;
+ IF to_regprocedure('public.word_start(uuid)') IS NULL
+    OR position('started_at' IN pg_get_functiondef('public.word_view(public.word_rounds,uuid)'::regprocedure)) = 0
+    OR position('started_at' IN pg_get_functiondef('public.word_submit(uuid,text[],integer)'::regprocedure)) = 0
+    OR position('started_at' IN pg_get_functiondef('public.word_sweep(uuid)'::regprocedure)) = 0 THEN
+   RAISE EXCEPTION 'Word Wheel needs independent attempt clocks: apply migration 202610190003_word_wheel_async_practice.sql.';
+ END IF;
  IF position('word_view' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0
     OR position('word_sweep' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0 THEN
    RAISE EXCEPTION 'games_state is missing the Word Wheel snapshot or grace-window sweep: rerun migration 202610190001_word_wheel.sql.';
  END IF;
- FOREACH fn IN ARRAY ARRAY['public.start_word_round(text,integer)','public.word_ready(uuid)',
+ FOREACH fn IN ARRAY ARRAY['public.start_word_round(text,integer)','public.word_start(uuid)','public.word_ready(uuid)',
    'public.word_submit(uuid,text[],integer)','public.word_cancel(uuid)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Word Wheel RPC: %',fn; END IF;
    IF NOT has_function_privilege('authenticated',fn,'EXECUTE') OR has_function_privilege('anon',fn,'EXECUTE') THEN
