@@ -1,3 +1,4 @@
+import { PreviewEverydayStatus } from './PreviewEverydayStatus';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
@@ -13,12 +14,14 @@ import { CoupleHeader } from '../components/common/CoupleHeader';
 import { PreviewSnake } from './PreviewSnake';
 import { PreviewTetris } from './PreviewTetris';
 import { ChessDuel } from '../components/games/ChessDuel';
+import { LastDuelRow, OngoingGames } from '../components/games/OngoingGames';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { MissYouReveal } from '../components/home/MissYouReveal';
 import { ChatView } from '../components/chat/ChatView';
 import { CalendarModal } from '../components/calendar/CalendarModal';
 import { DangerSettingsModal } from '../components/common/DangerSettingsModal';
+import pairAffectionate from '../assets/companions/pair-affectionate.png';
 import type { PushNotificationsState } from '../hooks/usePushNotifications';
 import type { MissYouBatch } from '../lib/missYou';
 import type { ChatEntry, Couple, Profile, CoupleEvent, RepeatFrequency } from '../types/database';
@@ -247,6 +250,10 @@ export const AppPreview = () => {
   // by the real components; the count here is the preview's own, never a backend's.
   const [missYouTaps, setMissYouTaps] = useState(0);
   const [missYouReveal, setMissYouReveal] = useState<MissYouBatch | null>(null);
+  // The couple picture frame: the preview stands the cartoon pair in for the couple's
+  // own photo, so both the framed and the empty "upload your couple picture" invite
+  // can be looked at without a backend.
+  const [photoFramed, setPhotoFramed] = useState(true);
   const [adultEnabled, setAdultEnabled] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   // "Update location" edits this phone's place, so the sheet can be looked at after a
@@ -489,6 +496,9 @@ export const AppPreview = () => {
         <button type="button" style={controlStyle(missYouTaps > 0)} onClick={() => setMissYouTaps(0)}>
           {missYouTaps > 0 ? `Reset the ${missYouTaps} miss-you taps` : 'I miss you (tap it in the nook)'}
         </button>
+        <button type="button" style={controlStyle(!photoFramed)} onClick={() => setPhotoFramed((value) => !value)}>
+          {photoFramed ? 'Empty the picture frame' : 'Frame the sample picture'}
+        </button>
         <button
           type="button"
           style={controlStyle(Boolean(missYouReveal))}
@@ -537,9 +547,24 @@ export const AppPreview = () => {
             />
 
             {tab === 'games' ? (
-              /* The duels, played out on this page: same boards, same rules, no backend.
+              /* The Games tab head — the real eyebrow, the real swipeable Ongoing games
+                 card and the real Last duel row, fed sample matches — and below it the
+                 duels played out on this page: same boards, same rules, no backend.
                  A toggle rather than two tabs — the preview is a page, not an app. */
               <section style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px 24px' }}>
+                <header style={{ margin: '6px 0 16px' }}>
+                  <span className="games-eyebrow">A little lovers rivalry</span>
+                  <h1 style={{ fontSize: '1.6rem', margin: '6px 0 0', color: tokens.colors.textPrimary }}>Play together</h1>
+                </header>
+                <OngoingGames
+                  slides={[
+                    { id: 'sample-tetris', name: 'Tetris Duel', statusLine: 'Your turn · With your partner →' },
+                    { id: 'sample-chess', name: 'Chess', statusLine: 'Your turn · With your partner →' },
+                    { id: 'sample-snake', name: 'Snake Duel', statusLine: 'With your partner →' },
+                  ]}
+                  onOpen={() => {}}
+                />
+                <LastDuelRow name="Tetris Duel" outcome="You won · You 4100 — 900 Ana →" onOpen={() => {}} />
                 <ChessDuel partnerName={partner.name} />
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', marginTop: '12px' }}>
                   {(['snake', 'tetris'] as const).map((game) => (
@@ -571,14 +596,19 @@ export const AppPreview = () => {
               </section>
             ) : tab === 'home' ? (
               <HomeView
+                everyday={<PreviewEverydayStatus coupleId={couple.id} userId={profile.id} partnerId={partner.id} partnerName={partner.name} onMessage={() => setTab('chat')} />}
                 events={events}
                 anniversaryDate={couple.anniversary_date}
                 eventsLoading={false}
                 eventsError={null}
                 onOpenCalendar={() => setShowCalendar(true)}
-                userName={profile.name}
-                partnerName={partner.name}
                 partnerOnline={partnerOnline}
+                photo={{
+                  src: photoFramed ? pairAffectionate : null,
+                  uploading: false,
+                  error: null,
+                  onUpload: () => setPhotoFramed(true),
+                }}
                 missYou={{
                   visible: !partnerOnline,
                   sentCount: missYouTaps,
@@ -700,8 +730,8 @@ export const AppPreview = () => {
                 Chat
               </button>
 
-              {[
-                { label: 'Media', Icon: ImageIcon, tint: tokens.colors.primaryGreenSoft, ink: tokens.colors.primaryGreenDeep },
+                {[
+                { label: 'Together', Icon: ImageIcon, tint: tokens.colors.primaryGreenSoft, ink: tokens.colors.primaryGreenDeep },
               ].map(({ label, Icon, tint, ink }) => (
                 <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: tokens.colors.textMuted }}>
                   <span style={{ width: '30px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: tokens.radii.sm, backgroundColor: tint, color: ink }}>

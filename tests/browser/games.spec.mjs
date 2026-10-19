@@ -25,7 +25,7 @@ async function mockGames(page, options = {}) {
         return route.fulfill({ status: 400, json: { code: 'P0001', message: 'Invalid game settings.' }, headers });
       }
       if (!state.snapshot.matches.length) state.snapshot.matches.push({
-        id: 'duel-1', game: 'snake', daily_date: null, player_x: 'test-user', player_o: 'test-partner',
+        id: 'duel-1', game: 'snake', player_x: 'test-user', player_o: 'test-partner',
         board: Array(9).fill(''), turn_id: 'test-user', best_of: 3, round: 1,
         score_x: 0, score_o: 0, my_pick: null, partner_locked: false,
         finished: false, winner_id: null, rounds: [],
@@ -49,6 +49,92 @@ async function mockGames(page, options = {}) {
   });
   return state;
 }
+
+async function mockDash(page) {
+  const state = { starts: 0, runs: 0, finishes: 0, reads: 0, snapshot: { wins: {}, matches: [] } };
+  await page.route('https://test-project.supabase.co/**', async (route) => {
+    const request = route.request();
+    const name = new URL(request.url()).pathname.split('/').at(-1);
+    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (name === 'games_state') {
+      state.reads += 1;
+      return route.fulfill({ json: state.snapshot, headers });
+    }
+    if (name === 'start_dash') {
+      const args = request.postDataJSON();
+      state.starts += 1;
+      state.snapshot.matches = [{
+        id: 'dash-1', game: 'dash-duel', player_x: 'test-user', player_o: 'test-partner',
+        turn_id: 'test-user', best_of: 3, round: 1, score_x: 0, score_o: 0,
+        my_pick: null, partner_locked: false, finished: false, winner_id: null, rounds: [],
+        dash: {
+          course_version: 1,
+          course: [{ tick: 1, kind: 'barrier', lanes: [1], jumpable: true }],
+          mode: args.p_mode, level: args.p_level, created_by: 'test-user', mine: null,
+          partner: { status: 'waiting', ended: null },
+        },
+      }];
+      return route.fulfill({ json: 'dash-1', headers });
+    }
+    if (name === 'dash_start') {
+      state.runs += 1;
+      const run = {
+        status: 'running', ended: null, distance: 0, hearts: 0, ticks: 0, lane: 1, jump_ticks: 0,
+        actions: [], started_at: new Date().toISOString(), last_seen: new Date().toISOString(),
+      };
+      state.snapshot.matches[0].dash.mine = run;
+      return route.fulfill({ json: run, headers });
+    }
+    if (name === 'dash_finish' || name === 'dash_beat') {
+      const run = state.snapshot.matches[0].dash.mine;
+      const args = request.postDataJSON();
+      state.finishes += Number(name === 'dash_finish');
+      Object.assign(run, { status: 'crash', ended: 'barrier', ticks: args.p_ticks, distance: 0, last_seen: new Date().toISOString() });
+      return route.fulfill({ json: run, headers });
+    }
+    throw new Error(`Unexpected Dash request: ${request.url()}`);
+  });
+  return state;
+}
+
+test('Dash Duel runs a complete mobile crash attempt, saves the referee result and stays within the phone', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  const state = await mockDash(page);
+  await page.goto('/tests/browser/games.html');
+  const card = page.locator('article[data-game="dash-duel"]');
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('button', { name: /Play together/ })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Set a challenge →', exact: true }).click();
+  await expect(page.locator('[data-dash-mode="challenge"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Start my run', exact: true }).click();
+  await expect(page.locator('.dash-stage')).toBeVisible();
+  await expect(page.locator('.dash-lane')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Move to the left lane' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jump over a barrier' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Move to the right lane' })).toBeVisible();
+  await expect(page.locator('[data-dash-waiting="me"]')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('[data-dash-waiting="me"]')).toContainText('Barrier hit');
+  expect(state.starts).toBe(1);
+  expect(state.runs).toBe(1);
+  expect(state.finishes).toBe(1);
+  expect(state.snapshot.matches[0].dash.mine.distance).toBe(0);
+  const dimensions = await page.locator('.games-view').evaluate((view) => ({
+    scroll: view.scrollWidth,
+    client: view.clientWidth,
+    board: view.querySelector('.dash-stage').getBoundingClientRect().width,
+  }));
+  expect(dimensions.scroll).toBe(dimensions.client);
+  expect(dimensions.board).toBeLessThanOrEqual(360);
+});
+
+test('Dash Duel live choice appears only when partner presence is online', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await mockDash(page);
+  await page.goto('/tests/browser/games.html?online=1');
+  await expect(page.locator('article[data-game="dash-duel"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Play together · online →', exact: true })).toBeVisible();
+});
 
 for (const width of [320, 360, 390, 480, 1024]) {
   test(`Sudoku stays square and inside the phone at ${width}px`, async ({ page }) => {

@@ -74,8 +74,8 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
 
     // --- A duel is started once and picked back up, not restarted ---------------------
     await login('a');
-    const duel = await games.startGame('snake', false, 3);
-    assert.equal(await games.startGame('snake', false, 3), duel, 'one open duel per couple');
+    const duel = await games.startGame('snake', 3);
+    assert.equal(await games.startGame('snake', 3), duel, 'one open duel per couple');
     const opened = await match(duel);
     assert.equal(opened.game, 'snake');
     assert.equal(opened.finished, false);
@@ -136,7 +136,7 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
     assert.equal(playedOnce.wins[expected] ?? 0, expected ? 1 : 0, 'a duel win lands on the scoreboard');
 
     // --- Leaving is a forfeit, there and then, even with no run from the partner -------
-    const second = await games.startGame('snake', false, 3);
+    const second = await games.startGame('snake', 3);
     assert.notEqual(second, duel, 'a finished duel does not block a new one');
     await login('a');
     await games.startSnakeRun(second);
@@ -154,7 +154,7 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
     assert.equal(winnerSees.snake.partner.score, lost.snake.mine.score, 'the revealed score is what the leaver had reached');
 
     // --- A phone that goes quiet loses the run (the 30-second grace) -------------------
-    const third = await games.startGame('snake', false, 3);
+    const third = await games.startGame('snake', 3);
     await login('a');
     const quiet = await games.startSnakeRun(third);
     await backdate(third, a.id, 45, 'last_seen');
@@ -172,7 +172,7 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
     assert.equal(quiet.foods.length, SNAKE_FOOD_COUNT);
 
     // --- A phone that keeps reporting when the four minutes are up simply stops there --
-    const fourth = await games.startGame('snake', false, 3);
+    const fourth = await games.startGame('snake', 3);
     await login('a');
     const long = await games.startSnakeRun(fourth);
     await backdate(fourth, a.id, 90);
@@ -194,8 +194,8 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
       'and the score is the replayed truth, not a claim',
     );
 
-    // --- Safe to rerun on a live project: the migration leaves the duels alone ---------
-    const migration = await readFile(new URL('../supabase/migrations/202610150010_snake_duel.sql', import.meta.url), 'utf8');
+    // --- Safe to rerun on a live project: the retirement migration leaves duels alone ---
+    const migration = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql', import.meta.url), 'utf8');
     const beforeRerun = await games.fetchGames();
     const beforeMigration = beforeRerun.matches.map((item) => [item.id, item.finished, item.winner_id]);
     await db.exec(migration);
@@ -205,7 +205,7 @@ test('snake duel: verified runs, sealed scores, one attempt, forfeits and the gr
     assert.deepEqual(
       afterMigration.matches.map((item) => [item.id, item.finished, item.winner_id]),
       beforeMigration,
-      'rerunning the migration preserves every duel',
+      'rerunning the retirement migration preserves every duel',
     );
     assert.deepEqual(afterMigration.wins, beforeRerun.wins, 'and the scoreboard it fed');
     const stillSealed = afterMigration.matches.find((item) => item.id === fourth);

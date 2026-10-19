@@ -10,7 +10,7 @@ import type {
 } from '../types/database';
 
 /**
- * Storage and data for the Media tab's "Read together" shelf.
+ * Storage and data for the Together tab's "Read together" shelf.
  *
  * Everything is couple-scoped and the database is what keeps it that way (see the
  * RLS policies in supabase/migrations/202610150008_shared_books.sql). The file

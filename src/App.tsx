@@ -1,3 +1,4 @@
+import { EverydayStatusCards } from './components/home/EverydayStatusCards';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   MessageCircle,
@@ -23,17 +24,21 @@ import { MissYouReveal } from './components/home/MissYouReveal';
 import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
-import { MediaView } from './components/media/MediaView';
-import { ReaderView, type ShareHighlightInput } from './components/media/ReaderView';
+import { TogetherView } from './components/together/TogetherView';
+import { ReaderView, type ShareHighlightInput } from './components/together/ReaderView';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useBooks } from './hooks/useBooks';
+import { useVisits } from './hooks/useVisits';
+import { useSomedayList } from './hooks/useSomedayList';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
+import { useCouplePhoto } from './hooks/useCouplePhoto';
 import { useDailyDecision } from './hooks/useDailyDecision';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { VisitPlanningModal } from './components/together/VisitPlanningModal';
 import {
   PUSH_DEEP_LINK_TABS,
   isPushOpenTabMessage,
@@ -47,9 +52,9 @@ import {
   signOutUser,
   type AuthUser,
 } from './lib/authService';
-import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
+import type { Profile, Couple, DailyDecisionQuestion, SomedayItem } from './types/database';
 
-type TabKey = 'chat' | 'media' | 'home' | 'discuss' | 'games';
+type TabKey = 'chat' | 'together' | 'home' | 'discuss' | 'games';
 
 interface TabConfig {
   key: TabKey;
@@ -61,6 +66,12 @@ interface TabConfig {
   accentSoft: string;
 }
 
+/**
+ * The bottom navigation, left to right: Chat, Together, Home (the raised centre
+ * button), Discuss, Games. This is the same order the push deep links accept
+ * (`PUSH_DEEP_LINK_TABS`) and the one the design preview shows, so a tapped
+ * notification and the bar on screen always agree about where a tab sits.
+ */
 const TABS: TabConfig[] = [
   {
     key: 'chat',
@@ -71,10 +82,10 @@ const TABS: TabConfig[] = [
     accentSoft: tokens.colors.primaryPinkSoft,
   },
   {
-    key: 'media',
-    label: 'Media',
+    key: 'together',
+    label: 'Together',
     icon: ImageIcon,
-    comingSoonSubtitle: 'Synced music, shared books & scrapbooks',
+    comingSoonSubtitle: 'Shared books, visits & someday list',
     accentColor: tokens.colors.primaryGreenDeep,
     accentSoft: tokens.colors.primaryGreenSoft,
   },
@@ -150,6 +161,11 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const [showDailyDecision, setShowDailyDecision] = useState(false);
   // The calendar is a modal over whatever tab is open, never a page of its own.
   const [showCalendar, setShowCalendar] = useState(false);
+  // Visit planning modal for the Together tab
+  const [showVisitPlanning, setShowVisitPlanning] = useState(false);
+  // A someday idea waiting for the visit being planned: when the visit is saved,
+  // the idea joins it straight away ("Add to our next visit" with no visit yet).
+  const [somedayItemForVisit, setSomedayItemForVisit] = useState<string | null>(null);
   // A message is only "read" while the Chat tab is on screen *and* the app is awake.
   const [appVisible, setAppVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
 
@@ -198,10 +214,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const games = useGames(couple?.id ?? null, currentUser?.id ?? null);
 
   /**
-   * Every way out of the Games tab goes through here. A live duel run — snake or Tetris —
-   * has no pause and no second chance, so a tab change while one is on screen is a forfeit,
-   * and the couple is asked before it happens — with the run still going behind the
-   * question.
+   * Every way out of the Games tab goes through here. A live duel run — Snake, Tetris or
+   * Dash Duel — has no pause and no second chance, so a tab change while one is on screen
+   * is a forfeit, and the couple is asked before it happens.
    */
   const requestTab = useCallback((key: TabKey) => {
     if (key === activeTab) return;
@@ -219,7 +234,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     userId: currentUser?.id ?? null,
   });
 
-  // The Media tab's "Read together" shelf: one book in play, both partners' places in
+  // The Together tab's "Read together" shelf: one book in play, both partners' places in
   // it, and the highlights that reach the chat. App-level for the same reason as the
   // chat — a partner's highlight lands while this phone is somewhere else.
   const books = useBooks({
@@ -227,6 +242,12 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     userId: currentUser?.id ?? null,
     partnerId: partner?.id ?? null,
   });
+
+  // Visits for the Together tab: next visit countdown and planning
+  const visits = useVisits(couple?.id ?? null, currentUser?.id ?? null);
+
+  // Someday list for the Together tab: shared list of things to experience together
+  const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
 
   // This device's notification switch, and the deep link a tapped notification carries.
   // App-level like the chat: the home-screen badge is cleared from here, and a
@@ -239,6 +260,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     userId: currentUser?.id ?? null,
     coupleId: couple?.id ?? null,
   });
+
+  // A reminder belongs to this account, not to the partner who may still be deciding.
+  // No loaded question (including an empty/exhausted pool) means nothing is pending.
+  const pendingDailyDecision = dailyDecision.question !== null && dailyDecision.my_choice === null;
 
   // The full-screen reader is a layer over whatever tab is open (Chat jumps come
   // straight here too). Tagged with the couple so nothing outlives the account.
@@ -374,6 +399,13 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     partnerId: partner?.id ?? null,
     partnerOnline,
     active: appVisible && !loading && splashDone && Boolean(couple && partner && currentUser),
+  });
+
+  // The couple's framed picture for the Home nook: one photo per couple, standing
+  // on both phones, kept live by the couple_photo realtime channel.
+  const couplePhoto = useCouplePhoto({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
   });
 
   const loadUserData = useCallback(async () => {
@@ -526,6 +558,20 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     }
   };
 
+  const handleAddSomedayItemToVisit = async (item: SomedayItem) => {
+    if (visits.visit) {
+      await somedayList.attachToVisit(item, visits.visit.id);
+      return;
+    }
+    // No visit yet: plan one, then pin this idea to it once it is saved.
+    setSomedayItemForVisit(item.id);
+    setShowVisitPlanning(true);
+  };
+
+  const handleRemoveSomedayItemFromVisit = async (item: SomedayItem) => {
+    await somedayList.attachToVisit(item, null);
+  };
+
   // Backend failures are not missing profiles and must never silently restart onboarding.
   if (sessionError) {
     return (
@@ -634,11 +680,14 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Home tab: Today card, daily game card and reserved animated scene area.
-            Chat tab: the couple's live conversation.
+        {/* Chat tab: the couple's live conversation.
+            Together tab: shared books, visits & someday list, with the full-screen
+            reader opening over whatever tab is active.
+            Home tab: Today card, today's shared decision and the reserved animated scene area.
             Discuss tab: the question engine over the imported library.
-            Media tab: the "Read together" shelf (shared books), with the full-screen
-            reader opening over whatever tab is active. Games is its own tab. */}
+            Games tab: mini-games and chibi room decoration.
+            (Listed in the bottom navigation's order, left to right; the checks below
+            keep Chat as the fall-through so an unknown tab still lands somewhere safe.) */}
         {isDiscuss ? (
           <DiscussView
             discuss={discuss}
@@ -649,20 +698,24 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             focusSession={focusSession}
             onSayMore={handleSayMore}
           />
+        ) : activeTab === 'games' ? (
+          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} partnerOnline={partnerOnline} />
         ) : isHome ? (
           <HomeView
+            everyday={<EverydayStatusCards coupleId={couple.id} userId={currentUser.id} partnerId={partner.id} partnerName={partner.name} onMessage={() => { setChatContextStored(null); setActiveTab('chat'); }} />}
             events={calendar.events}
             anniversaryDate={couple.anniversary_date}
             eventsLoading={calendar.loading}
             eventsError={calendar.error}
             onOpenCalendar={() => setShowCalendar(true)}
-            userName={profile.name}
-            partnerName={partner.name}
             partnerOnline={partnerOnline}
-            userWins={games.data?.wins[currentUser.id] ?? 0}
-            partnerWins={games.data?.wins[partner.id] ?? 0}
-            onPlayDailyGame={() => { setActiveTab('games'); void games.start('tic-tac-toe', true); }}
             onOpenDailyDecision={() => setShowDailyDecision(true)}
+            photo={{
+              src: couplePhoto.url,
+              uploading: couplePhoto.busy,
+              error: couplePhoto.error,
+              onUpload: (file) => { void couplePhoto.upload(file); },
+            }}
             missYou={{
               visible: missYou.available,
               sentCount: missYou.sentCount,
@@ -671,15 +724,32 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
               onTap: () => { void missYou.tap(); },
             }}
           />
-        ) : activeTab === 'games' ? (
-          <GamesView games={games} userId={currentUser.id} partnerName={partner.name} />
-        ) : activeTab === 'media' ? (
-          <MediaView
+        ) : activeTab === 'together' ? (
+          <TogetherView
             state={books}
             userId={currentUser.id}
             userName={profile.name}
             partnerName={partner.name}
             onOpenReader={(bookId) => openReader(bookId)}
+            visit={visits.visit}
+            onPlanVisit={() => setShowVisitPlanning(true)}
+            onViewVisitPlans={() => {
+              // For now, just open the planning modal to edit
+              setShowVisitPlanning(true);
+            }}
+            somedayItems={somedayList.items}
+            somedayError={somedayList.error}
+            onAddSomedayItem={somedayList.addItem}
+            onUpdateSomedayItem={somedayList.updateItem}
+            onToggleSomedayItem={somedayList.toggleItem}
+            onDeleteSomedayItem={somedayList.deleteItem}
+            onReorderSomedayItems={somedayList.reorderItems}
+            onAddSomedayItemToVisit={handleAddSomedayItemToVisit}
+            onRemoveSomedayItemFromVisit={handleRemoveSomedayItemFromVisit}
+            onPlanSomedayItemVisit={(item) => {
+              setSomedayItemForVisit(item.id);
+              setShowVisitPlanning(true);
+            }}
           />
         ) : (
           <ChatView
@@ -742,8 +812,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
                 >
                   <button
                     type="button"
-                    aria-label="Home"
+                    data-nav-tab="home"
+                    aria-label={pendingDailyDecision ? "Home, today's decision waiting for you" : 'Home'}
                     style={{
+                      position: 'relative',
                       width: '48px',
                       height: '48px',
                       borderRadius: tokens.radii.full,
@@ -761,6 +833,11 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
                     }}
                   >
                     <Icon size={21} strokeWidth={2.4} />
+                    {pendingDailyDecision && (
+                      <span className="nooki-nav-badge" data-nav-badge="home" aria-hidden="true">
+                        1
+                      </span>
+                    )}
                   </button>
                   <span
                     style={{
@@ -906,6 +983,45 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
           );
         })()}
 
+        {/* Visit Planning Modal for Together tab */}
+        {showVisitPlanning && couple && (
+          <VisitPlanningModal
+            isOpen={showVisitPlanning}
+            onClose={() => {
+              setShowVisitPlanning(false);
+              // Cancelling the planner leaves the idea right where it was.
+              setSomedayItemForVisit(null);
+            }}
+            onSave={async (startDate, endDate, location, timezone, isTentative) => {
+              try {
+                if (visits.visit) {
+                  // Update existing visit
+                  await visits.updateVisit(visits.visit.id, {
+                    start_date: startDate,
+                    end_date: endDate,
+                    location,
+                    timezone: timezone ?? 'UTC',
+                    is_tentative: isTentative,
+                  });
+                } else {
+                  // Create new visit, then let the idea that asked for one join it.
+                  const created = await visits.planVisit(startDate, endDate, location, timezone, isTentative);
+                  if (somedayItemForVisit) {
+                    const item = somedayList.items.find((entry) => entry.id === somedayItemForVisit);
+                    if (item) await somedayList.attachToVisit(item, created.id);
+                    setSomedayItemForVisit(null);
+                  }
+                }
+              } catch {
+                // The modal shows the save error beside the form.
+              }
+            }}
+            existingVisit={visits.visit}
+            userTimezone={profile?.timezone || 'UTC'}
+            partnerName={partner.name}
+          />
+        )}
+
         {/* Danger Zone Settings Modal (Sign Out & Mutual Breakup Option) */}
         {showSettings && couple && (
           <DangerSettingsModal
@@ -932,15 +1048,24 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             board, which keeps running while the question is on screen. */}
         {pendingTab && games.match && (
           <DuelLeaveDialog
-            runLabel={games.duelLive === 'tetris' ? 'your Tetris run' : 'your run'}
+            runLabel={games.duelLive === 'tetris' ? 'your Tetris run' : games.duelLive === 'dash-duel' ? 'your Dash Duel run' : 'your run'}
             partnerName={partner.name}
+            forfeitCopy={games.duelLive === 'dash-duel'
+              ? games.match?.dash?.mode === 'together'
+                ? `Leaving the live race gives it to ${partner.name}.`
+                : `Your Dash Duel score becomes zero. ${partner.name} can still play the shared course later.`
+              : undefined}
             busy={games.busy}
             onKeepPlaying={() => setPendingTab(null)}
             onForfeit={() => {
               const target = pendingTab;
               const matchId = games.match?.id;
               setPendingTab(null);
-              if (matchId) void games.forfeitSnake(matchId);
+              if (matchId) {
+                if (games.duelLive === 'tetris') void games.forfeitTetris(matchId);
+                else if (games.duelLive === 'dash-duel') void games.forfeitDash(matchId);
+                else void games.forfeitSnake(matchId);
+              }
               setActiveTab(target);
             }}
           />

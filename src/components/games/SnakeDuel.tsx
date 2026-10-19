@@ -69,7 +69,7 @@ export const SnakeDuel: React.FC<SnakeDuelProps> = ({
           <button
             type="button"
             disabled={games.busy}
-            onClick={() => { onWarmUpSkip(); void games.start('snake', false, 3); }}
+            onClick={() => { onWarmUpSkip(); void games.start('snake', 3); }}
           >
             Start a new duel
           </button>
@@ -112,7 +112,9 @@ export const SnakeDuel: React.FC<SnakeDuelProps> = ({
         <p className="game-status" role="status">
           {them.status === 'running'
             ? `${partnerName} is playing right now…`
-            : `${partnerName} hasn't played yet — their go comes whenever it suits them.`}
+            : them.status === 'done' || them.status === 'forfeit'
+              ? `${partnerName}'s run is in as well — the reveal lands the moment the duel settles.`
+              : `${partnerName} hasn't played yet — their go comes whenever it suits them.`}
         </p>
         <p className="game-hint">
           Your run: {endReason(mine, true, partnerName)}. Scores stay sealed until both runs are in.

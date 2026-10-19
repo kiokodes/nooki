@@ -7,10 +7,11 @@ import '../../src/index.css';
 
 export function GamesFixture() {
   const games = useGames('test-couple', 'test-user');
+  const partnerOnline = new URLSearchParams(window.location.search).get('online') === '1';
   return (
     <div className="nooki-viewport">
       <main className="nooki-shell">
-        <GamesView games={games} userId="test-user" partnerName="Ana" />
+        <GamesView games={games} userId="test-user" partnerName="Ana" partnerOnline={partnerOnline} />
       </main>
     </div>
   );

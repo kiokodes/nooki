@@ -94,6 +94,16 @@
         line-height: 1.1;
         animation: nooki-boot-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
+      /* The couple themselves — the cover image of the app, on every launch. Same
+         pop-in as the wordmark, mirrored by SplashScreen's data-splash-pair. */
+      .nooki-boot-pair {
+        height: 84px;
+        width: auto;
+        max-width: 42%;
+        object-fit: contain;
+        pointer-events: none;
+        animation: nooki-boot-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
       .nooki-boot-track {
         position: relative;
         width: 100%;
@@ -191,6 +201,7 @@
     <div id="root">
       <div class="nooki-boot" data-boot-splash role="status" aria-label="Loading Nooki">
         <div class="nooki-boot-card">
+          <img class="nooki-boot-pair" src="/assets/nooki/boot-pair.png" alt="" width="88" height="84" />
           <span class="nooki-boot-wordmark">Nooki</span>
           <div class="nooki-boot-track" aria-hidden="true">
             <span class="nooki-boot-runner nooki-boot-runner--pink">

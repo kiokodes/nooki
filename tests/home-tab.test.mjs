@@ -112,8 +112,12 @@ test('global header: live counter, presence ticker and partner clock', async () 
     );
     await auth.signInWithEmail('alice@example.com', 'password');
 
-    // Realtime presence without a socket, mirroring the real channel API.
+    // Realtime presence without a socket, mirroring the real channel API. Every
+    // channel topic is recorded; presence specifics only apply to the presence
+    // channel (the couple picture frame opens its own couple-scoped channel too).
     const presence = { state: {}, tracked: [], topic: null, key: null, handlers: [], status: null };
+    const topics = [];
+    const checkInChannels = new Set();
     let removedChannels = 0;
     const fakeChannel = {
       presenceState: () => presence.state,
@@ -123,7 +127,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
       },
       subscribe(callback) {
         presence.status = 'SUBSCRIBED';
-        callback('SUBSCRIBED');
+        // The real client allows subscribe() with no status callback; the Together
+        // hooks use that form, so the stand-in must too.
+        callback?.('SUBSCRIBED');
         // The real client replays the current presence state on subscribe.
         for (const entry of presence.handlers.filter((item) => item.event === 'sync')) entry.handler({ event: 'sync' });
         return fakeChannel;
@@ -133,11 +139,21 @@ test('global header: live counter, presence ticker and partner clock', async () 
       async unsubscribe() { return 'ok'; },
     };
     supabase.channel = (topic, options) => {
-      presence.topic = topic;
-      presence.key = options?.config?.presence?.key ?? null;
+      topics.push(topic);
+      // Home-only check-ins may unsubscribe on navigation; the global presence
+      // channel must not. Give these their own identity instead of conflating them.
+      if (topic.startsWith('everyday:')) {
+        const channel = { on: () => channel, subscribe: () => channel };
+        checkInChannels.add(channel);
+        return channel;
+      }
+      if (options?.config?.presence) {
+        presence.topic = topic;
+        presence.key = options.config.presence.key ?? null;
+      }
       return fakeChannel;
     };
-    supabase.removeChannel = async () => { removedChannels += 1; return 'ok'; };
+    supabase.removeChannel = async (channel) => { if (!checkInChannels.has(channel)) removedChannels += 1; return 'ok'; };
 
     const body = () => document.body.textContent.replace(/\u2019/g, "'");
     const waitFor = async (predicate, message) => {
@@ -168,6 +184,26 @@ test('global header: live counter, presence ticker and partner clock', async () 
 
     await waitFor(() => body().includes('Together for'), 'the unlocked app should render once the splash and couple load complete');
     assert.equal(document.querySelector('[data-screen="splash"]'), null, 'the splash screen dismisses after under 0.5 seconds');
+
+    // The bottom navigation reads Chat · Together · Home · Discuss · Games, left to right,
+    // with Home as the raised centre button — the same order the push deep links accept, so
+    // a tapped notification lands on the tab where the couple sees it sitting.
+    const navOrder = [...document.querySelectorAll('[data-nav-tab]')].map((node) => node.dataset.navTab);
+    assert.deepEqual(navOrder, ['chat', 'together', 'home', 'discuss', 'games'],
+      'the tabs keep their left-to-right order');
+    const push = await server.ssrLoadModule('/src/lib/pushService.ts');
+    assert.deepEqual(navOrder, [...push.PUSH_DEEP_LINK_TABS],
+      'the navigation and the push deep links agree on the tab order');
+
+    const homeBadge = () => document.querySelector('[data-nav-badge="home"]');
+    const homeTabButton = () => document.querySelector('[data-nav-tab="home"]');
+    await waitFor(() => homeBadge()?.textContent.trim() === '1', 'an unanswered daily decision badges Home');
+    assert.equal(homeTabButton().getAttribute('aria-label'), "Home, today's decision waiting for you");
+    // Navigating away or simply visiting Home never counts as answering.
+    await act(async () => { document.querySelector('[data-nav-tab="together"]').click(); });
+    assert(homeBadge(), 'the reminder remains visible on another tab');
+    await act(async () => { homeTabButton().click(); });
+    assert(homeBadge(), 'visiting Home does not clear the reminder');
 
     // 1. Global header: names, the live YMD counter, the partner clock and an offline dot.
     const expectedDuration = coupleTime.formatTogetherDuration(
@@ -208,7 +244,7 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert(!appHeader().textContent.includes(`${aliceClock.time} ${aliceClock.weekday}`),
       'the reader never sees their own time');
 
-    // 2. The Home tab shows Today, two compact daily cards and the reserved bottom scene area.
+    // 2. The Home tab shows Today, today's decision and the reserved bottom scene area.
     const shell = document.querySelector('main.nooki-shell');
     assert(shell, 'the app renders inside the responsive .nooki-shell container');
     assert.equal(shell.style.width, '100%', 'the app shell uses fluid 100% width instead of a fixed pixel width');
@@ -219,21 +255,10 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(body().includes('This phone'), false, 'the old partner-status card is gone');
     assert.equal(body().includes('Partner status'), false, 'no leftover status card');
 
-    // Compact daily game card: the eyebrow, Play button and initials score line only.
-    const dailyGameCard = home.querySelector('[data-card="daily-game"]');
-    assert(dailyGameCard, 'the Daily game card is on the Home tab');
-    assert(dailyGameCard.textContent.includes('Daily game'), 'the card keeps the Daily game eyebrow');
-    assert.equal(dailyGameCard.textContent.includes("Today's challenge"), false, 'the old headline is removed');
-    const playButton = dailyGameCard.querySelector('[data-action="play-daily-game"]');
-    assert(playButton, 'the Daily game card has a Play button');
-    assert(playButton.textContent.includes('Play'), 'the Play button is labelled Play');
-    const scoreboard = dailyGameCard.querySelector('[data-scoreboard]');
-    assert(scoreboard, 'the Daily game card includes a scoreboard');
-    assert.equal(scoreboard.textContent.replace(/\s+/g, ''), 'A0–0B', 'only initials and the score are shown');
-    assert.match(scoreboard.getAttribute('aria-label'), /Alice 0 to 0 Bob/, 'full names stay available accessibly');
+    assert.equal(home.querySelector('[data-card="daily-game"]'), null, 'the retired Daily game card is absent');
 
     const dailyDecisionCard = home.querySelector('[data-card="daily-decision"]');
-    assert(dailyDecisionCard, 'the Daily decision card sits beside the game');
+    assert(dailyDecisionCard, 'the daily decision is the only daily Home card');
     const decisionCardCopy = dailyDecisionCard.textContent.replace(/\u2019/g, "'").trim();
     assert.equal(decisionCardCopy, "Today's decisionPlay", 'the card shows only its eyebrow and Play button');
     const openDecisionButton = dailyDecisionCard.querySelector('[data-action="play-daily-decision"]');
@@ -243,16 +268,21 @@ test('global header: live counter, presence ticker and partner clock', async () 
     await waitFor(() => decisionModal()?.querySelector('[data-decision-question]'), 'today’s uploaded decision should load');
     assert.equal(decisionModal().querySelector('[data-decision-question]').textContent, 'What should we plan together?');
     assert.equal(decisionModal().querySelectorAll('[data-decision-option]').length, 3, 'the question has exactly three choices');
+    assert(homeBadge(), 'opening the decision does not clear its badge');
     assert.match(decisionModal().querySelector('[data-decision-status]').textContent, /Neither answer is revealed/);
     await act(async () => {
       decisionModal().querySelector('[data-decision-option="2"] input').click();
     });
     const submitDecision = decisionModal().querySelector('[data-action="submit-daily-decision"]');
     assert.equal(submitDecision.disabled, false, 'a single choice can be submitted privately');
+    assert(homeBadge(), 'selecting an option without saving still leaves the decision pending');
     await act(async () => { submitDecision.click(); });
     await waitFor(() => decisionModal().querySelector('[data-decision-status]').textContent.includes('Your choice stays private'),
       'the first choice is saved privately while the partner waits');
     assert.equal(decisionModal().querySelector('[data-decision-reveal]'), null, 'the partner answer is still hidden');
+    await waitFor(() => homeBadge() === null, 'saving your own choice clears the Home badge');
+    assert.equal(homeTabButton().getAttribute('aria-label'), 'Home',
+      'waiting for the partner does not badge a decision you have already answered');
 
     // Take to chat shares the exact prompt and all three options so the couple can deliberate.
     await act(async () => { decisionModal().querySelector('[data-action="take-decision-to-chat"]').click(); });
@@ -262,16 +292,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
       'the chat message carries all three options');
     await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
 
-    // Play the daily game from its compact card, then return to Home.
-    const currentPlayButton = document.querySelector('[data-card="daily-game"] [data-action="play-daily-game"]');
-    await act(async () => { currentPlayButton.click(); });
-    assert(document.querySelector('[aria-label="Games"]'), 'tapping Play opens the Games tab');
-    assert(document.body.textContent.includes('Daily challenge'), 'the daily match loads');
-    await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
-
     // The shared nook stays at the bottom of Home, with its caption pinned to the top-right.
     const currentHome = document.querySelector('[data-screen="home"]');
-    assert(currentHome, 'the Home tab is visible again after the daily game');
+    assert(currentHome, 'the Home tab is visible again after closing the daily decision');
     const sceneArea = currentHome.querySelector('[data-scene-placeholder]');
     assert(sceneArea, 'the Home tab includes the shared Nooki scene');
     assert.equal(currentHome.lastElementChild, sceneArea, 'the shared nook stays at the bottom of the Home screen');
@@ -280,14 +303,28 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(nookCaption?.style.top, '10px');
     assert.equal(nookCaption?.style.right, '12px');
     assert.equal(sceneArea.dataset.partnerOnline, 'false', 'starts with the partner marked away');
-    assert.equal(sceneArea.querySelector('img[data-nooki-pair]')?.dataset.expression, 'happy',
-      'uses the calm default artwork while the partner is away');
+    const nookFrame = sceneArea.querySelector('[data-component="nook-photo-frame"]');
+    assert(nookFrame, 'the nook holds the couple picture frame');
+    assert.equal(nookFrame.dataset.hasPhoto, 'false', 'the frame starts by inviting the couple to upload a picture');
+    assert.equal(
+      nookFrame.querySelector('button[data-nooki-frame-button]')?.getAttribute('aria-label'),
+      'Upload your couple picture',
+      'the empty frame prompts the upload',
+    );
     assert(sceneArea.style.borderRadius, 'the shared nook is rounded');
+    assert.equal(sceneArea.style.flexDirection, 'column', 'the photo grows below the caption row');
+    assert.equal(sceneArea.style.paddingTop, '44px', 'the photo leaves the caption and miss-you control clear');
+    assert.equal(sceneArea.style.paddingBottom, '8px', 'only a small gap remains above navigation');
+    assert.equal(nookFrame.style.flexGrow, '1', 'the photo fills the remaining nook height');
 
     // Presence: tracked on the couple channel, keyed by the signed-in account.
     assert.equal(presence.topic, `nooki-couple-${couple.id}`, 'presence stays scoped to the couple');
     assert.equal(presence.key, alice.id, 'presence is keyed by the current account');
     assert.equal(presence.status, 'SUBSCRIBED');
+    assert(
+      topics.includes(`nooki-couple-photo-${couple.id}`),
+      'the picture frame keeps its own couple-scoped realtime channel',
+    );
     assert.equal(presence.tracked[0]?.user_id, alice.id, 'the app announces this account as present');
 
     // The heartbeat keeps this account's last_seen_at fresh for the partner's screen.
@@ -302,9 +339,9 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.notEqual(dot().style.backgroundColor, offlineDotColor, 'an online partner turns the ticker green');
     assert(dot().getAttribute('aria-label').includes('is online'), 'the online dot announces itself');
     assert.equal(sceneArea.dataset.partnerOnline, 'true', 'the Home nook receives live partner availability');
-    await waitFor(
-      () => sceneArea.querySelector('[data-layer="overlay"] img[data-expression="affectionate"]'),
-      'the Nookis crossfade to affectionate art when both partners are online',
+    assert(
+      sceneArea.querySelector('[data-component="nook-photo-frame"]'),
+      'the framed couple picture keeps standing in the nook while presence changes',
     );
 
     // Partner leaves: the ticker greys out and re-reads the freshest database timestamp.
@@ -317,17 +354,17 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(dot().dataset.presence, 'offline');
     assert.equal(dot().style.backgroundColor, offlineDotColor, 'the ticker greys back out');
     assert.equal(sceneArea.dataset.partnerOnline, 'false', 'the Home nook returns to partner-away mode');
-    await waitFor(
-      () => sceneArea.querySelector('[data-layer="overlay"] img[data-expression="happy"]'),
-      'the Nookis return to calm happy art when the partner leaves',
+    assert(
+      sceneArea.querySelector('[data-component="nook-photo-frame"]'),
+      'the framed couple picture is unaffected by presence coming and going',
     );
     await waitFor(() => dot().getAttribute('aria-label').includes('Last seen 7m ago'),
       'leaving the app re-reads the stored last_seen_at');
 
     // Presence survives browsing other tabs: it is owned by the app, not the Home tab.
-    const mediaTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Media'));
-    await act(async () => { mediaTab.click(); });
-    assert(body().includes('Read together'), 'the Media tab now opens the shared books shelf');
+    const togetherTab = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Together'));
+    await act(async () => { togetherTab.click(); });
+    assert(body().includes('Read together'), 'the Together tab now opens the shared books shelf');
     assert(dot(), 'the header ticker stays visible on every tab');
     assert.equal(removedChannels, 0, 'the presence channel is not torn down on tab switches');
 

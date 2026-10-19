@@ -24,7 +24,7 @@ test('snake UI: the gate, a playable board, the leave question, warm-ups and the
     const calls = [];
     const foods = Array.from({ length: 40 }, (_, i) => ({ x: i % 20, y: 15 }));
     const duel = (snake, finished = false, winnerId = null) => ({
-      id: 'duel-1', game: 'snake', daily_date: null, player_x: 'a', player_o: 'b',
+      id: 'duel-1', game: 'snake', player_x: 'a', player_o: 'b',
       board: Array(9).fill(''), turn_id: 'a', best_of: 3, round: 1, score_x: 0, score_o: 0,
       my_pick: null, partner_locked: false, finished, winner_id: winnerId, rounds: [], snake,
     });
@@ -56,7 +56,7 @@ test('snake UI: the gate, a playable board, the leave question, warm-ups and the
     assert(document.body.textContent.includes('Snake Duel'));
     assert(document.body.textContent.includes('One run each, highest score wins'), 'the rule is on the card');
     await act(async () => button('Duel Bob →').click());
-    assert.deepEqual(calls.pop(), ['start', 'snake', false, 3]);
+    assert.deepEqual(calls.pop(), ['start', 'snake', 3]);
     await act(async () => button('Warm-up run (not counted)').click());
     assert(document.querySelector('.snake-board'), 'a warm-up board opens straight from the library');
     assert(document.body.textContent.includes('Not counted'), 'and says that it does not count');
@@ -151,7 +151,7 @@ test('snake UI: the gate, a playable board, the leave question, warm-ups and the
     assert.equal(document.querySelector('[data-snake-score-partner]').textContent, '41');
     assert(result.textContent.includes('hit the wall'));
     await act(async () => button('Start a new duel').click());
-    assert.deepEqual(calls.pop(), ['start', 'snake', false, 3]);
+    assert.deepEqual(calls.pop(), ['start', 'snake', 3]);
 
     // --- Winning your own way, and the forfeit reveal ----------------------------------
     await render(React.createElement(GamesView, {
@@ -298,6 +298,14 @@ test('snake preview: the sample duel plays, and leaving it forfeits to the sampl
     await waitFor(() => document.querySelector('[data-card="today"]'), 'the preview should open on Home');
     assert(gamesTab(), 'the preview nav offers Games');
     await act(async () => { gamesTab().click(); });
+    // The tab head is the real thing: the eyebrow, the swipeable Ongoing games card and
+    // the last duel's history row — the same components the app renders, so the preview
+    // cannot drift from the Games tab it stands in for.
+    assert.equal(document.querySelector('.games-eyebrow').textContent, 'A little lovers rivalry');
+    const ongoing = document.querySelector('[data-ongoing-games]');
+    assert.ok(ongoing, 'the preview shows the Ongoing games card');
+    assert.equal(ongoing.querySelectorAll('[data-ongoing-slide]').length, 3, 'with the sample matches to swipe');
+    assert(document.querySelector('[data-last-duel]'), 'and the last duel below, as history');
     // The Games tab shows one duel at a time, and it opens on Tetris: ask for Snake.
     await act(async () => { document.querySelector('[data-preview-game="snake"]').click(); });
     const gate = document.querySelector('[data-preview-snake="gate"]');

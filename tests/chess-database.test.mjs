@@ -108,12 +108,14 @@ test('chess database: authoritative moves, turns, checkmate and situational wins
     await assert.rejects(games.startChess('classic'), /Pair/);
     await assert.rejects(games.fetchGames(), /Pair/);
 
-    // The migration is rerunnable and preserves finished matches.
-    const migration = await readFile(new URL('../supabase/migrations/202610150011_chess.sql', import.meta.url), 'utf8');
+    // The Games retirement migration is rerunnable and preserves supported finished matches.
+    const migration = await readFile(new URL('../supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql', import.meta.url), 'utf8');
     await db.exec(migration);
+    await db.exec(await readFile(new URL('../supabase/migrations/202610180006_connect_four.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/202610180009_dash_duel.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/verify-games.sql', import.meta.url), 'utf8'));
     await login('a');
-    assert.equal((await match(hunt)).winner_id, a.id, 'rerunning migration 011 preserves matches');
+    assert.equal((await match(hunt)).winner_id, a.id, 'rerunning the retirement migration preserves supported matches');
     const perms = await db.query("SELECT has_function_privilege('authenticated','public.chess_legal(text[],text,integer,integer,integer,text)','EXECUTE') allowed");
     assert.equal(perms.rows[0].allowed, false, 'the referee internals stay server-side');
   } finally { await db?.close(); await server.close(); }

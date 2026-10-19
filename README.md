@@ -72,8 +72,19 @@ apply and verify the database migrations separately.
    marketplace key generated from them), then `202610170002_daily_decisions.sql` (the
    owner-uploaded daily three-choice decision), then
    `202610180001_daily_decision_pool.sql` (which turns that dated prompt table into an
-   undated question pool each couple draws a random unseen question from daily).
-   Apply pending migrations in this order; they preserve existing records.
+   undated question pool each couple draws a random unseen question from daily), then
+   `202610180003_couple_photo.sql` (the couple picture frame standing in the Home nook),
+   then `202610180002_remove_daily_games_and_tic_tac_toe.sql` (removes the retired daily
+   Games feature, Tic Tac Toe and their match history), then
+   `202610180006_connect_four.sql` (adds Connect Four with database-refereed turns), then
+   `202610180007_together_visits_and_someday_list.sql` (the Together tab's planned visits
+   and shared someday list), then
+   `202610180008_someday_details_order_and_visit_link.sql` (the list's notes, its manual
+   drag order, and the "Add to our next visit" link), then
+   `202610180009_dash_duel.sql` (Dash Duel's shared course, verified runs and live-ready
+   handshake).
+   Apply pending migrations in this order; apart from the intentionally retired Games
+   history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
    `202610150014_restore_chess_tetris_game_check.sql` are repairs, not part of a fresh
    install: run them only if `verify-games.sql` names them — see **Troubleshooting the
@@ -89,7 +100,10 @@ apply and verify the database migrations separately.
    adds the tap table behind the "I miss you" button (`202610150016`, the only one the
    frontend never writes directly), and the location one adds columns to `profiles` —
    no new table, no new policy, and every existing row keeps working with no place saved.
-   See **Locations, and the marketplace they are scaffolding for**.
+   See **Locations, and the marketplace they are scaffolding for**. `202610180004` lets a
+   retried run report skip taps the referee has already logged: a finish that repeated
+   them used to be refused as "out of order" forever, so a duel both partners had played
+   never settled and stood in their Ongoing games until the grace window erased it.
 3. Run `supabase/verify.sql` in the same SQL Editor. It is read-only and checks required
    functions, authenticated/anonymous pairing permissions, table permissions, RLS, the
    anniversary-lock trigger, the `couple_events` calendar, the realtime `messages` chat,
@@ -297,13 +311,19 @@ The global header sits above every tab and carries the couple's live status:
 
 The header owns its own one-second tick, so only the header re-renders as time passes.
 
+Below every tab, the bottom navigation runs **Chat · Together · Home · Discuss · Games**,
+left to right, with Home as the raised centre button. `TABS` in `src/App.tsx` and
+`PUSH_DEEP_LINK_TABS` in `src/lib/pushService.ts` list that same order, so a tapped
+notification and the bar on screen always agree about where a tab sits.
+
 ## Launch, the splash and the first paint
 
 Opening the installed app is the one part of Nooki a couple does every session, so it is
 deliberately the cheapest:
 
 - **The boot splash paints before any JavaScript.** `index.html` carries a plain HTML/CSS
-  copy of the splash (wordmark + the pink and green race) inside `#root`, so a phone shows
+  copy of the splash (the Nooki couple — the app's cover artwork — plus the wordmark and the
+  pink and green race) inside `#root`, so a phone shows
   Nooki from the first frame instead of a blank page while the bundle downloads and parses.
   React replaces it on mount; a test keeps the two copies in step.
 - **The race is played once, not twice.** The boot splash starts the race — on a slow phone
@@ -335,7 +355,7 @@ Reduced motion (an OS "reduce motion" setting — common on phones, rare on a de
 honoured: the splash still appears, with both dots parked visibly under the wordmark and no
 race, and the fallback timer dismisses it as usual.
 
-## Today card, daily cards and the full calendar
+## Today card, daily decision and the full calendar
 
 The Home tab shows:
 
@@ -349,11 +369,13 @@ The Home tab shows:
     default, set in `src/components/home/TodayCard.tsx`). It is separated from today by a
     hairline and a small "Tomorrow" label, so today always reads first.
   - A **calendar icon** in the corner that opens the full calendar.
-- Two compact daily cards side by side: **Daily game** (`src/components/home/DailyGameCard.tsx`)
-  has its eyebrow, Play button and a one-line initials-and-score tally (e.g. `A 1–4 J`);
-  **Today’s decision** (`src/components/home/DailyDecisionCard.tsx`) opens the couple's private choice.
-- The **cozy nook** at the bottom of the screen — the shared room the companions stand in,
-  with the "I miss you" button in its top-left corner (see below).
+- One compact **Today’s decision** card (`src/components/home/DailyDecisionCard.tsx`) opens the
+  couple's private choice. It is the only daily activity on Home.
+- The **cozy nook** at the bottom of the screen — the shared room where the couple's own
+  picture stands in a gift-wrapped frame (see **The framed couple picture** below), with the
+  "I miss you" button in its top-left corner and the caption pinned top-right. The cartoon
+  Nooki pair stays the app's branding — its icon, its favicon and its splash — just not the
+  thing standing in the nook.
 
 The full calendar is a **modal over the current tab** — never a page of its own, so the
 Home tab stays exactly as it was behind it:
@@ -386,9 +408,7 @@ rows to `'yearly'`, drops the old column, and then `verify.sql` should report **
 
 ### Daily decisions
 
-The two daily cards sit beside each other under Today: a minimal **Daily game** card with the
-Play button and initials-and-score line, and a **Today’s decision** eyebrow with a Play button
-that opens the couple's private choice sheet.
+The **Today’s decision** card sits under Today and opens the couple's private choice sheet.
 Decisions are shared only when both people pick the same option:
 
 - Each partner privately chooses one of the three options. The database hides each choice
@@ -398,7 +418,7 @@ Decisions are shared only when both people pick the same option:
   change their choice and the sheet offers **Take to chat**, which sends the question and all
   three options into their shared chat to discuss. The decision becomes final and locked only
   when the two choices match.
-- The day rolls over at **midnight UTC**, like the daily game. The questions work the way
+- The day rolls over at **midnight UTC**. The questions work the way
   Discuss questions do: they live in an undated pool the owner uploads to Supabase, and each
   day the database randomly picks one question **this couple has never been given before**
   and saves that pick (`daily_decision_assignments`), so both partners see the same question
@@ -474,6 +494,50 @@ table and no function to count with, so the button says "The database needs an u
 Please ask the app owner to apply supabase/migrations/202610150016_miss_you.sql" rather than
 appearing to work. The migration is additive and rerunnable: it never resets a count.
 
+### The framed couple picture
+
+The centre of the nook is the couple's own picture, standing in a gift-wrapped frame
+(`src/components/home/NookPhotoFrame.tsx` — honey wood, stitched mat, corner hearts and a
+pink-and-green ribbon bow, the same duo as the racing splash dots). A real photo of the two
+of you is the highest form of personalisation the app can offer: opening it shows the picture
+from when you were last physically together, or simply your favourite one. Before anything
+is framed, the window carries a soft **"Upload your couple picture"** invite instead.
+
+- **One picture per couple.** `couple_photo` is keyed by the couple id itself, so a couple
+  frames at most one picture, ever; replacing it moves the same row. Either partner may
+  frame or replace — the frame belongs to the couple — and the row's couple can never move
+  (a database trigger refuses, past the app and its policies).
+- **The phone does the heavy lifting.** A chosen picture is resized to a 1600px JPEG in the
+  browser before a single byte leaves the device, so weak mobile data never carries a
+  12 MB camera-roll original; a 25 MB original is refused outright.
+- **"Fit it to the frame" comes first.** A chosen picture is never uploaded as-is: it opens
+  in a crop step (`src/components/home/PhotoCropDialog.tsx`) locked to the mat window's
+  exact aspect (67:47, kept in step with the frame's SVG), where the couple drags to
+  position and slides to zoom before **Frame picture** uploads exactly what they chose —
+  not a quiet `object-fit` crop centred on nobody's decision. Escape, Cancel or a backdrop
+  tap steps out without uploading a byte. Where a browser cannot preview or crop (very old
+  devices), the original travels on as-is rather than blocking the picture.
+- **The replace order is deliberate.** New bytes upload first, then the row moves, then the
+  old file is deleted — the frame never points at a file that is not there yet, and a failed
+  replace leaves the old picture standing. Tapping a framed picture asks
+  "Replace the picture in the frame?" first, because replacing is a couple decision, not an
+  accident waiting for a pocket tap.
+- **Privacy.** The file lives in the private `couple-photos` bucket under
+  `photos/{couple_id}/{photo_id}.jpg` — the folder name is the couple id, which is what the
+  storage policies check — and is opened only through short-lived signed URLs. There is
+  deliberately no public link: a picture is never readable outside the couple.
+- **Live on both phones.** The table sits on the `supabase_realtime` publication, so the
+  moment one partner frames a new picture, the other partner's nook updates without a
+  refresh (`useCouplePhoto` keeps the signed URL fresh with the row).
+- **The rest of the nook is untouched.** The "I miss you" button stays in its top-left
+  corner and the "Our little nook" caption stays pinned top-right.
+
+**The migration is required before the frame can hold anything.**
+`supabase/migrations/202610180003_couple_photo.sql` adds the table, its policies, the
+realtime publication entry and the private bucket. Without it the frame still renders and
+invites the upload, but the upload is refused with a readable sentence instead of appearing
+to work.
+
 ## The Chat tab
 
 A plain, WhatsApp-shaped conversation between the two partners — the second tab from the
@@ -518,7 +582,7 @@ left, live, with no refresh anywhere. It is built from:
   app is in the foreground, because you have to be looking at a message to have read it.
   Opening the tab stamps everything the partner sent.
 - **Unread badge** — the partner's unseen messages are counted on the Chat tab icon in the
-  bottom nav (capped at `99+`), updated live even while this phone sits on Home, Media or
+  bottom nav (capped at `99+`), updated live even while this phone sits on Home, Together or
   Games, and cleared the moment the chat opens. Screen readers hear
   *"Chat, 2 unread messages"* instead of the raw number.
 - **Conversation bar** — the partner's name and live status (`Online`, `typing…`, or
@@ -542,7 +606,7 @@ left, live, with no refresh anywhere. It is built from:
   loaded (`MESSAGE_PAGE_SIZE`).
 
 Presence runs at app level, so a partner still reads as online while this phone browses
-Chat, Media, Discussion or Games. The app writes its own `last_seen_at` on mount, every
+Chat, Together, Discussion or Games. The app writes its own `last_seen_at` on mount, every
 minute while open, and when the tab is hidden — permitted by the existing "update own
 profile" RLS policy, so **no migration is required** for any of this. Two caveats:
 
@@ -636,7 +700,7 @@ a link back to those answers) attached. It is built from:
   empty list.
 - **Unanswered badge** — sessions without your answer badge the Discuss tab in the bottom
   nav and repeat the count in the tab header, live, even while this phone sits on Home,
-  Media or Games. Screen readers hear *"Discuss, 1 question waiting"*.
+  Together or Games. Screen readers hear *"Discuss, 1 question waiting"*.
 - **18+ (Intimacy)** — hidden from the library by default. It opens only when **both**
   partners turn it on under Settings → *Intimacy questions (18+)*; either one turning it
   off closes it again, for both phones. The gate lives in the database: the `questions`
@@ -812,13 +876,12 @@ Run **one** of these, depending on the project:
 | Project state | Run this |
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
-| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
+| Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql` — then `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live and `supabase/verify-books.sql` once books are live |
 
-All of the migrations are idempotent and safe to rerun; they never drop or rewrite existing
-data (the pairing migration only changes policies, the calendar migration only adds a table
-or converts an older one in place, the chat migration only adds a table, its policies and
-its Realtime membership, and the Discuss migration only adds tables, functions, triggers
-and policies). Take a snapshot first anyway.
+All migrations are idempotent and safe to rerun. Take a snapshot first: the retirement
+migration intentionally deletes the retired daily-game and Tic Tac Toe match history, and
+the rest preserve existing data.
 
 `supabase/verify.sql` is read-only and must print **PASS**. It checks the pairing RPCs,
 RLS on every table, the anniversary-lock trigger, the `couple_events` calendar, the repeat
@@ -1025,6 +1088,7 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] The header clock beside the dot matches the partner's own device time and weekday, and never shows your own clock.
 - [ ] The Today card shows today's date and the anniversary/monthsary that fall today.
 - [ ] With one app open and the other closed, the nook shows a small "I miss you" pill in its top-left corner; open both and it disappears.
+- [ ] Before a picture is framed, the nook's frame invites "Upload your couple picture"; the chosen picture opens in the fit-to-frame step (drag + zoom) and frames exactly what was chosen. Framing one on device A shows it on device B without a refresh, and B's replace (behind its confirm) lands back on A.
 - [ ] Tapping it a few times shows the count on the button (2, 3…) and never on the other phone yet.
 - [ ] Opening the other app shows a big heart expanding over the load with "… missed you N times today" (a single tap reads "Hi, … missed you"), fading away on its own.
 - [ ] Opening that second app again shows no heart: the taps were received, and the count starts again from one.
@@ -1076,8 +1140,8 @@ Use your actual accounts; there is no automatic user creation.
       turning it on for both unlocks it, and either device turning it off hides it again.
 - [ ] With an empty `questions` table, Discuss says "The question library is empty"
       instead of showing bundled questions; after importing the CSV the categories fill up.
-- [ ] Home shows the compact **Daily game** and **Today’s decision** cards side by side; the
-      game card has no extra heading or status copy, and each Play button opens its activity.
+- [ ] Home shows only the compact **Today’s decision** card; its Play button opens the
+      couple's private daily choice.
 - [ ] Uploading `daily_decision_questions` rows (question + three options, no date) fills
       the pool; opening Today's decision shows one random question with exactly its three
       options, the same one on both devices all day, and a different unseen one tomorrow.
@@ -1091,7 +1155,7 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] A third account cannot read either partner's responses, and an app user cannot write
       prompt rows or update/delete responses directly.
 - [ ] A third account cannot read the couple's sessions, answers or comments.
-- [ ] The Media tab's empty shelf shows **Read together** with an Upload book button and
+- [ ] The Together tab's empty shelf shows **Read together** with an Upload book button and
       the "DRM-free EPUB or PDF only" note; a picked file appears as the reading book.
 - [ ] A second upload while a book is reading says "Leave or delete current book first."
       and the same rule holds even if the request is forced through.
@@ -1113,6 +1177,20 @@ Use your actual accounts; there is no automatic user creation.
       and jumping still work.
 - [ ] A third account cannot read the couple's books, bookmarks or highlights, and no
       book file is reachable without the couple's own signed URL.
+- [ ] Adding a someday idea puts it at the top of the Together tab on both phones; adding
+      several never replaces or reorders the others.
+- [ ] Drag the dots on an idea (or focus the dots and press ↑/↓) and the list reorders;
+      after a reload both phones show the same order.
+- [ ] Tapping an idea opens its sheet: the 500-character idea, a notes box that accepts
+      well over 500 characters (up to 1,000), and a save that both partners see. Delete
+      asks first, then removes it for both.
+- [ ] With a visit planned, **Add to our next visit** marks the idea "Next visit", puts it
+      under "What we'll do" on the visit card, and **Remove from this visit** takes it back
+      off without deleting the idea.
+- [ ] With no visit planned, **Plan our next visit** opens the planner; saving the visit
+      pins the idea to it automatically. Cancelling leaves the idea untouched.
+- [ ] Deleting a visit keeps its pinned ideas and simply returns them to the someday list;
+      a third account can neither read nor reorder the list.
 - [ ] Couple Settings shows **Notifications**; on Android/desktop the switch turns on after
       the browser's permission prompt, and says "On this device" afterwards.
 - [ ] With both apps closed, a message from device A produces a notification on device B
@@ -1160,18 +1238,23 @@ this repository's own `send-push` Edge Function — no notification service, SDK
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
 tab, and an unread count on the installed app's icon; the chat is the only thing announced
-so far. Media hosts **Read together** (shared books:
+so far. Together hosts **Read together** (shared books:
 one EPUB or PDF in play per couple, a full-screen reader, saved places for both
 partners, "Jump to {partner}", shared two-colour highlights, and the highlight → chat →
-back-to-the-passage loop); synced music and scrapbooks are still to come. Games includes
-Tic Tac Toe, Rock Paper Scissors, Chess, Sudoku, the asynchronous Snake Duel and the
-asynchronous Tetris Duel (five minutes each, in either a sprint or a survival), and
-voice/video calling is still a "coming soon" toast. No sample conversations or questions
+back-to-the-passage loop), **Our next visit** (a countdown, the visit planner, and the
+ideas pinned from the someday list) and **Our someday list** (a shared, manually ordered
+list of things to experience together, each with 1,000 characters of notes and a one-tap
+move into the next visit); synced music and scrapbooks are still to come. Games includes
+Rock Paper Scissors, Chess, Sudoku, asynchronous Snake and Tetris Duels, and Dash Duel
+(a Lagos runner with an async course challenge, online-only live race and local free play).
+Voice/video calling is still a "coming soon" toast. No sample conversations or questions
 are loaded into the app itself — the in-memory transcript only exists on the development
 preview page, Discuss uses the rows imported into `questions`, and Daily Decisions uses the
 owner-uploaded pool rows in `daily_decision_questions`, drawn one random unseen question per couple per day.
-Home also carries the **"I miss you" button** in the nook — the small pink pill in the
-top-left corner, offered only while the partner is away. Taps are counted per partner and
+Home also carries the **framed couple picture** standing in the nook — the couple's own
+photo in a gift-wrapped frame, one per couple, replaceable by either partner, stored in a
+private couple-scoped bucket and opened only through signed URLs — and the **"I miss you"
+button** in the nook's top-left corner, offered only while the partner is away. Taps are counted per partner and
 per day, and the other phone opens them over its next load as a big heart with a sentence
 that counts them ("Hi, Jayo missed you", "Jayo missed you 4 times today"), then resets.
 Scenes and illustrated backgrounds are deliberately out of scope for now: the Discuss tab
@@ -1186,206 +1269,64 @@ sale (see **What the marketplace scaffolding is (and is not)**).
 and sage palette, typography, radii and shadows. The app remains locked until both
 partners are paired; ending a completed couple requires both partners' agreement.
 
-## Games tab and Today's Challenge
+## Games tab
 
-Apply **`supabase/migrations/202610150007_games.sql`** to an existing project before
-shipping Games, then **`supabase/migrations/202610150010_snake_duel.sql`** before shipping
-the Snake Duel, then **`supabase/migrations/202610150011_chess.sql`** before shipping
-Chess, then **`supabase/migrations/202610150012_tetris_duel.sql`** before shipping the
-Tetris Duel, then run **`supabase/verify-games.sql`** in addition to the usual
-`verify.sql`. New projects get all four from `schema.sql`. The migrations are additive
-and rerunnable; they do not reset existing matches or duels. Apply pending Games
-migrations in order (007 → 010 → 011 → 012); do not downgrade the shared game constraint
-by reapplying an older migration after Chess or Tetris has saved matches. Projects that
-installed 010, 011 or 012 before those migrations revoked the game internals from
-`authenticated` by name also need
-`supabase/migrations/202610150013_lock_down_game_internals.sql` (privileges only) before
-`verify-games.sql` will pass — see Troubleshooting the Duel button. The frontend build
-does not apply migrations to your live project.
+Games are always available: there is no daily Games challenge. Apply
+**`supabase/migrations/202610150007_games.sql`**, then
+**`202610150010_snake_duel.sql`**, **`202610150011_chess.sql`**,
+**`202610150012_tetris_duel.sql`**, then
+**`202610180002_remove_daily_games_and_tic_tac_toe.sql`**, **`202610180006_connect_four.sql`**,
+**`202610180007_together_visits_and_someday_list.sql`**,
+**`202610180008_someday_details_order_and_visit_link.sql`**, and
+**`202610180009_dash_duel.sql`** to an existing project before running
+**`supabase/verify-games.sql`**. New projects receive the same final shape from
+`schema.sql`. The retirement migration deletes historical daily-game and Tic Tac Toe rows,
+removes their date/board columns, and replaces the daily-flag Games RPC.
 
-- **Tic Tac Toe:** a 3×3 board, alternating turns, all eight winning lines and draws.
-  The starting partner is X. Moves and results are validated by the database.
-- **Rock Paper Scissors:** best of 3 (first to 2 wins) or 5 (first to 3).
-  Ties replay without adding a point. Tap once to lock a secret pick; both picks
-  are revealed together when the second partner submits. Locked picks cannot change.
-- **Snake Duel:** one run each, and the higher score wins. The two partners never need to
-  be online at the same time: a duel waits for both runs whenever they are played, so it
-  suits a couple in two time zones. A run starts the moment it is entered, lasts at most
-  four minutes, and cannot be paused — there is no pause button and none is coming.
-  Leaving the run is a forfeit and the partner takes the duel there and then, so the only
-  score you can hand in is the one you played. A phone that goes quiet for more than
-  **30 seconds** (locked, backgrounded, no signal) is treated as having left, and time in
-  the background is not paused: the snake keeps travelling and will usually hit a wall
-  before you get back. Reloading is the same — you get the 30 seconds to pick the run
-  back up, from the tick the server last heard about.
-- **Snake Duel · scorekeeping:** the score is not something the phone claims. The
-  database deals the food, the phone reports only its direction changes and its tick
-  count, and the database replays that history through the same rules as
-  `src/lib/snake.ts` to derive the score, the length and the crash (`snake_replay`).
-  Reports are append-only, cannot be rewound, and cannot outrun real time (one tick per
-  160ms, plus two ticks of slack for the round trip), and each side may start exactly one
-  run per duel — so a run cannot be re-rolled, sped up or handed in twice. The honest
-  limits: the food sequence is sent to the phone, so a technical player who scripts a bot
-  could still play a very good run at human speed; the duel is built to stop score
-  forgery and re-rolls between two people who trust each other, not to police a
-  tournament. Both `snake_replay` and `src/lib/snake.ts` hold the same constants and the
-  same rules: **changing one without the other disqualifies honest runs**, and the
-  database test compares the two scores precisely because that is the failure mode.
-- **Snake Duel · secrecy:** it is a blind duel. While the duel is open, neither partner
-  can see the other's score — a partner who is playing right now shows only as *playing
-  right now*. Both scores are revealed together when both runs are in (`snake_view`
-  strips the score from the snapshot until then, exactly as it strips rock-paper-scissors
-  picks). A forfeit ends the duel immediately and reveals the score the leaver had
-  reached.
-- **Snake Duel · warm-up:** the same board, dealt on the phone itself, never reported and
-  never scored. It is offered on the duel's gate, while waiting for the partner, and from
-  the Snake Duel card in the library, so nobody's one attempt is their first attempt.
-- **Snake Duel · leaving a tab:** a live ranked run guards the app's navigation. Changing
-  tab asks first — over the board, which keeps moving, because there is no pause — and
-  only changing the tab after *Leave and forfeit* gives the duel to the partner.
-- **Snake Duel · not the daily challenge:** the daily pool stays Tic Tac Toe and Rock
-  Paper Scissors (`start_game` never picks snake for a daily match). A duel waits however
-  long both partners need, which one UTC day is the wrong container for.
-- **Chess:** adapted clean-room from
-  [PyChess](https://github.com/Kingcitaldo125/PyChess/tree/main/chess) — its 8×8 cell
-  board, per-piece move generators, line-of-sight blocking and attack-based check test,
-  re-implemented in `src/lib/chess.ts`. No PyChess code or PNG pieces are copied (it is
-  GPL-3.0, and its bishop/queen movement, pawn blocking and checkmate test are broken or
-  missing); the board here is a CSS grid of buttons with Unicode glyphs. The engine plays
-  full normal chess — legal-move filtering (a pinned piece cannot expose its king),
-  castling, en passant, promotion with a picker (underpromotion included), checkmate over
-  all replies, stalemate, insufficient material, fifty-move and threefold draws — plus
-  Nooki's situational layer, chosen by whoever starts the match: **Classic Duel**
-  (checkmate wins), **Capture Race** (first to capture **7** enemy pieces wins the moment
-  the seventh capture lands) and **Queen Hunt** (capture the opponent's *original* queen
-  — a promoted queen does not count — to win on the spot). In every mode checkmate still
-  wins and being checkmated still loses: goal moves are legal moves, so they can never
-  leave your own king in check, and there is no move after you are mated for a goal to
-  save you. Kings are never captured.
-- **Chess · the referee is the database:** apply
-  **`supabase/migrations/202610150011_chess.sql`** before shipping Chess
-  (`verify-games.sql` checks it too). Like the Snake duel, the rules live on both sides:
-  `chess_attacked` / `chess_pseudo` / `chess_legal` / `chess_has_move` in SQL mirror
-  `src/lib/chess.ts`, and the only thing a phone may send is `chess_move` with a move in
-  coordinate notation (`e2e4`, `e7e8q`, or `resign`) plus the match's round, checked
-  exactly as `play_game` checks it. The server decides whose piece it is, whether the
-  move is legal, what it captured, and whether checkmate, a draw, the Capture Race or
-  the Queen Hunt ends the match — a phone can never claim a capture, or a queen, it did
-  not really make. The starter is White (`player_x`); the position lives in the match's
-  `chess` jsonb (64 piece codes — `wQ` the original queen, `wQ*` a promoted one —
-  castling rights, the en-passant square, captures, history, repetition counts, which
-  the snapshot strips). There are no secrets to seal, so the snapshot shows the whole
-  position to both partners. One open chess match per couple, as with the other games;
-  resigning is always allowed, on either turn. Chess is not in the daily pool. The
-  design preview still plays pass-and-play on one phone, with undo, because it has no
-  backend by design.
-- **Tetris Duel:** five minutes each, and both partners play the same pieces — dealt once
-  per duel, so the two runs are like for like no matter how far apart in time they happen.
-  Neither partner needs to be online when the other plays. A run starts the moment it is
-  entered and cannot be paused: leaving the run is a forfeit and the partner takes the duel
-  there and then, and a phone that goes quiet for more than **30 seconds** (locked,
-  backgrounded, no signal) is treated as having left. Time in the background is not paused
-  either — the clock keeps running and the pieces keep falling, so a run that is left alone
-  fills its own well. Reloading is the same: you get the 30 seconds to pick the run back up,
-  from the tick the server last heard about. The well is 10×16 and the speed climbs with
-  every ten lines you clear, from 0.75s a row to 0.15s at a hundred lines.
-- **Tetris Duel · the two ways to settle it,** chosen when the duel is started and fixed for
-  its lifetime:
-  - **Sprint** — *highest score in five minutes*. Fill your well early and you bank whatever
-    you had reached, which is usually not enough: the five minutes are the whole game.
-  - **Survival** — *last one stacking wins*. Whoever keeps going for longer takes it, and
-    the score only separates two runs that lasted exactly the same number of ticks. Sitting
-    still is not a way to win this one: a well that is never cleared buries itself in about
-    forty seconds, so you have to keep the board down to stay in it.
-  A sprint and a survival can both be open at once; neither is the other's rematch.
-- **Tetris Duel · the rules come from** [`KPaccarizi/_Tetris_Game`](https://github.com/KPaccarizi/_Tetris_Game),
-  a Pygame coding-challenge entry: the same seven tetrominoes, the same spawn, the same
-  rotation about a piece's first cell, and the same `{1:100, 2:300, 3:700, 4:1500}` for a
-  clear. Its pygame loop is rewritten as a tick simulation so the database can replay it;
-  three of its rough edges are deliberately **not** carried over, and `src/lib/tetris.ts`
-  names all three (a row-clear that left a stale row behind, a game over that waited for
-  the top row to fill, and a rotation that could wander off the top of the board).
-- **Tetris Duel · scorekeeping:** exactly the Snake bargain. The database deals the pieces,
-  the phone reports only its taps and its tick count, and the database replays that history
-  through the same rules as `src/lib/tetris.ts` to derive the score, the lines and the
-  top-out (`tetris_replay`). Reports are append-only, cannot be rewound, and cannot outrun
-  real time (one tick per 50ms, plus six ticks of slack for the round trip), and each side
-  may start exactly one run per duel — so a run cannot be re-rolled, sped up or handed in
-  twice. Both `tetris_replay` and `src/lib/tetris.ts` hold the same constants and the same
-  rules: **changing one without the other disqualifies honest runs**, and the database test
-  compares the two scores precisely because that is the failure mode. As with Snake, the
-  honest limit is that the piece sequence is sent to the phone, so a technical player who
-  scripts a bot could still play a very good run at human speed: this stops score forgery
-  and re-rolls between two people who trust each other, not a tournament.
-- **Tetris Duel · secrecy and warm-up:** a blind duel, the same as Snake — the partner's
-  score is sealed until both runs are in (`tetris_view` strips it from the snapshot), and a
-  partner who is playing right now shows only as *playing right now*. A forfeit ends the
-  duel immediately and reveals the score the leaver had reached. The same board, dealt on
-  the phone itself, never reported and never scored, is offered on the gate, while waiting
-  for the partner, and from the Tetris Duel card in the library.
-- **Tetris Duel · controls:** a phone has no arrow keys, so the board is played with
-  gestures and an on-screen pad: tap to turn the piece, slide sideways to move it, swipe
-  down to slam it, or use the ◀ ▶ ▼ ⟳ ⤓ buttons under the well. The keyboard (arrows and
-  space) works too. Where the piece would land is drawn as a shadow beneath it.
-- **Tetris Duel · leaving a tab and the daily challenge:** a live ranked run guards the
-  app's navigation, exactly as a Snake run does — changing tab asks first, over the board,
-  which keeps running because there is no pause. Neither duel is ever the daily challenge
-  (`start_game` never picks snake or tetris for a daily match): both wait however long the
-  two partners need, which one UTC day is the wrong container for.
-- **Games:** unlimited rematches; starting a game with an unfinished practice match
-  resumes that match, including the original match length. A finished duel stays reachable
-  from the library's *Last Duel* row — whichever of the two it was — so its result does
-  not vanish.
-- **Home → Today's Challenge:** randomly selects either available game on the first
-  start and saves that choice for both partners. Exactly one shared match per couple
-  per **UTC day**, enforced by a database unique constraint and serialized starts.
-  Refreshing, switching devices or tapping again resumes the same match or its result;
-  it never gives another attempt that day. RPS daily matches use best of 3.
-- The Home scoreboard counts completed wins across daily and practice matches;
-  draws do not award wins. Open matches survive tab changes and reloads.
-- Both devices refresh game state every two seconds while visible. No secret picks
-  are published through Realtime or exposed through direct table access. Only the
-  RPC's sanitized snapshot is returned to the couple; other accounts cannot read it.
-- To add another game, extend `GAMES` in `gamesService.ts`, its UI, and the database
-  validator/daily selection pool together. No future game is selected until playable. A
-  game with rules of its own (as Snake and Tetris have) wants its own RPCs plus its own row
-  in the snapshot, the way `snake_*`/`tetris_*` and `games_state`'s `snake`/`tetris` keys
-  do: never hand a phone the authority to score itself. A game that is played against the
-  clock also wants a pure core next to `src/lib/snake.ts` and `src/lib/tetris.ts`, an SQL
-  replay that mirrors it, and a test that holds the two scores against each other — that
-  test is the only thing standing between a rule change and a week of disqualified runs.
+- **Rock Paper Scissors:** best of 3 (first to 2 wins) or 5 (first to 3). Ties replay
+  without adding a point. Each pick stays secret until both partners lock in.
+- **Snake Duel:** one authoritative, no-pause run each; the higher score wins. The database
+  deals food and replays reported turns, so a phone cannot claim a score it did not play.
+  Leaving or going quiet for more than 30 seconds forfeits the run.
+- **Chess:** classic chess, Capture Race and Queen Hunt; the database validates every move.
+- **Sudoku:** a solo, race or shared grid in easy, medium and hard difficulties.
+- **Tetris Duel:** each partner plays the same server-dealt pieces in a five-minute sprint
+  or survival duel. The database replays taps to settle the result.
+- **Connect Four:** turns are async and resume across devices. The server checks whose turn it
+  is, drops each checker into the selected column, and decides wins and draws under a row lock.
+- **Dash Duel:** a three-lane Lagos runner with an async shared-course challenge (the first
+  partner chooses the difficulty), a live race shown only while the partner is online, and a
+  local unranked free run. The server replays inputs to verify distance and hearts.
+- An unfinished match resumes when either partner opens the same game; the live matches
+  stand in the Games tab's swipeable **Ongoing games** card — one card's height however
+  many are open. Finished duels stay available through the **Last duel** row beneath it,
+  as history and never among the games that can still be played. The Games tab badge
+  counts matches waiting for this phone.
+- Secret picks and live opponent scores are never exposed through direct table access or a
+  realtime payload; the app receives only the sanitized Games RPC snapshot.
 
-Before release, use two real paired accounts to play each game, verify a secret pick
-is absent from the other device's network responses, resume after a reload, finish a
-daily match, and confirm both devices can only view its result until midnight UTC.
-For either duel specifically: play both runs on two real phones (one of them in a
-different time zone), leave a run halfway and confirm the partner is credited with the
-win, lock one phone for longer than 30 seconds mid-run and confirm the run is lost,
-reload mid-run and confirm the run resumes from the last report, and confirm the
-partner's score is nowhere in the other phone's network responses until both runs are in.
-For the Tetris Duel, play one sprint and one survival to completion and check the reveal
-says what you expected, and confirm the two of you were dealt the same pieces.
-The no-backend development preview remains sample UI, not a local game backend: the
-preview's Snake and Tetris duels are played out on the page (there is a toggle above
-them), and a ranked duel needs its migration.
+Before release, test each game with two paired accounts, including a reload during an open
+match and a sealed Rock Paper Scissors pick. For Snake, Tetris and Dash Duel, test a live
+run on two phones; verify that Play Together is hidden while the partner is offline and
+starts on a shared ready handshake.
 
 ### Troubleshooting the Duel button
 
-The library button calls `start_game('snake', false, …)`; **Start my run** then calls
+The library button calls `start_game('snake', …)`; **Start my run** then calls
 `snake_start`. The Tetris Duel is the same shape with its own entry point: the card calls
 `start_tetris(mode)` and **Start my 5 minutes** calls `tetris_start` — a duel fixed to a
-mode gets an RPC of its own, exactly as Chess does, so `start_game` is left alone for the
-games that were already working. All of them depend on the live database, not just a
-successful Vercel build. Migration `007` alone only accepts Tic Tac Toe and Rock Paper
-Scissors, so it rejects Snake with `Invalid game settings.` even though the Games library
-loads normally, and a Tetris card on a project without `012` reports `012` by name.
+mode gets an RPC of its own, exactly as Chess does. All of them depend on the live database,
+not just a successful Vercel build. The base Games migration cannot start Snake on its own,
+so it rejects Snake with `Invalid game settings.` even though the Games library loads
+normally, and a Tetris card on a project without `012` reports `012` by name.
 
 In the Supabase project used by the deployment:
 
 1. Apply `supabase/migrations/202610150007_games.sql` if Games has not been installed.
 2. Apply pending `supabase/migrations/202610150010_snake_duel.sql` **after** `007`,
    then `supabase/migrations/202610150011_chess.sql` for the Chess-enabled release, then
-   `supabase/migrations/202610150012_tetris_duel.sql` for Tetris.
+   `supabase/migrations/202610150012_tetris_duel.sql` for Tetris, and finally
+   `supabase/migrations/202610180002_remove_daily_games_and_tic_tac_toe.sql`.
 3. Run `supabase/verify-games.sql` and require **PASS**, then try Duel again.
 
 If `verify-games.sql` instead fails with **"The Snake internals must stay
@@ -1447,9 +1388,9 @@ npm run test:browser
 # PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser
 ```
 
-## Media tab: Read together (shared books)
+## Together tab: Read together (shared books)
 
-The first Media feature: one book the couple reads together, EPUB first and PDF on the
+The first Together feature: one book the couple reads together, EPUB first and PDF on the
 same flow. Apply **`supabase/migrations/202610150008_shared_books.sql`** to an existing
 project before shipping books, then run **`supabase/verify-books.sql`** in addition to
 the usual `verify.sql`. New projects get books from `schema.sql`. The migration is
@@ -1458,7 +1399,7 @@ applied to your live project by the frontend build.
 
 ### The shelf, the reader and the loop
 
-- **Upload** — a file picker on the Media tab takes a **DRM-free EPUB or PDF, up to
+- **Upload** — a file picker on the Together tab takes a **DRM-free EPUB or PDF, up to
   40 MB**. The shelf row is created first (so a couple that already has an active book
   is told "Leave or delete current book first." before a single byte uploads), then the
   file goes up. The card shows the title, both people's percentages and **Continue
@@ -1522,3 +1463,110 @@ both devices at once, jump to each other, highlight with and without comments, j
 from a chat quote back into the passage, then Leave / Finish / Delete (checking the
 chat quote after Delete). Upload a scanned PDF and confirm the no-selectable-text
 note. Finally, check a third account cannot reach any of it in its network responses.
+
+## Together tab: Our next visit & the someday list
+
+Before deploying to an **existing** project, apply
+`supabase/migrations/202610180007_together_visits_and_someday_list.sql` and then
+`supabase/migrations/202610180008_someday_details_order_and_visit_link.sql`, and run
+`supabase/verify.sql` again. Both migrations are additive and safe to rerun. New projects
+get the same tables and functions from `schema.sql`.
+
+### The list
+
+- **Adding** — “Add to our list” takes one line (up to 500 characters) and drops it at the
+  top of the couple's list. There is no practical limit on how many ideas a couple keeps.
+- **Order** — the dots on the left drag a row anywhere in the list; the grip is also a
+  button, so focusing it and pressing ↑/↓ moves the idea one slot. The whole order is saved
+  in one database call (`reorder_someday_items`), so the two phones always read the same
+  list after the next load or Realtime update. New ideas join above the list, and completed
+  ideas move into the collapsed “completed” group.
+- **Opening an idea** — tapping the words opens a bottom sheet. The idea stays editable,
+  and **More about it** holds up to **1,000 characters** of context (the request was “at
+  least 500”): the place, the plan, who mentioned it. Notes show as a one-line preview on
+  the row and update for both partners.
+- **Deleting** — the trash button on the row and the Delete button in the sheet both ask
+  first, then remove the idea for both partners.
+
+### Moving an idea into a visit
+
+**Add to our next visit** is the bridge between the list and a real plan:
+
+- With a next visit planned, the button pins the idea to it. The row gets a small **Next
+  visit** pill and the idea appears under **What we'll do** on the visit card. This is the
+  same row, not a copy; **Remove from this visit** takes the pin off and leaves the idea on
+  the someday list. If the idea belongs to a visit that has already passed, the sheet also
+  offers **Take it off that visit**.
+- Without a visit, the button becomes **Plan our next visit**: it opens the visit planner
+  and remembers the idea, then pins it to the visit the couple saves. Closing the planner
+  without saving leaves the idea exactly where it was.
+- Deleting the visit does **not** delete its ideas: `visit_id` goes back to NULL and every
+  pinned idea simply returns to the unplanned someday list.
+- A visit from another couple can never be linked, even with a forged request; a database
+  trigger enforces that the idea and the visit belong to the same couple.
+
+### Data and privacy
+
+The list and its visits are couple-scoped tables with row-level security (read, insert,
+update and delete each check `get_user_couple_id`). The notes ceiling and non-empty title
+are database constraints, not just form limits. The reorder function is callable only by a
+signed-in member, rejects duplicate ids, and refuses any id that is not on the caller's own
+list. Realtime keeps both phones' rows, visit card, and completed group in step.
+
+Local coverage: `node --test tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs`
+(plus the existing Together/book tests).
+
+Before release, use two real paired accounts: add several ideas, reorder them on both
+phones (including while the other phone is open), add a long note, delete one, pin one to
+the next visit, remove it, then delete the visit and confirm the idea is still there. Check
+a third account sees none of it in its network responses.
+
+## Everyday status + mood (Home)
+
+Before deploying this feature to an **existing** project, apply
+`supabase/migrations/202610180005_everyday_status.sql` in the Supabase SQL Editor.
+It is additive and safe to rerun. New projects get it through `supabase/schema.sql`.
+
+Home now shows a compact **Our day** card beside **Today’s decision**. It opens a
+modal with both partners’ current check-ins side by side: optional mood, activity and a
+120-character note. At least one field is required; sharing is never mandatory.
+Updates expire after 12 hours by default, with 1- and 4-hour choices. A server-side
+policy hides expired rows; Home also checks expiry every 30 seconds and on resume.
+Realtime refreshes inserts, updates and acknowledgements; polling covers missed
+changes, expiry and clears (Realtime delete filters are not reliable).
+
+Only the author can save/clear their own check-in, through authenticated functions.
+Their paired partner can acknowledge the exact visible version once. Editing resets
+the acknowledgement. There is one stored snapshot per person, not a mood history;
+expired snapshots remain inaccessible until replaced/cleared or the couple is deleted.
+Deleting the couple cascades to these snapshots. Nothing is inferred from presence
+or location, and check-ins do not send push notifications.
+
+**Message** opens the existing couple chat without posting an automatic message or
+carrying over a Discuss question. The editor stays inside the Our day modal, so Home preserves space for
+the couple picture frame. The compact card reads “[Partner] left a message” when
+the partner has an active check-in, otherwise “Update [Partner] on your day”. Switching accounts/couples or leaving Home discards unsaved drafts.
+
+Two-device acceptance check after migration:
+1. Share a mood-only update on one device; confirm the other sees it.
+2. Send “Thinking of you”; verify the author sees it, and a replacement resets it.
+3. Save an activity/note, cancel an edit, and clear your update. Confirm your partner's
+   snapshot is unaffected; the other device reflects a clear within 30 seconds.
+4. Tap Message and verify the existing conversation opens with no auto-sent text.
+5. Test expiry and re-entry, and verify an unrelated account cannot read either row.
+
+Local coverage: `node --test tests/everyday-status.test.mjs tests/everyday-status-ui.test.mjs`.
+
+### Mascot artwork transparency
+
+The five `src/assets/companions/pair-*.png` expressions use real alpha, including
+inside the affectionate pose's heart pocket (not a baked-in grey checkerboard).
+`public/assets/nooki/boot-pair.png` is derived from the cleaned happy pose so the
+pre-React loader and React splash do not use different cutouts. Installed-app icons
+retain their intentional cream canvas, with grey residue removed between the faces.
+User-uploaded couple photos are not processed or changed by this cleanup.
+
+To repeat or verify this targeted cleanup after changing artwork, install Pillow
+in a Python virtual environment, then run `python scripts/clean-companion-art.py`
+and `python scripts/check-companion-art.py`. The cleanup preserves enclosed eye,
+shoe and clothing details; the regression check also protects the pink heart.

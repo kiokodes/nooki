@@ -177,6 +177,12 @@ html, body {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* Centered pop-ups (the Discuss difficulty picker): a small scale-up from the middle. */
+@keyframes nooki-modal-pop {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
 /* Couple Settings: the sheet is capped by the phone frame around it and only the block
    below its pinned header scrolls, so a new setting lengthens the panel instead of pushing
    it off the screen. Containment matters here — without it, a drag that reaches the end of
@@ -548,6 +554,47 @@ html, body {
   }
   .nooki-living-layer {
     transition: none !important;
+  }
+}
+
+
+/* =========================================================================
+   Nook photo: a full-size picture with a thin border and two partner hearts.
+   Keep it still so the edges stay aligned with the available space.
+   ========================================================================= */
+
+/* The one focus ring the nook's centrepiece ever shows: keyboard only. */
+.nooki-photo-frame-button:focus {
+  outline: none;
+}
+
+.nooki-photo-frame-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(249, 168, 212, 0.55),
+    0 0 0 1px rgba(236, 72, 153, 0.35);
+  border-radius: 16px;
+}
+
+/* While a chosen picture uploads, the window dims and breathes. */
+.nooki-photo-frame-busy .nooki-photo-frame-window {
+  animation: nooki-photo-frame-busy 1.2s ease-in-out infinite;
+}
+
+@keyframes nooki-photo-frame-busy {
+  0%,
+  100% {
+    filter: saturate(0.7) brightness(1.02);
+  }
+  50% {
+    filter: saturate(0.5) brightness(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nooki-photo-frame-busy .nooki-photo-frame-window {
+    animation: none !important;
+    filter: saturate(0.6);
   }
 }
 

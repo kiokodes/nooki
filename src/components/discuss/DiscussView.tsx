@@ -82,6 +82,9 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
     setScreen('browse');
     setDraft(null);
     setOpenSessionId(null);
+    // The difficulty pop-up is driven by the chosen category: coming back to the grid
+    // starts clean, instead of reopening the last category's pop-up unasked.
+    setFilters({ category: null, seriousness: null });
   };
 
   const handlePick = async (category: string | null, seriousness: number | null) => {
@@ -93,6 +96,9 @@ export const DiscussView: React.FC<DiscussViewProps> = ({
       setScreen('question');
       return;
     }
+    // No question came back (a stale count, or an emptied library): dismiss the
+    // difficulty pop-up so the explanation below is what the couple actually sees.
+    setFilters({ category: null, seriousness: null });
     if (result.total === 0) {
       setNotice('Your library has no questions yet. Import your CSV into the Supabase questions table and they appear here.');
       return;

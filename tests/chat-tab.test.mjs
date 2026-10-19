@@ -347,7 +347,12 @@ test('chat tab: live bubbles, receipts, typing, unread badge and day grouping', 
       return channel;
     };
     supabase.channel = (topic, options) => makeChannel(topic, options);
-    supabase.removeChannel = async () => { realtime.removed += 1; return 'ok'; };
+    // Only the chat channel counts here: Together also owns visits and someday-list
+    // channels, and those coming and going says nothing about the conversation.
+    supabase.removeChannel = async (channel) => {
+      if (channel?.topic === chat.chatTopic(couple.id)) realtime.removed += 1;
+      return 'ok';
+    };
 
     const body = () => document.body.textContent.replace(/\u2019/g, "'");
     // Labels are not unique across the document (the Chat screen and its tab share one),

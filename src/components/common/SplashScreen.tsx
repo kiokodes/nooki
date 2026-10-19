@@ -1,6 +1,7 @@
 import React from 'react';
 import type { CSSProperties } from 'react';
 import { tokens } from '../../tokens/designTokens';
+import pairHappy from '../../assets/companions/pair-happy.png';
 
 /** Total splash screen duration in milliseconds — extended to show the full animation. */
 export const SPLASH_DURATION_MS = 1500;
@@ -31,8 +32,9 @@ export interface SplashScreenProps {
 type SplashTrackStyle = CSSProperties & { '--nooki-race-delay'?: string };
 
 /**
- * Splash screen (~1.5s) displaying the simple "Nooki" wordmark and the two
- * signature pink and green dots racing from one side of the screen to the other.
+ * Splash screen (~1.5s) displaying the Nooki couple — the app's cover artwork —
+ * above the simple "Nooki" wordmark and the two signature pink and green dots
+ * racing from one side of the screen to the other.
  */
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete, elapsedMs = 0 }) => {
   // Past SPLASH_DURATION_MS the race is over and the splash is only waiting for the last of
@@ -58,6 +60,23 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete,
         userSelect: 'none',
       }}
     >
+      {/* The couple themselves — the cover image of the app, on every launch. */}
+      <img
+        data-splash-pair
+        src={pairHappy}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        style={{
+          height: '84px',
+          width: 'auto',
+          maxWidth: '42%',
+          objectFit: 'contain',
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      />
+
       <span
         data-splash-wordmark
         className="nooki-splash-wordmark"

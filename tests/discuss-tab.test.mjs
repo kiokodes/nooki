@@ -167,6 +167,8 @@ test('discuss tab: browse the library, ask, answer privately, reveal together, c
     assert(button('Fun, 2 left'), 'Fun counts the two imported questions');
     assert(button('Home Life, 2 left'), '"home_life" in the CSV is shown as Home Life');
     assert(button('Money, 1 left'), 'Money is listed from its own row');
+    assert(button('Money, 1 left').textContent.includes('✨'), 'Money uses the twinkling-star category emoji');
+    assert(!button('Money, 1 left').textContent.includes('🪙'), 'the old Money coin emoji is gone');
     assert(button('Deep, 1 left'), 'Deep is listed from its own row');
     assert(!button('Silently, 0 left') && !document.querySelector('[data-category="Games"]'), 'unused categories stay out of the list');
 

@@ -96,8 +96,12 @@ export function TetrisBoard({
     appliedRef.current = true;
     setEnded(final.ended);
     if (warmUp || !onFinishRef.current) return;
-    const inputs = unsentRef.current;
-    unsentRef.current = [];
+    // Take the queue with splice, the way the beat does: anything still on the wire was
+    // taken out of it when that report was made, so a run that ends mid-report cannot
+    // hand the same taps to both. A finish that repeats taps the server has already
+    // logged is refused as out of order — and a refused finish is a duel that never
+    // settles, sitting in the couple's ongoing games until the grace window erases it.
+    const inputs = unsentRef.current.splice(0);
     setUnsavedFinish({ ticks: final.ticks, inputs });
     void Promise.resolve(onFinishRef.current(final.ticks, inputs))
       .then(() => setUnsavedFinish(null))
@@ -145,19 +149,27 @@ export function TetrisBoard({
     if (warmUp || !live || ended) return;
     const timer = setInterval(() => {
       if (appliedRef.current || !onBeatRef.current) return;
-      const inputs = unsentRef.current;
-      // How much of the queue is going out with this report, counted *before* the call:
-      // the array is the live one and the board keeps pushing to it while the report is on
-      // the wire, so counting afterwards would quietly drop everything tapped mid-flight —
-      // and a tap the server never hears is a replay that no longer matches what was played.
-      const reported = inputs.length;
+      // The queue leaves with the report the moment it is made (splice, not a peek and a
+      // later trim): taps pressed while the report is on the wire start a fresh queue and
+      // belong to the next one. If the report never lands, its taps come straight back —
+      // into the queue while the run is live, or into the pending finish if the run has
+      // already ended under it — so no tap is ever sent twice and none is ever lost.
+      const inputs = unsentRef.current.splice(0);
       void Promise.resolve(onBeatRef.current(stateRef.current.ticks, inputs))
-        .then(() => {
-          // Anything tapped while that report was in flight stays for the next one.
-          unsentRef.current = unsentRef.current.slice(reported);
-          setConnection('live');
-        })
-        .catch(() => setConnection('trouble'));
+        .then(() => setConnection('live'))
+        .catch(() => {
+          setConnection('trouble');
+          if (appliedRef.current) {
+            // The run ended while this report was on the wire: its taps join the pending
+            // finish (stable-sorted by tick, in the order they were played), so the finish
+            // that goes out is complete — and unique.
+            setUnsavedFinish((pending) => (pending
+              ? { ticks: pending.ticks, inputs: [...inputs, ...pending.inputs].sort((a, b) => a.tick - b.tick) }
+              : pending));
+          } else {
+            unsentRef.current = [...inputs, ...unsentRef.current];
+          }
+        });
     }, TETRIS_BEAT_MS);
     return () => clearInterval(timer);
   }, [warmUp, live, ended]);

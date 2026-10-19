@@ -67,6 +67,23 @@ export interface CoupleEvent {
 }
 
 /**
+ * The one picture standing in the couple's nook frame. Exactly one row per couple
+ * (the couple id is the key): either partner may replace it, and the row's couple
+ * never moves (see `couple_photo` in supabase/schema.sql). The file itself lives in
+ * the private `couple-photos` bucket and is opened only through short-lived signed
+ * URLs.
+ */
+export interface CouplePhoto {
+  couple_id: string;
+  /** Storage path, always `photos/{couple_id}/{photo_id}.jpg` in the private bucket. */
+  file_path: string;
+  /** Who framed it last; null if that account was later deleted. */
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * What a message row is for. Only 'text' is produced by the Chat tab today; the Discuss
  * tab will reuse the same log for prompts ('question'), their replies ('answer') and
  * automatic notes ('system').
@@ -250,7 +267,7 @@ export interface DailyDecisionSnapshot {
 }
 
 /* ---------------------------------------------------------------------------
-   Shared books: the Media tab's "Read together" shelf. One book in play per
+   Shared books: the Together tab's "Read together" shelf. One book in play per
    couple, both partners' places saved in it, and the passages they highlight.
    See supabase/migrations/202610150008_shared_books.sql.
    --------------------------------------------------------------------------- */
@@ -338,6 +355,52 @@ export interface MissYouTap {
   delivered_count: number;
   /** When the partner last opened them; NULL while nothing has been received yet. */
   delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ---------------------------------------------------------------------------
+   Together tab: Visits - planned visits with countdown.
+   See supabase/migrations/202610180007_together_visits_and_someday_list.sql.
+   --------------------------------------------------------------------------- */
+
+export interface Visit {
+  id: string;
+  couple_id: string;
+  start_date: string;
+  end_date: string | null;
+  location: string | null;
+  timezone: string;
+  is_tentative: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ---------------------------------------------------------------------------
+   Together tab: Someday list - shared list of things to experience together.
+   See supabase/migrations/202610180007_together_visits_and_someday_list.sql and
+   supabase/migrations/202610180008_someday_details_order_and_visit_link.sql.
+   --------------------------------------------------------------------------- */
+
+export interface SomedayItem {
+  id: string;
+  couple_id: string;
+  /** The idea, at most 500 characters: the line the Together tab shows. */
+  text: string;
+  /** Extra context added after tapping the idea, up to 1000 characters. */
+  details: string | null;
+  /** The couple's manual order, ascending; lower numbers sit higher on the list. */
+  sort_order: number;
+  /**
+   * The visit this idea was added to ("Add to our next visit"), or null while it is
+   * still only a someday idea. Deleting the visit puts the idea back on the list
+   * rather than deleting it.
+   */
+  visit_id: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
