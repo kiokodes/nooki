@@ -281,6 +281,18 @@ test('a missing Snake migration stays visible beside Duel through polling, and r
   expect(state.starts).toBe(2);
 });
 
+test('Sudoku collaboration waits until both players are in its collaboration room', async ({ page }) => {
+  await mockGames(page, { offline: true });
+  await page.goto('/tests/browser/games.html?online=1');
+  await openGameTab(page, 'sudoku');
+  const card = page.locator('article[data-game="sudoku"]');
+  await card.getByRole('button', { name: 'Play →', exact: true }).click();
+  await card.getByRole('button', { name: 'collaboration', exact: true }).click();
+  const start = card.getByRole('button', { name: 'Waiting for both players…', exact: true });
+  await expect(start).toBeDisabled();
+  await expect(card.getByRole('status')).toContainText('Waiting for Ana to open Sudoku and select Collaboration.');
+});
+
 test('local Sudoku and warm-up remain playable when shared games cannot load', async ({ page }) => {
   await mockGames(page, { offline: true });
   await page.goto('/tests/browser/games.html');

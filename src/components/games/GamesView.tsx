@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { GAMES, type GameId, type GameMatch } from '../../lib/gamesService';
+import { GAMES, type GameMatch } from '../../lib/gamesService';
 import { needsMyMove, type GamesState } from '../../hooks/useGames';
 import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
 import { dealPracticePieces, tetrisModeLabel, type TetrisMode } from '../../lib/tetris';
@@ -46,13 +46,13 @@ function runDuelConcluded(match: GameMatch): boolean {
   return mineIn && theirsIn;
 }
 
-export function GamesView({ games, userId, partnerName, partnerOnline = false, initialGame = null, onInitialGameHandled }: {
+export function GamesView({ games, userId, coupleId, partnerId, partnerName, partnerOnline = false }: {
   games: GamesState;
   userId: string;
+  coupleId: string;
+  partnerId: string;
   partnerName: string;
   partnerOnline?: boolean;
-  initialGame?: GameId | null;
-  onInitialGameHandled?: () => void;
 }) {
   const [bestOf, setBestOf] = useState(3);
   const [mode, setMode] = useState<TetrisMode>('sprint');
@@ -87,25 +87,6 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false, i
     }
   };
   const activeGame = GAMES[libraryIndex] ?? GAMES[0];
-  const handledInitialGame = useRef<GameId | null>(null);
-  useEffect(() => {
-    if (!initialGame) {
-      handledInitialGame.current = null;
-      return;
-    }
-    if (handledInitialGame.current === initialGame) return;
-    handledInitialGame.current = initialGame;
-    const nextIndex = GAMES.findIndex((game) => game.id === initialGame);
-    if (nextIndex >= 0) {
-      setLibraryDirection(nextIndex >= libraryIndex ? 'next' : 'prev');
-      setLibraryIndex(nextIndex);
-      setWarmUp(null);
-      setSudokuOpen(false);
-      setDashFreePlay(false);
-      setWordPracticeSession(null);
-      onInitialGameHandled?.();
-    }
-  }, [initialGame, libraryIndex, onInitialGameHandled]);
   const selectGame = (index: number) => {
     if (index === libraryIndex) return;
     setLibraryDirection(index > libraryIndex ? 'next' : 'prev');
@@ -351,7 +332,7 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false, i
       <DashFreePlay level={dashLevel} seed={dashFreeSeed} onExit={() => setDashFreePlay(false)} />
     </> : sudokuOpen ? <>
       <button className="game-back" onClick={() => setSudokuOpen(false)}>← All games</button>
-      <Sudoku partnerName={partnerName} onExit={() => setSudokuOpen(false)} />
+      <Sudoku coupleId={coupleId} userId={userId} partnerId={partnerId} partnerName={partnerName} partnerOnline={partnerOnline} onExit={() => setSudokuOpen(false)} />
     </> : warmUp ? <>
       <button className="game-back" onClick={() => setWarmUp(null)}>← All games</button>
       {practice}

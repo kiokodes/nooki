@@ -5,7 +5,7 @@ import { installTestBackend } from './helpers/testBackend.mjs';
 
 // These feature guarantees belong to PostgreSQL, not just to the UI. The in-memory
 // Supabase adapter loads schema.sql (including the new migration) into real PGlite/RLS.
-test('Together restructure: wish reveal privacy, checklist ownership, idea matching, reminders and memory rules', async () => {
+test('Together restructure: visit wishes, checklist, the shared notebook, and memory rules', async () => {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false, ws: false },
     define: {
@@ -72,72 +72,32 @@ test('Together restructure: wish reveal privacy, checklist ownership, idea match
     const checkOff = await supabase.from('visit_checklist_items').update({ completed: true }).eq('id', checklist.data.id);
     assert.equal(checkOff.error, null);
 
-    // An open idea is visible to both partners; a private idea and its vote stay private.
+    // Notebook tasks are always visible to both partners, with no privacy or vote table.
     await auth.signInWithEmail('alice@example.com', 'password');
-    const openIdea = await supabase.from('someday_items').insert({
-      couple_id: couple.id, text: 'Visit the night market', visibility: 'open',
-      sort_order: 0, completed: false, created_by: alice.id,
+    const task = await supabase.from('someday_items').insert({
+      couple_id: couple.id, text: 'Visit the night market', sort_order: 0, completed: false, created_by: alice.id,
     }).select().single();
-    assert.equal(openIdea.error, null);
-    const privateIdea = await supabase.from('someday_items').insert({
-      couple_id: couple.id, text: 'Plan a surprise', visibility: 'private',
-      sort_order: -1, completed: false, created_by: alice.id,
+    assert.equal(task.error, null);
+    const secondTask = await supabase.from('someday_items').insert({
+      couple_id: couple.id, text: 'Plan a surprise', sort_order: 1, completed: false, created_by: alice.id,
     }).select().single();
-    assert.equal(privateIdea.error, null, 'new private ideas are allowed');
-    await supabase.from('someday_item_votes').insert({ idea_id: privateIdea.data.id, couple_id: couple.id, user_id: alice.id });
-    await supabase.from('someday_item_votes').insert({ idea_id: openIdea.data.id, couple_id: couple.id, user_id: alice.id });
+    assert.equal(secondTask.error, null);
     await auth.signInWithEmail('bob@example.com', 'password');
-    const { data: visibleIdeas } = await supabase.from('someday_items').select('*').eq('couple_id', couple.id);
-    assert.deepEqual(visibleIdeas.map((item) => item.id), [openIdea.data.id]);
-    const privateVote = await supabase.from('someday_item_votes').insert({ idea_id: privateIdea.data.id, couple_id: couple.id, user_id: bob.id });
-    assert(privateVote.error, 'a partner cannot vote on an idea hidden from them');
-    const vote = await supabase.from('someday_item_votes').insert({ idea_id: openIdea.data.id, couple_id: couple.id, user_id: bob.id });
-    assert.equal(vote.error, null);
+    const { data: visibleTasks } = await supabase.from('someday_items').select('*').eq('couple_id', couple.id);
+    assert.deepEqual(new Set(visibleTasks.map((item) => item.id)), new Set([task.data.id, secondTask.data.id]));
+    const deleteByPartner = await supabase.from('someday_items').delete().eq('id', task.data.id);
+    assert.equal(deleteByPartner.error, null, 'either partner can remove a task directly');
+    assert.equal((await supabase.from('someday_items').select('*').eq('id', task.data.id)).data.length, 0);
     await auth.signInWithEmail('alice@example.com', 'password');
-    const { data: openVotes } = await supabase.from('someday_item_votes').select('*').eq('idea_id', openIdea.data.id);
-    assert.equal(openVotes.length, 2, 'both yes-votes can be combined into a match');
-    await auth.signInWithEmail('bob@example.com', 'password');
-    const partnerShare = await supabase.from('someday_items').update({ visibility: 'private' }).eq('id', openIdea.data.id);
-    assert(partnerShare.error, 'only the author may change visibility');
-    await auth.signInWithEmail('alice@example.com', 'password');
+    const noVisibility = await backend.query("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='someday_items' AND column_name='visibility'");
+    assert.equal(noVisibility.rows.length, 0, 'private visibility is removed from the notebook schema');
+    const noTogetherTime = await backend.query("SELECT to_regclass('public.together_time_sessions') AS table_name");
+    assert.equal(noTogetherTime.rows[0].table_name, null, 'Together time is removed from the database');
 
-    const attach = await supabase.from('someday_items').update({ visit_id: visit.id, visit_date: '2099-05-02' }).eq('id', openIdea.data.id);
+    const attach = await supabase.from('someday_items').update({ visit_id: visit.id, visit_date: '2099-05-02' }).eq('id', secondTask.data.id);
     assert.equal(attach.error, null);
-    const wrongDay = await supabase.from('someday_items').update({ visit_date: '2099-05-03' }).eq('id', openIdea.data.id);
+    const wrongDay = await supabase.from('someday_items').update({ visit_date: '2099-05-03' }).eq('id', secondTask.data.id);
     assert.match(wrongDay.error?.message || '', /Choose a day inside this visit/);
-    const privateAttach = await supabase.from('someday_items').update({ visit_id: visit.id, visit_date: '2099-05-01' }).eq('id', privateIdea.data.id);
-    assert.match(privateAttach.error?.message || '', /Share this idea before adding it to a visit/);
-
-    // The activity catalogue is validated, and clients cannot mark a reminder as already sent.
-    const scheduled = await supabase.from('together_time_sessions').insert({
-      couple_id: couple.id, created_by: alice.id, activity_type: 'game', activity_id: 'word-wheel',
-      activity_name: 'Word Wheel', scheduled_at: '2099-05-01T18:00:00.000Z', timezone: 'Africa/Lagos',
-    }).select().single();
-    assert.equal(scheduled.error, null);
-    const invalidGame = await supabase.from('together_time_sessions').insert({
-      couple_id: couple.id, created_by: alice.id, activity_type: 'game', activity_id: 'not-a-game',
-      activity_name: 'Mystery', scheduled_at: '2099-05-01T18:00:00.000Z',
-    });
-    assert.match(invalidGame.error?.message || '', /Choose one of the games/);
-    const fakeReminder = await supabase.from('together_time_sessions').update({ reminder_sent_at: new Date().toISOString() }).eq('id', scheduled.data.id);
-    assert.match(fakeReminder.error?.message || '', /Only the reminder service/);
-
-    // The due-time claim is atomic and one-shot: overlapping sweeps cannot claim it twice.
-    // Only a locked-in ('scheduled') date can be claimed — inserts now default to a
-    // suggestion, so the trusted backend row names its status explicitly, with no auth
-    // user acting (a signed-in partner could only ever create a suggestion).
-    await backend.query("SELECT set_config('request.jwt.claim.sub', '', false)");
-    await backend.query(`
-      INSERT INTO public.together_time_sessions
-        (couple_id, created_by, activity_type, activity_id, activity_name, scheduled_at, timezone, status)
-      VALUES ($1, $2, 'game', 'word-wheel', 'Due Word Wheel', now() - interval '1 minute', 'Africa/Lagos', 'scheduled')
-    `, [couple.id, alice.id]);
-    const { rows: claimed } = await backend.query('SELECT * FROM public.claim_due_together_time_reminders()');
-    assert.equal(claimed.length, 1);
-    assert.equal(claimed[0].activity_name, 'Due Word Wheel');
-    const { rows: claimedAgain } = await backend.query('SELECT * FROM public.claim_due_together_time_reminders()');
-    assert.equal(claimedAgain.length, 0, 'the same due session is not claimed twice');
-    await auth.signInWithEmail('alice@example.com', 'password');
 
     // A finished visit accepts each partner's own photo path and one line, and reveals
     // both entries to the couple; a current visit cannot be memorialized yet.
@@ -171,12 +131,7 @@ test('Together restructure: wish reveal privacy, checklist ownership, idea match
     const { data: timeline } = await supabase.from('visit_memory_entries').select('*').eq('visit_id', pastVisit.id);
     assert.equal(timeline.length, 2);
 
-    const { rows: reminderPrivileges } = await backend.query(`
-      SELECT has_function_privilege('service_role', 'public.claim_due_together_time_reminders()', 'EXECUTE') AS service_can_claim,
-             has_function_privilege('authenticated', 'public.claim_due_together_time_reminders()', 'EXECUTE') AS member_cannot_claim
-    `);
-    assert.equal(reminderPrivileges[0].service_can_claim, true);
-    assert.equal(reminderPrivileges[0].member_cannot_claim, false);
+
   } finally {
     await backend?.close();
     await server.close();

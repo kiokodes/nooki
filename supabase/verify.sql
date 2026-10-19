@@ -4,6 +4,7 @@ BEGIN TRANSACTION READ ONLY;
 DO $$
 DECLARE
   signature TEXT;
+  private_memory_bucket BOOLEAN;
 BEGIN
   IF to_regclass('public.profiles') IS NULL OR to_regclass('public.couples') IS NULL THEN
     RAISE EXCEPTION 'Missing profiles/couples tables. Apply the schema to a new project first.';
@@ -518,8 +519,7 @@ BEGIN
     RAISE EXCEPTION 'couple_photo is missing from supabase_realtime. Rerun supabase/migrations/202610180003_couple_photo.sql.';
   END IF;
 
-  -- Together tab: visit wishes/checklist, private and matched ideas, scheduled activities,
-  -- and the shared memory timeline.
+  -- Together tab: next-visit planning and the shared numbered someday notebook.
   IF to_regclass('public.visits') IS NULL OR to_regclass('public.someday_items') IS NULL THEN
     RAISE EXCEPTION 'Missing visits or someday_items. Apply supabase/migrations/202610180007_together_visits_and_someday_list.sql.';
   END IF;
@@ -527,133 +527,80 @@ BEGIN
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relname IN ('visits', 'someday_items') AND NOT c.relrowsecurity
   ) THEN
-    RAISE EXCEPTION 'Row-level security must be enabled on visits and someday_items. Rerun supabase/migrations/202610180007_together_visits_and_someday_list.sql.';
+    RAISE EXCEPTION 'Row-level security must be enabled on visits and someday_items.';
   END IF;
   IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'visits') < 4
      OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'someday_items') < 4 THEN
-    RAISE EXCEPTION 'visits/someday_items are missing their couple-scoped policies. Rerun supabase/migrations/202610180007_together_visits_and_someday_list.sql.';
+    RAISE EXCEPTION 'visits/someday_items are missing couple-scoped policies.';
   END IF;
   IF has_table_privilege('anon', 'public.visits', 'SELECT')
      OR has_table_privilege('anon', 'public.someday_items', 'SELECT') THEN
-    RAISE EXCEPTION 'Anonymous users must not read visits or the someday list. Rerun supabase/migrations/202610180007_together_visits_and_someday_list.sql.';
+    RAISE EXCEPTION 'Anonymous users must not read visits or the shared list.';
   END IF;
-  IF NOT has_table_privilege('authenticated', 'public.visits', 'SELECT')
-     OR NOT has_table_privilege('authenticated', 'public.visits', 'INSERT')
-     OR NOT has_table_privilege('authenticated', 'public.visits', 'UPDATE')
-     OR NOT has_table_privilege('authenticated', 'public.visits', 'DELETE')
-     OR NOT has_table_privilege('authenticated', 'public.someday_items', 'SELECT')
+  IF NOT has_table_privilege('authenticated', 'public.someday_items', 'SELECT')
      OR NOT has_table_privilege('authenticated', 'public.someday_items', 'INSERT')
      OR NOT has_table_privilege('authenticated', 'public.someday_items', 'UPDATE')
      OR NOT has_table_privilege('authenticated', 'public.someday_items', 'DELETE') THEN
-    RAISE EXCEPTION 'Authenticated users need select, insert, update and delete on visits and someday_items. Rerun the Together migration.';
+    RAISE EXCEPTION 'Authenticated users need full shared-list access.';
   END IF;
   IF (SELECT count(*) FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'someday_items'
-        AND column_name IN ('details', 'sort_order', 'visit_id')) <> 3 THEN
-    RAISE EXCEPTION 'someday_items is missing details, sort_order or visit_id. Apply supabase/migrations/202610180008_someday_details_order_and_visit_link.sql.';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'someday_details_length_check') THEN
-    RAISE EXCEPTION 'someday_items is missing its notes length check. Apply supabase/migrations/202610180008_someday_details_order_and_visit_link.sql.';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.someday_items'::regclass
-      AND tgname = 'guard_someday_item_visibility_and_day' AND tgenabled = 'O'
-  ) THEN
-    RAISE EXCEPTION 'The someday privacy/day guard is missing. Apply supabase/migrations/202610190004_together_tab_restructure.sql.';
-  END IF;
-  IF (SELECT count(*) FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'someday_items'
-        AND column_name IN ('visibility', 'visit_date')) <> 2 THEN
-    RAISE EXCEPTION 'someday_items is missing private visibility or per-day planning. Apply supabase/migrations/202610190004_together_tab_restructure.sql.';
+        AND column_name IN ('sort_order', 'visit_id', 'visit_date')) <> 3
+     OR EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'someday_items'
+                  AND column_name = 'visibility') THEN
+    RAISE EXCEPTION 'someday_items is missing notebook ordering/visit links or still has private visibility. Apply 202610190007_someday_notebook_and_remove_together_time.sql.';
   END IF;
   IF to_regprocedure('public.reorder_someday_items(uuid[])') IS NULL
      OR NOT has_function_privilege('authenticated', 'public.reorder_someday_items(uuid[])', 'EXECUTE')
      OR has_function_privilege('anon', 'public.reorder_someday_items(uuid[])', 'EXECUTE') THEN
-    RAISE EXCEPTION 'The someday reorder function is missing or its permissions are wrong. Apply supabase/migrations/202610180008_someday_details_order_and_visit_link.sql.';
-  END IF;
-  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
-     AND (NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime'
-                      AND schemaname = 'public' AND tablename = 'visits')
-          OR NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime'
-                      AND schemaname = 'public' AND tablename = 'someday_items')) THEN
-    RAISE EXCEPTION 'visits/someday_items are missing from supabase_realtime. Rerun the Together migration.';
+    RAISE EXCEPTION 'The shared notebook reorder function is missing or its permissions are wrong.';
   END IF;
 
   IF to_regclass('public.visit_wishes') IS NULL
      OR to_regclass('public.visit_checklist_items') IS NULL
-     OR to_regclass('public.someday_item_votes') IS NULL
-     OR to_regclass('public.together_time_sessions') IS NULL
      OR to_regclass('public.visit_memory_entries') IS NULL THEN
-    RAISE EXCEPTION 'Together planning tables are missing. Apply supabase/migrations/202610190004_together_tab_restructure.sql.';
-  END IF;
-  IF (SELECT count(*) FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'together_time_sessions'
-        AND column_name IN ('proposed_by', 'agreed_by', 'agreed_at')) <> 3 THEN
-    RAISE EXCEPTION 'together_time_sessions is missing the two-partner agreement columns. Apply supabase/migrations/202610190005_together_time_agreement.sql.';
+    RAISE EXCEPTION 'Visit wishes, checklist, or memories are missing. Apply 202610190004_together_tab_restructure.sql.';
   END IF;
   IF EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
-      AND c.relname IN ('visit_wishes', 'visit_checklist_items', 'someday_item_votes', 'together_time_sessions', 'visit_memory_entries')
+      AND c.relname IN ('visit_wishes', 'visit_checklist_items', 'visit_memory_entries')
       AND NOT c.relrowsecurity
   ) THEN
-    RAISE EXCEPTION 'Every Together planning table must have row-level security enabled. Rerun 202610190004_together_tab_restructure.sql.';
+    RAISE EXCEPTION 'Every visit-planning table must have row-level security enabled.';
   END IF;
   IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'visit_wishes') < 3
      OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'visit_checklist_items') < 4
-     OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'someday_item_votes') < 3
-     OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'together_time_sessions') < 3
      OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'visit_memory_entries') < 3 THEN
-    RAISE EXCEPTION 'A Together planning table is missing an RLS policy. Rerun 202610190004_together_tab_restructure.sql.';
+    RAISE EXCEPTION 'A visit-planning table is missing an RLS policy.';
   END IF;
   IF has_table_privilege('anon', 'public.visit_wishes', 'SELECT')
      OR has_table_privilege('anon', 'public.visit_checklist_items', 'SELECT')
-     OR has_table_privilege('anon', 'public.someday_item_votes', 'SELECT')
-     OR has_table_privilege('anon', 'public.together_time_sessions', 'SELECT')
      OR has_table_privilege('anon', 'public.visit_memory_entries', 'SELECT') THEN
-    RAISE EXCEPTION 'Anonymous users must not read Together planning data. Rerun 202610190004_together_tab_restructure.sql.';
-  END IF;
-  IF NOT has_table_privilege('authenticated', 'public.visit_wishes', 'SELECT')
-     OR NOT has_table_privilege('authenticated', 'public.visit_wishes', 'INSERT')
-     OR NOT has_table_privilege('authenticated', 'public.visit_wishes', 'UPDATE')
-     OR NOT has_table_privilege('authenticated', 'public.visit_checklist_items', 'SELECT')
-     OR NOT has_table_privilege('authenticated', 'public.visit_checklist_items', 'INSERT')
-     OR NOT has_table_privilege('authenticated', 'public.visit_checklist_items', 'UPDATE')
-     OR NOT has_table_privilege('authenticated', 'public.visit_checklist_items', 'DELETE')
-     OR NOT has_table_privilege('authenticated', 'public.someday_item_votes', 'SELECT')
-     OR NOT has_table_privilege('authenticated', 'public.someday_item_votes', 'INSERT')
-     OR NOT has_table_privilege('authenticated', 'public.someday_item_votes', 'DELETE')
-     OR NOT has_table_privilege('authenticated', 'public.together_time_sessions', 'SELECT')
-     OR NOT has_table_privilege('authenticated', 'public.together_time_sessions', 'INSERT')
-     OR NOT has_table_privilege('authenticated', 'public.together_time_sessions', 'UPDATE')
-     OR NOT has_table_privilege('authenticated', 'public.visit_memory_entries', 'SELECT')
-     OR NOT has_table_privilege('authenticated', 'public.visit_memory_entries', 'INSERT')
-     OR NOT has_table_privilege('authenticated', 'public.visit_memory_entries', 'UPDATE') THEN
-    RAISE EXCEPTION 'Authenticated users are missing a Together planning table permission. Rerun 202610190004_together_tab_restructure.sql.';
-  END IF;
-  IF to_regprocedure('public.visit_wishes_are_revealed(uuid)') IS NULL
-     OR NOT has_function_privilege('authenticated', 'public.visit_wishes_are_revealed(uuid)', 'EXECUTE')
-     OR to_regprocedure('public.claim_due_together_time_reminders()') IS NULL
-     OR to_regprocedure('public.invoke_together_time_reminder_sweep()') IS NULL THEN
-    RAISE EXCEPTION 'Together reveal/reminder functions are missing. Apply 202610190004_together_tab_restructure.sql.';
-  END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role')
-     AND NOT has_function_privilege('service_role', 'public.claim_due_together_time_reminders()', 'EXECUTE') THEN
-    RAISE EXCEPTION 'The service role cannot claim due Together reminders. Rerun 202610190004_together_tab_restructure.sql.';
+    RAISE EXCEPTION 'Anonymous users must not read visit-planning data.';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
      AND EXISTS (
-       SELECT 1 FROM unnest(ARRAY['visit_wishes', 'visit_checklist_items', 'someday_item_votes', 'together_time_sessions', 'visit_memory_entries']) AS required(table_name)
+       SELECT 1 FROM unnest(ARRAY['visits', 'someday_items', 'visit_wishes', 'visit_checklist_items', 'visit_memory_entries']) AS required(table_name)
        WHERE NOT EXISTS (SELECT 1 FROM pg_publication_tables publication
                          WHERE publication.pubname = 'supabase_realtime'
                            AND publication.schemaname = 'public'
                            AND publication.tablename = required.table_name)
      ) THEN
-    RAISE EXCEPTION 'Together planning tables are missing from supabase_realtime. Rerun 202610190004_together_tab_restructure.sql.';
+    RAISE EXCEPTION 'Visit and notebook tables are missing from supabase_realtime.';
+  END IF;
+  IF to_regclass('public.someday_item_votes') IS NOT NULL
+     OR to_regclass('public.together_time_sessions') IS NOT NULL
+     OR to_regprocedure('public.claim_due_together_time_reminders()') IS NOT NULL
+     OR to_regprocedure('public.invoke_together_time_reminder_sweep()') IS NOT NULL THEN
+    RAISE EXCEPTION 'The removed Together-time or private/vote features are still installed. Apply 202610190007_someday_notebook_and_remove_together_time.sql.';
   END IF;
   IF to_regclass('storage.buckets') IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'visit-memories' AND public = false) THEN
-      RAISE EXCEPTION 'The visit-memories storage bucket is missing or public. Rerun 202610190004_together_tab_restructure.sql.';
+    EXECUTE 'SELECT EXISTS (SELECT 1 FROM storage.buckets WHERE id = ''visit-memories'' AND public = false)'
+      INTO private_memory_bucket;
+    IF NOT private_memory_bucket THEN
+      RAISE EXCEPTION 'The visit-memories storage bucket is missing or public.';
     END IF;
   END IF;
 END;
