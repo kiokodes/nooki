@@ -1,331 +1,521 @@
-# Word Wheel — Product & Implementation Specification
+# Word Wheel — product and implementation spec
 
-**Status:** Implemented; database migrated and puzzle bank seeded; two-device release validation pending
-**Product owner:** Nooki
-**Target:** A simultaneous two-phone word hunt for a paired couple, with pregenerated puzzles and a server-timed round
-**Out of scope for this document:** voice chat, live word-by-word score streaming, tournament ladders, monetization, sound/music, matchmaking outside an existing couple
+Status: **v1 built, deployed to the Nooki Supabase project, awaiting the two-device acceptance pass.**
 
-Word Wheel lives in Nooki's paired-couple Games area beside the other duels. It is not a
-local word game with a score-sharing screen: both partners receive the same seven letters
-and the same hidden-word list, both clocks count down from one server timestamp, and the
-database decides the winner from the words each phone actually submitted.
+Word Wheel is the third "duel" in Nooki's Games tab after Snake and Tetris, and the first one
+built for two phones playing at the same moment rather than taking turns. Both partners get the
+same seven letters and the same hidden words. They swipe for one to five minutes, submit what
+they found, and the faster, fuller word list wins.
+
+This document is the source of truth for what v1 is, what it deliberately is not, and how to
+verify it. The code lives in:
+
+| Area | File |
+| --- | --- |
+| Rules, scoring, formatting | `src/lib/wordWheel.ts` |
+| Board and lobby UI | `src/components/games/WordWheel.tsx` |
+| Styles | `src/components/games/games.css` (`.word-*`) |
+| Games-tab integration | `src/components/games/GamesView.tsx` |
+| Hook and badge logic | `src/hooks/useGames.ts` |
+| Service/type mapping | `src/lib/gamesService.ts` |
+| Schema, RPCs, sweep | `supabase/migrations/202610190001_word_wheel.sql` |
+| Seed | `supabase/seed/word_puzzles.sql` and `.json` |
+| Offline puzzle generator | `scripts/build-word-puzzles.mjs` |
+| Curated base words | `scripts/word-puzzle-bases.json` |
+| Optional service-role uploader | `scripts/upload-word-puzzles.mjs` |
+| Tests | `tests/word-wheel-logic.test.mjs`, `word-wheel-database.test.mjs`, `word-wheel-ui.test.mjs` |
+| Backend-free preview | `src/preview/PreviewWordWheel.tsx` (`/preview.html` → Games → Word Wheel) |
 
 ---
 
 ## 1. Product intent
 
-A couple should be able to open Games, pick a difficulty and a 1, 3 or 5 minute round, and
-be playing within seconds of their partner accepting. The loop is deliberately physical:
-swipe a line through the wheel, build a word, watch blanks fill. The seven-letter word is
-the trophy of every round; the short words keep the loop moving.
+A round should feel like the word-wheel puzzles people already know, with one twist: the person
+you love is doing the same puzzle at the same time, and the result is a shared little scoreboard.
 
-### Product promises
+Promises the product makes:
 
-- **One shared puzzle:** both phones see the same seven letters and exactly the same hidden
-  words. There is no per-player deal.
-- **A real race, not an async score comparison:** both partners ready up; the server sets a
-  single `start_at` a few seconds ahead; each phone runs its own countdown from that
-  timestamp.
-- **Most words wins:** the count is primary. A tie goes to the player whose **last found
-  word** came earlier. Clearing every word ends that player's round immediately, and that
-  moment becomes their tie-break time.
-- **Fair by construction:** the hidden list is selected on the server when the round starts;
-  submitted words are filtered against it. A phone can submit any list it likes and still
-  only be credited for the round's actual words.
-- **Word quality first:** a real word rejected as "not hidden" is a worse experience than a
-  blank that stays empty. The puzzle bank is generated offline, frequency-gated, manually
-  reviewable, and blocked from rude or medical vocabulary.
-- **Nothing is generated live:** a round deals one prebuilt pack. There is no dictionary in
-  the browser and no random word generation at play time.
-- **Short commitment:** a 60-second round is the default social unit. Longer rounds ask for
-  more words rather than simply stretching the same list.
+1. **One puzzle, two phones.** The wheel and the hidden list are identical on both screens. No
+   one can be dealt an easier board.
+2. **A fair start.** Neither phone starts the clock by itself. The server writes one start
+   timestamp and both countdowns use it, even if one phone opens late.
+3. **Swipe first.** The primary input is a finger tracing letters. Typing exists as a fallback,
+   not as the main game.
+4. **Words are the score.** A found word fills a blank. Extra words are welcome as discoveries
+   but never inflate the score.
+5. **The result explains itself.** "Most words wins" is visible during play; the tie-break
+   ("earlier last word") is visible before the round and in the result.
+6. **Nothing to install, nothing to pair.** It uses the couple already signed in on each phone.
 
-## 2. Version-one gameplay decisions
+Non-goals for v1: live word-by-word spectating, a global leaderboard, public matchmaking,
+puzzle authoring inside the app, and any form of turn timer.
 
-| Topic | Decision |
-|---|---|
-| Wheel | Exactly seven letter tiles (a–z). The letters may repeat because the base word may repeat a letter. The wheel is a circle, not a grid: any tile can connect to any other tile. |
-| Hidden words | 2–7 letters. Every hidden word can be built from the wheel using each tile at most once. Exactly one 7-letter word is the **grand prize** and is always present. |
-| Input | Swipe with a pointer across the wheel. The line is drawn as an SVG polyline over the tiles. Each tile may be used once per word. The hit area is smaller than the visible tile (8.5% of the wheel's width) so a swipe does not grab a neighbour accidentally. |
-| Swipe back | Moving back onto the previous tile removes it from the path. Moving back over several tiles, or onto a tile already in the path, is ignored rather than corrupting the word. |
-| Release | Lifting the pointer checks the word. A correct hidden word fills its blank and clears the path. A wrong word, a repeated word, or a word outside the hidden list shakes the wheel and clears the path without consuming a blank. |
-| Keyboard input | A "Type a word" field and **Check** button mirror the swipe for desktop, accessibility and precision. The same validation path is used. |
-| Extra words | A real English word that is not in this round's hidden list does **not** count and does not fill a blank. The feedback is "Not one of the hidden words." Packs are generated from the most common buildable words, so this should be rare rather than punitive. |
-| Shuffle | **⇄ Shuffle** reorders the seven tiles around the wheel. It does not change the puzzle, the hidden words, the clock or the found words. The client may shuffle as often as it likes while the round is live. |
-| Hints | Two per round, tracked locally per phone. Each hint reveals one letter of a random unfound word in its blank row. Hints are a convenience, not a scored resource; trust is appropriate for a couples game. |
-| Clock | Player-selectable 1, 3 or 5 minutes. The phone never owns the deadline: it computes `start_at + duration_seconds` from the server snapshot. Leaving the screen does not pause the clock. |
-| Countdown | When both partners ready up, `word_ready` sets `start_at = now() + 8 seconds`. Both phones show the same countdown. A partner who opens late still sees the correct remaining time because the deadline is absolute. |
-| Difficulty | Easy, Medium, Hard. Difficulty controls **how many words** are asked for and **how long the words are**; the 2–7 mix and the seven-letter grand prize are present at every level. |
-| Duration | 1, 3 or 5 minutes. Longer rounds ask for more words. See §3 for the exact matrix. |
-| Result | Most words found wins. If the counts are equal, the earlier `finished_ms` (the time of the player's last found word, or the end of their round) wins. Equal count and equal time is a draw. |
-| Submission | A phone submits once when the clock reaches zero, or immediately when it clears the last word. A second submission is idempotent and cannot change the score. The last word's elapsed time is sent explicitly so waiting for the clock does not erase a fast finish. |
-| Partner visibility | While the round is live, the phone learns only whether the partner is ready, submitted, and (after settlement) their words and time. The partner's count stays sealed until the round is finished. |
-| Rematch | **Play again →** starts a new round with the same difficulty and duration. The prior round remains as history. A couple can have only one waiting/running Word Wheel round at a time. |
-| Abandonment | A lobby nobody accepts is cancelled after 30 minutes. A live round whose deadline has passed by a 45-second network grace window is settled by `word_sweep`: a phone that never submitted counts as zero words and the full duration. |
-| Art | Existing Nooki pink/green styling, authored CSS and inline SVG. No remote runtime assets. The wheel should read clearly at phone width and respect reduced-motion for the shake. |
-| Sound / haptics | None in v1; no sound dependency. Haptic feedback may be added later as an enhancement. |
+---
 
-## 3. Difficulty and duration matrix
-
-The generator stores one complete hidden list per difficulty × duration on every puzzle
-row. Counts include the seven-letter grand prize.
-
-| Level | 1 minute | 3 minutes | 5 minutes | Length mix |
-|---|---:|---:|---:|---|
-| Easy | 7 words | 10 words | 13 words | Mostly 3–5 letters; one 2-letter word when available; no 6-letter words. |
-| Medium | 9 words | 13 words | 17 words | 2–6 letters; one or two 6-letter words; more 5-letter words than Easy. |
-| Hard | 12 words | 16 words | 20 words | 2–6 letters; the longest list and the most 5- and 6-letter words. |
-
-Every pack contains the seven-letter base word. The generator starts from a length quota per
-pack and, if a base cannot supply a length, redistributes the missing slots toward the
-difficulty's preferred neighbouring lengths (Easy toward shorter words, Hard toward longer
-ones). If it still cannot fill the pack exactly, that pack is omitted rather than dealing a
-short or impossible round. The server only ever selects a puzzle with a non-empty pack for
-the requested difficulty and duration.
-
-Generation produced **137 puzzles** and **1,176 playable packs**:
-
-| Level | 60 s | 180 s | 300 s |
-|---|---:|---:|---:|
-| Easy | 137 | 134 | 131 |
-| Medium | 135 | 131 | 126 |
-| Hard | 133 | 126 | 123 |
-
-## 4. Puzzle bank and word quality
-
-### 4.1 Curation pipeline
-
-`scripts/build-word-puzzles.mjs` is a one-time/offline generator. It is not imported by the
-app and never runs in the browser.
-
-1. Read the hand-curated seven-letter bases in `scripts/word-puzzle-bases.json`.
-2. Keep a base only if it is in the English dictionary and matches `^[a-z]{7}$`.
-3. Enumerate every dictionary word of 2–7 letters that can be built from those letters with
-   each letter used at most once.
-4. Frequency-gate the candidates using SUBTLEX ranks. Two-letter words are restricted to a
-   short allowlist (`am`, `an`, `as`, `at`, `be`, `by`, `do`, `go`, `he`, `if`, `in`, `is`,
-   `it`, `me`, `my`, `no`, `of`, `on`, `or`, `so`, `to`, `up`, `us`, `we`).
-5. Remove blocked words: profanity, slurs, sexual/medical terms, violence, death and a
-   broad list of names. Word quality is treated as a safety and tone problem, not only a
-   difficulty problem.
-6. Sort each length by commonness, then alphabetically for stable reruns.
-7. Fill the nine packs per base from the quotas in §3, always starting with the base word.
-8. Emit `supabase/seed/word_puzzles.sql` and `supabase/seed/word_puzzles.json`.
-
-A base that cannot fill any pack is skipped and logged. Regenerating is deterministic apart
-from deliberate base-list edits, so the seed can be reviewed as a diff.
-
-### 4.2 Stored shape
-
-Each `word_puzzles` row stores:
-
-- `letters` — the seven letters, sorted for a stable display (e.g. `ceiprtu`).
-- `base_word` — the seven-letter grand prize (e.g. `picture`). Unique, so uploads upsert.
-- `words` — the union of every word used by any pack. Kept as a simple vocabulary record
-  and a search aid; a round only ever deals a pack.
-- `packs` — `{"easy":{"60":[…],"180":[…],"300":[…]}, "medium":{…}, "hard":{…}}`.
-
-A round copies the selected pack into `word_rounds.words` and the base word into
-`word_rounds.grand_word`. From that point the round is immutable, so both phones and the
-referee read the same list even if the puzzle bank is later regenerated.
-
-### 4.3 Review rule
-
-Read a new batch before uploading it. Word quality is the top product risk: a plausible
-word that the game rejects feels arbitrary, while an obscure or rude word damages the tone.
-The blocklist and frequency gates are a starting point, not a substitute for a human scan.
-
-## 5. Data model and server rules
-
-The migration is `supabase/migrations/202610190001_word_wheel.sql`; the consolidated
-`schema.sql` contains the same definitions.
-
-### 5.1 Tables
-
-- `word_puzzles` — the pregenerated bank described above. RLS enabled, no direct table
-  access for `anon` or `authenticated`.
-- `word_rounds` — one couple's round: `couple_id`, `puzzle_id`, `difficulty`,
-  `duration_seconds`, `letters`, `grand_word`, `words`, `status`
-  (`waiting` / `running` / `finished` / `cancelled`), `start_at`, `finished_at`,
-  `winner_id`, and both player ids. A partial unique index (`word_one_open_round`) allows at
-  most one waiting/running round per couple.
-- `word_round_results` — one row per player per round: `words_found`, `finished_ms`,
-  `ready_at`, `submitted_at`. Created for both partners when the round starts, so readiness
-  and missing submissions are represented without nullable match fields.
-
-Both round tables are RLS-protected and private. The app sees only sanitized JSON from the
-`SECURITY DEFINER` functions.
-
-### 5.2 Public RPCs
-
-| RPC | Behaviour |
-|---|---|
-| `start_word_round(difficulty, seconds)` | Locks the couple, validates Easy/Medium/Hard and 60/180/300, resumes the existing open round if there is one, otherwise chooses a random puzzle with a non-empty pack for that combination, preferring puzzles this couple has not seen in the last 60 days. Copies the pack and creates both result rows. |
-| `word_ready(round_id)` | Stamps the caller's `ready_at`. When both rows are ready, atomically sets `status = 'running'` and `start_at = now() + 8 seconds`. Idempotent and safe to retry. |
-| `word_submit(round_id, words[], finished_ms)` | Only after `start_at`. Filters to distinct lowercase words from the round's hidden list, clamps `finished_ms` into `0..duration*1000`, stores the result once, and calls `word_settle`. A retry after the first submission returns the existing view unchanged. |
-| `word_cancel(round_id)` | Cancels a lobby that has not started. A live round cannot be cancelled. |
-
-### 5.3 Internal functions
-
-- `word_layout(words[])` — groups hidden words by length for the wire snapshot.
-- `word_view(round, uid)` — the caller's sanitized projection: letters, difficulty,
-  duration, grand word, hidden words, layout, totals, status, start time, server now, own
-  result, and a partner result that stays sealed until `finished`.
-- `word_settle(round_id)` — under the round row lock, waits until both result rows have
-  `submitted_at`; compares count, then `finished_ms`; writes `finished`, `winner_id` and
-  `finished_at`.
-- `word_sweep(couple_id)` — called on every `games_state()` read. Cancels stale lobbies and
-  settles live rounds 45 seconds past their deadline, treating a missing phone as zero
-  words. This is why neither phone needs to run a server-side timer.
-
-`games_state()` was extended to call `word_sweep` and to append a pseudo-match with
-`game = 'word-wheel'` and a `word` view. That single change makes Word Wheel appear in the
-Ongoing games card, the Games badge (`needsMyMove`), Last duel, rematches and the existing
-2-second polling cadence without a second realtime channel.
-
-### 5.4 Scoring rules in SQL
+## 2. The round, step by step
 
 ```
-if count_x > count_o            -> player_x
-else if count_o > count_x       -> player_o
-else if finished_ms_x < finished_ms_o -> player_x
-else if finished_ms_o < finished_ms_x -> player_o
-else                            -> draw (winner_id null)
+A opens Games → picks difficulty + clock → taps "Set the wheel"
+        │
+        ├─ creates word_rounds(status=waiting) and two word_round_results rows
+        │
+B opens Ongoing games → sees the wheel → both tap "I'm ready"
+        │
+        ├─ the SECOND ready sets status=running and start_at = now() + 8s
+        │
+both countdown from the same server timestamp
+        │
+each phone independently: swipe words, hints, shuffle, local clock
+        │
+each phone submits once: found words + elapsed ms of its last find
+        │
+        ├─ first submission: sealed; the partner only sees "submitted"
+        ├─ both submissions: word_settle compares and writes winner_id
+        │
+result screen → "Play again" starts a new round with the same settings
 ```
 
-The `finished_ms` value is the elapsed time of the player's last found word, explicitly
-submitted by the phone and clamped by the server. A player who never finds a word has 0 and
-loses any count comparison. A player who clears every word submits immediately, so their
-last-found time is their full-clear time. If both players clear, the faster full clear wins.
+The second player does not need to open the game at exactly the same second. The lobby waits up
+to **30 minutes** for both ready taps; after that the sweep cancels it. Once `start_at` exists,
+the round is live whether or not a phone is looking at it. Opening late means the clock is
+already running, which the UI states explicitly.
 
-## 6. Client architecture
+### 2.1 Lobby and ready handshake
 
-- `src/lib/wordWheel.ts` — pure rules shared by UI and tests: level/duration constants,
-  normalisation, buildability, blank grouping, hint choice, shuffle, comparison and clock
-  formatting.
-- `src/components/games/WordWheel.tsx` — the view and the pointer state machine.
-- `src/lib/gamesService.ts` — wire types, `wordRoundFromWire` sanitisation and the four RPC
-  wrappers.
-- `src/hooks/useGames.ts` — starts/readies/submits/cancels, polling, the 2-second snapshot
-  and `needsMyMove`.
-- `src/components/games/GamesView.tsx` — the library card (level and duration pickers) and
-  the in-tab round panel.
-- `src/components/games/games.css` — wheel, blanks, lobby, countdown, result and shake
-  styling.
+- The creator chooses **difficulty** and **duration**; those settings are frozen on the round.
+- If the couple already has a `waiting` or `running` round, `start_word_round` returns that round
+  instead of replacing the puzzle underneath the other phone. This is deliberate: no one gets
+  ambushed by a different wheel after readying up.
+- Either partner can tap ready. The second ready is the one that writes `start_at`.
+- The shared lead is **8 seconds** (`WORD_START_LEAD_MS`). It is long enough for a poll cycle to
+  deliver the timestamp and short enough to feel immediate.
+- A lobby can be cancelled before it starts. A live round cannot.
+- The old lobby becomes `cancelled`; a finished round stays as history.
 
-### 6.1 Screens
+### 2.2 The clock
 
-1. **Lobby** — wheel preview, chosen level and duration, total hidden words, both readiness
-   states, the rules list, **I'm ready**, and exit. While waiting, the countdown shows when
-   the shared start is set.
-2. **Countdown** — a large number derived from the same `start_at`; the board unlocks at
-   zero. A late joiner sees the clock already running rather than a fresh start.
-3. **Board** — time left, words found / total, a "Saved" or "Round live" pill, partner
-   status, a progress bar, blank rows (grand prize first, then 2–6 by length), current
-   swipe, the SVG wheel, feedback, shuffle, hint count, type-a-word and exit.
-4. **Saved** — shown when this phone submitted but the partner has not; states the count,
-   last-word time and that the result will settle on the next refresh.
-5. **Result** — winner or draw, both counts and last-word times, both word lists, **Play
-   again →** with the same settings, and exit.
+- Each phone computes `serverNow = localNow + (server_now - localNowAtFetch)`.
+- `remaining = start_at + duration - serverNow`.
+- The display refreshes four times a second (`useNow(250)`) but the authoritative start and end
+  are the server's.
+- When the clock reaches zero the phone submits whatever it has. Leaving the board does not pause
+  the clock, and the unmount path still saves a result if the clock had already expired.
+- If a phone goes silent past its deadline, `word_sweep` waits a **45-second network grace
+  window**, then fills a zero-word result for the missing player and settles the round. No round
+  can hang forever.
+- The last found word's elapsed time, not the clock's end, is the tie-break. A player who stops
+  finding words early keeps that earlier timestamp. If they find nothing, the submission time is
+  the duration/adjudicated time.
 
-### 6.2 Pointer state machine
+### 2.3 Under a minute
 
-- `pointerdown` captures the pointer, finds the nearest tile within the hit radius and
-  starts a path.
-- `pointermove` adds the nearest new tile. Re-entering the previous tile truncates the path
-  by one; re-entering an earlier tile is a no-op. Each index can appear at most once.
-- `pointerup`/`pointercancel` ends the gesture. A path shorter than two tiles is discarded;
-  otherwise the word is evaluated.
-- The wheel sets `touch-action: none` and prevents default on pointer events so the page does
-  not scroll under a swipe.
-- Tile `<button>` elements are presentational (`tabIndex=-1`, `aria-hidden`) and the wheel
-  has an accessible label; the type-a-word field is the keyboard path.
+The default is a **1-minute** round. The picker offers exactly **1, 3 and 5 minutes**, as
+requested. There is no untimed mode.
 
-### 6.3 Local feedback vs server truth
+---
 
-The client keeps found words locally for immediate blank filling. Each successful word is
-appended once and the last-found elapsed time is recorded. On the first submission the
-phone sends the whole found list plus that time; the database owns the authoritative filtered
-count. A background refresh merges any server-side words into local state without wiping a
-word the swipe just found.
+## 3. The wheel and hidden words
 
-The clock uses `server_now` from the snapshot to estimate the phone-to-server offset, then a
-250 ms local tick. This is a clock display, not a scoring authority: the server clamps
-`finished_ms` and rejects submissions before `start_at`.
+### 3.1 Wheel
 
-Unmounting after the clock expires still submits what was found. Without that path the
-grace sweep would eventually score the phone as zero.
+- **Seven letter tiles.** A 6-letter wheel cannot contain a genuine 7-letter grand prize, and the
+  grand prize is a standing requirement, so the wheel uses all seven. Tiles may repeat when the
+  base word repeats a letter (e.g. `cookies`).
+- The wheel is a **circle, not a grid**: any tile can connect to any other tile.
+- Tiles have a stable shuffled order per phone. `⇄ Shuffle` animates the same seven letters into
+  a new order. It never changes the letters, the hidden list, the clock or the score.
+- Letters are laid out from the top clockwise at a 36%-radius ring.
 
-## 7. Edge cases and acceptance behaviour
+### 3.2 Hidden words
 
-| Situation | Expected behaviour |
-|---|---|
-| Partner never opens the lobby | The round stays waiting; after 30 minutes `word_sweep` cancels it and the next start creates a fresh one. |
-| One phone readies and quits | The round waits. Readiness is per-user and idempotent. |
-| Both ready, one phone offline during the countdown | The other plays on the absolute clock. A late mount shows the correct remaining time. |
-| Player finds all words early | The phone submits immediately; the round ends for that player at that moment and the partner can keep playing until their own deadline. |
-| Player finds no words | Submits an empty list at zero; count 0 and time 0, and loses to any positive count. |
-| Both find the same number but one last word earlier | The earlier last-word time wins, even if the other person kept swiping longer. |
-| Exact tie on count and time | Draw; `winner_id` is null and the UI says "A draw!" |
-| Phone never submits | After the deadline plus 45 seconds the sweep stores zero words and full duration for it, then settles. |
-| Duplicate submission / retry | The second call returns the existing view; the stored score cannot change. |
-| Submitted word not in the hidden list | The database filters it out; the UI also shakes on it locally so the player gets instant feedback. |
-| Swipe starts on a tile but never moves | Path length 1 is discarded; no penalty. |
-| Swipe traces the same tile twice | The second entry is ignored, so the letter is used once. |
-| Shuffle during a swipe or mid-round | Only the tile order changes; the path and found words reset safely. |
-| Hint with every word found | Shows "Every word is already found!" and does not consume the hint. |
-| Reload during a live round | The same round, words, deadline and local-ready state resume from the server snapshot. Found words that were never submitted are lost; the clock keeps running. |
-| Partner's score during play | Sealed. The phone only knows whether they have submitted. |
-| Finished round is replayed | Rematch keeps difficulty and duration but draws a new puzzle; history stays intact. |
+- Everything is **2–7 letters**, lowercase a–z, buildable from the wheel using each tile **at
+  most once**.
+- There is exactly **one 7-letter word**, the **grand prize**, and it is always in the round.
+  It gets its own gold-tinted blank row above the rest.
+- The rest are ordered into rows by length, shortest first.
+- Packs are deliberately composed from a length mix, not just the longest words. Easy leans
+  3–5 letters; Medium adds sixes; Hard adds the most five- and six-letter words. A 2-letter word
+  appears at every difficulty when the base can make a common one.
+- Words that cannot be built from the wheel are never shown or accepted. The generator only
+  emits buildable words.
 
-## 8. Verification and release checklist
+### 3.3 Extra words
 
-Automated coverage:
+Only the round's frozen `words` list counts. A valid English word that is not on the list, a
+duplicate, or a word built from unavailable letters gets the same gentle refusal: the path
+clears, the wheel shakes, and the line says "Not one of the hidden words." This keeps scoring
+honest without pretending the player typed nonsense.
 
-- `tests/word-wheel-logic.test.mjs` — buildability, normalisation, grouping, hints, shuffle,
-  comparison, clock formatting.
-- `tests/word-wheel-database.test.mjs` — schema, RLS, pack selection, readiness handshake,
-  submission filtering, tie-break, sweep and permissions, against PGlite.
-- `tests/word-wheel-ui.test.mjs` — lobby, countdown, board, swipe path, typed words,
-  correct/wrong feedback, shuffle, hints and result states in JSDOM.
-- `supabase/verify-games.sql` — tables exist and stay private, the one-open-round index
-  exists, `games_state` includes `word_view`/`word_sweep`, the four public RPCs are
-  `authenticated`-only and the internals are not executable by clients.
-- The full suite (`npm test`, typecheck, `oxlint`) is green; the live project has passed
-  `verify-games.sql`.
+---
 
-Manual two-device acceptance before calling the release done:
+## 4. Difficulty and duration
 
-- [ ] Both phones start from the same countdown and show the same letters and blanks.
-- [ ] A swipe fills a correct blank; a wrong word shakes and does not consume a blank.
-- [ ] Swipe back over the last letter removes it; a letter cannot be used twice.
-- [ ] Shuffle reorders only the wheel.
-- [ ] Two hints each reveal a letter and decrement independently on each phone.
-- [ ] A full clear submits immediately and the partner's round continues.
-- [ ] Both submissions produce the correct winner; a count tie is decided by last-word time.
-- [ ] A phone that never submits is scored zero after the grace window.
-- [ ] Reloading mid-round resumes the same deadline; leaving does not pause it.
-- [ ] A stale lobby disappears after 30 minutes and does not block a new round.
-- [ ] Reduced-motion users do not get an essential-information-only animation.
+Difficulty controls **how many words** and **how long they are**. Duration controls **how many
+words** are dealt. The 2–7 mix and the grand prize are present at every combination.
 
-## 9. Deliberately out of scope for v1
+| Difficulty | 1 minute | 3 minutes | 5 minutes | Length character |
+| --- | ---: | ---: | ---: | --- |
+| Easy | 7 | 10 | 13 | Mostly 3–4 letters, a 5, one 2 when available; no 6-letter words in the 1- and 3-minute packs (one 5-minute fallback pack can include one) |
+| Medium | 9 | 13 | 17 | 3–6 letters, one or two 6-letter words, more 5s |
+| Hard | 12 | 16 | 20 | The longest list; the most 5- and 6-letter words |
 
-- Live word-by-word score streaming / Supabase Realtime. The existing 2-second Games poll is
-  sufficient; the partner's score stays sealed until settlement.
-- A server-side hint ledger. Hints are local, limited and low-stakes.
-- Timers shorter than 1 minute or longer than 5, or levels beyond Easy/Medium/Hard.
-- Images, definitions, pronunciations or translations for found words.
-- Bot opponents, global leaderboards, streaks or currency.
-- A browser-side dictionary or runtime puzzle generation. The database only accepts words
-  from the pack dealt at round start.
-- Anti-cheat beyond result trust and server-side filtering. Cheating is low risk for a
-  private couples app; the server still refuses words that were not in the hidden list.
+The generator aims for these counts and accepts a pack only if it can fill each difficulty and
+duration while preserving the grand prize. Empty or too-short packs are **omitted** rather than
+dealt short. The live bank currently has:
 
-## 10. Future extensions that fit the current model
+- 137 puzzles, one per curated base word;
+- 1,176 non-empty packs out of 1,233 difficulty/duration slots;
+- per-level pack availability: Easy 137/134/131, Medium 135/131/126, Hard 133/126/123 for
+  60/180/300 seconds. Every emitted pack fills its quota exactly; the shortfall is in *how many
+  bases* can support that longer, harder pack, not in the number of words a round is dealt.
 
-- Realtime word counts once the couple is already both online (add a broadcast channel, keep
-  `games_state` as the reconnect source of truth).
-- A post-round "you almost found" strip using the unused words from the puzzle's union.
-- Weekly couple stats: favourite lengths, fastest full clear, most grand prizes.
-- More curated base packs and themed wheels, regenerated through the same offline script.
-- Optional haptics on each correct word and on the final blank.
+`start_word_round` filters on `packs -> difficulty ? seconds` and a non-empty array, so a missing
+pack can never produce an empty round.
+
+---
+
+## 5. Puzzle generation and curation
+
+Puzzles are **pre-generated and stored**, never produced at runtime. `npm run build:word-puzzles`
+does the following, offline and deterministically enough to review:
+
+1. Read the hand-curated 7-letter base words in `scripts/word-puzzle-bases.json`. Bases are
+   common, concrete, couple-friendly nouns/adjectives with a good spread of sub-words.
+2. Enumerate every 2–7-letter word in the source word list that can be built from the seven
+   letters, using each letter at most once.
+3. Filter by frequency and familiarity. The pipeline uses a SUBTLEX-style frequency list plus a
+   small allowlist for very common 2-letter words that frequency data under-ranks (`at`, `in`,
+   `on`, `to`, `it`, `is`, `be`, `we`, `he`, `me`, `my`, `so`, `up`, `us`, `go`, `no`, `am`,
+   `an`, `as`, `by`, `do`, `if`, `or`, `of`).
+4. Remove a profanity/medical/name blocklist. Curation is conservative: obscure Scrabble words,
+   slurs, body parts and proper nouns do not reach the bank. The remaining list is reviewed by
+   hand before upload.
+5. Compose the nine packs per base (difficulty × duration) by length quota, always including the
+   base word as the sole 7-letter grand prize, then the requested count of shorter words.
+6. Emit `supabase/seed/word_puzzles.json` and `supabase/seed/word_puzzles.sql`. The SQL upserts
+   on `base_word`, so re-running is idempotent and refreshes packs in place.
+
+The generator is a development tool, not a server dependency. The app never ships the source
+word list and never generates a puzzle on a phone.
+
+### 5.1 Adding puzzles
+
+1. Add a 7-letter base to `scripts/word-puzzle-bases.json`.
+2. Run `npm run build:word-puzzles`.
+3. Skim the emitted words for anything rude, obscure or not really English. Edit the blocklist or
+   the base list rather than shipping a bad word.
+4. Apply `supabase/seed/word_puzzles.sql` in the SQL editor, or set `SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY` and run `npm run upload:word-puzzles`.
+5. Re-run `supabase/verify-games.sql`.
+
+The bank is small on purpose. A couple sees a repeat only after many rounds, and
+`start_word_round` deprioritises puzzles used by this couple in the last 60 days. 137 puzzles is
+enough for months of occasional play and keeps every word reviewable.
+
+---
+
+## 6. Data model
+
+### 6.1 `word_puzzles`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `letters` | text | Exactly 7 a–z, sorted for stable display |
+| `base_word` | text | The 7-letter grand prize; unique |
+| `words` | text[] | Union of every word used by the packs |
+| `packs` | jsonb | `{ "<level>": { "<seconds>": string[] } }` |
+| `created_at` | timestamptz | |
+
+Example pack shape:
+
+```json
+{
+  "easy":   { "60": ["picture", "cut", "it", "tie", "true", "cute", "up"], "...": [] },
+  "medium": { "60": ["picture", "cutie", "price", "true", "cute", "tie", "cut", "it", "up"], "...": [] },
+  "hard":   { "60": ["picture", "cutie", "price", "truce", "cure", "cute", "pure", "trip", "true", "cut", "ice", "it"], "...": [] }
+}
+```
+
+### 6.2 `word_rounds`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `couple_id` | uuid | cascade on couple delete |
+| `puzzle_id` | uuid | restrict; puzzle bank is not deleted casually |
+| `difficulty` | text | `easy` / `medium` / `hard` |
+| `duration_seconds` | int | 60 / 180 / 300 |
+| `letters` | text | copied from the puzzle |
+| `grand_word` | text | copied from the puzzle |
+| `words` | text[] | the exact hidden list, 2–24 words, frozen at creation |
+| `created_by` | uuid | |
+| `player_x` / `player_o` | uuid | the couple, distinct |
+| `status` | text | `waiting` / `running` / `finished` / `cancelled` |
+| `start_at` | timestamptz | set only on the second ready |
+| `finished_at`, `winner_id` | | set by settle |
+
+Constraints:
+
+- `word_rounds_players_distinct`;
+- `word_rounds_started_has_time` (a running round must have `start_at`);
+- partial unique index `word_one_open_round` on `couple_id` where status is `waiting` or
+  `running`. Finished rounds never block a rematch.
+
+### 6.3 `word_round_results`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `round_id` | uuid | PK part |
+| `user_id` | uuid | PK part |
+| `words_found` | text[] | validated, deduplicated |
+| `finished_ms` | int | elapsed at the last found word, clamped to the duration |
+| `ready_at` | timestamptz | lobby handshake |
+| `submitted_at` | timestamptz | writes are one-way; a retry never improves the score |
+| `PRIMARY KEY` | `(round_id, user_id)` | exactly one row per player per round |
+
+Rows are created for both players up front, so "ready" and "submitted" are booleans without
+inventing sentinel values.
+
+### 6.4 Access and privacy
+
+- RLS is enabled on all three tables and privileges are revoked from `anon` and
+  `authenticated`. The app only ever goes through security-definer functions.
+- `word_view` is the single shape a phone sees. It includes the hidden words deliberately: the
+  phone needs instant local feedback, and this is a couples game. The database still validates
+  every submitted word, so knowing the list cannot fabricate a score beyond the list.
+- The partner's result is **sealed** until the round is finished: before that the other phone
+  only learns `ready` and `submitted`.
+- The result screen reveals both word lists after settlement.
+
+---
+
+## 7. RPCs
+
+| Function | Returns | Purpose |
+| --- | --- | --- |
+| `start_word_round(p_difficulty text, p_seconds int)` | `uuid` | Reuse the couple's open round, or pick a puzzle with a non-empty pack and create one. Locks the couple row. |
+| `word_ready(p_id uuid)` | `jsonb` (round view) | Mark this player ready; the second ready writes `status=running` and `start_at=now()+8s`. |
+| `word_submit(p_id uuid, p_words text[], p_finished_ms int)` | `jsonb` | Validate words against the round's list, store once, and settle if both are in. |
+| `word_cancel(p_id uuid)` | `jsonb` | Cancel a waiting lobby only. |
+| `word_view(round, uid)` | `jsonb` | Shared serializer, including `server_now`, sealed partner result and layout. |
+| `word_settle(p_id uuid)` | `word_rounds` | Compare the two attempts and write the winner. |
+| `word_sweep(couple uuid)` | `void` | Cancel stale lobbies, settle expired live rounds with zero-filled missing results. |
+| `word_layout(words text[])` | `jsonb` | Length/count summary used by the round view. |
+| `games_state()` | `jsonb` | Rewritten to include Word Wheel rounds in the same list as the other duels, so Ongoing games, the Games badge, Last duel and wins work without a second polling loop. |
+
+`word_settle` compares, in order:
+
+1. higher `cardinality(words_found)`;
+2. lower `finished_ms` (a null/missing attempt is treated as the duration);
+3. otherwise `winner_id = null` (a draw).
+
+### 7.1 Validation rules on submit
+
+`word_submit` keeps a word only when all of these hold:
+
+- it is in `word_rounds.words`;
+- it lowercases to 2–7 a–z letters;
+- it is distinct.
+
+Everything else is dropped silently; the phone has already shown the local refusal. `p_words`
+may be null or empty. `p_finished_ms` is clamped to `[0, duration]`. A submission before
+`start_at` is rejected. A second submission after `submitted_at` is stored is a no-op that
+returns the existing view.
+
+### 7.2 Trust model
+
+The database trusts the phone's list of words and its reported elapsed time, because cheating a
+romantic partner in a private two-person game has no payoff worth the engineering. What the
+server does not trust is the *universe* of words: it never accepts a word outside the round's
+frozen list. Scores are counted server-side, not sent as a number by the client.
+
+---
+
+## 8. Client architecture
+
+### 8.1 `src/lib/wordWheel.ts`
+
+Pure, React-free and network-free:
+
+- `WORD_LEVELS`, `WORD_DURATIONS`, `WORD_HINTS = 2`, `WORD_START_LEAD_MS = 8000`;
+- `normalizeWord`, `canBuildWord`;
+- `wordGroups(words, grandWord)` — grand prize first, then rows by length;
+- `nextHintIndex`, `chooseHint`;
+- `compareWordAttempts` → `'mine' | 'partner' | 'draw'`;
+- `formatWordClock`, `formatWordTime`;
+- `shuffleLetters`.
+
+### 8.2 Pointer input state machine
+
+The wheel container owns pointer capture. On `pointerdown` it finds the nearest tile within a
+**hit radius of 8.5% of the wheel width**, while tiles themselves are 19.5% wide. The tap target
+is therefore smaller than the visible circle: a finger between letters is ignored rather than
+snapping to a neighbour. `pointermove` adds the nearest new tile; `pointerup` evaluates the path;
+`pointercancel` clears it.
+
+Rules implemented in `pick`:
+
+- no tile can be used twice in one attempt;
+- moving back onto the previous tile removes the last letter (the one-tap undo);
+- moving back two positions truncates to that position;
+- moving onto any other already-used tile is ignored;
+- a path shorter than 2 letters is discarded without feedback;
+- `touch-action: none` and `user-select: none` prevent scrolling and text selection while
+  tracing;
+- the SVG polyline is drawn from tile centres with round caps, and small dots mark each chosen
+  centre;
+- the same component accepts typed words via `#word-type-input` and a "Check" button for
+  desktop/keyboard play;
+- `Shuffle` only permutes `order`; the hidden list is untouched.
+
+### 8.3 Component states
+
+`WordWheel.tsx` renders one of:
+
+1. **Lobby** (`waiting`) — wheel preview, both ready flags, rules, cancel/exit.
+2. **Countdown** (`running`, `start_at` in the future) — big number, wheel preview.
+3. **Board** (`running`, clock live) — HUD, blanks, tracing wheel, hints, shuffle, typing.
+4. **Saved** (`running`, this phone submitted, partner not) — result summary + waiting copy.
+5. **Result** (`finished`) — winner, both scores and last-word times, both word lists, rematch.
+6. **Missing puzzle** — defensive error if a round view lost its payload.
+
+The board merges locally found words with server words when a refresh arrives. It does not reset
+on every poll: only a new `match.id` clears the board, so a background refresh cannot erase a
+word found mid-swipe. Hints reveal letters only in the local blank rows; they are not persisted
+and do not alter the submitted score.
+
+### 8.4 Games-tab integration
+
+- `GAMES` gains the `word-wheel` card: difficulty picker, duration picker, and a button that
+  calls `startWordRound(level, seconds)`.
+- Word rounds ride in `games_state()['matches']` as `game: 'word-wheel'` with a `word` payload,
+  so the existing Ongoing games swipe card, badge and Last duel row keep working.
+- `needsMyMove` shows the badge when the player still has to ready up, or is in a live round
+  they have not submitted.
+- `lastDuelLine` shows word counts instead of hearts/distance.
+- `useGames` exposes `startWordRound`, `readyWord`, `submitWord` (does not take the shared busy
+  lock, like a duel heartbeat) and `cancelWord`.
+- `submitWord` refreshes the snapshot after writing, so the partner's submission can settle the
+  round on the next poll.
+
+### 8.5 Motion and mobile layout
+
+- Tiles animate position over 220 ms on shuffle; the line updates immediately.
+- A wrong word shakes the wheel for 420 ms; `prefers-reduced-motion` disables the shake and the
+  tile transitions.
+- The wheel is capped at 330 px, the blanks region at 30 vh on short phones, and the board is
+  usable one-handed with no hover reliance.
+- All interactive controls are real `<button>`s; the wheel has `role="application"` and an
+  accessible label explaining both swipe and typing. Tiles themselves are hidden from the
+  accessibility tree because they are not individually tabbable; the typed input is the
+  keyboard path.
+
+---
+
+## 9. Edge cases and expected behaviour
+
+| Situation | Expected |
+| --- | --- |
+| Both players tap ready at nearly the same time | Row lock serialises them; exactly one `start_at` is written; both read the same timestamp. |
+| Partner never readies | Lobby stays for 30 minutes, then the sweep cancels it. |
+| Player opens the app after `start_at` | Board opens with the clock already partly gone; the countdown screen is skipped. |
+| Player leaves mid-round | Clock keeps running. On return the same round is resumed. If the clock expired, unmount saves the local result. |
+| Player submits but partner never does | After `start_at + duration + 45s`, sweep stores a zero-word result and settles. |
+| Same word found twice | Second attempt says "Already found." and does not change the score. |
+| Word is valid English but not on the list | "Not one of the hidden words." No blank fills, no score. |
+| Word repeats a tile | Local path prevents it; a typed repeat is refused because it cannot be in the buildable list. |
+| Wrong word | Path clears, wheel shakes, message appears for 2.2 s. |
+| All words found | Phone submits immediately with the current elapsed time; the round ends for that player without waiting for the clock. |
+| Both clear every word | Earlier last-word time wins; equal counts and equal times are a draw. |
+| Same word count, different last-word times | Earlier last-word time wins, even if the slower player's clock ended earlier. |
+| Different word counts | Count wins; the tie-break is never consulted. |
+| Round is cancelled while both phones are open | Next refresh removes it from Ongoing; `word_ready`/`word_submit` return a clear error. |
+| Puzzle bank is empty | `start_word_round` raises a readable "No Word Wheel puzzles are installed" error; the Games tab shows the setup hint. |
+| A pack is missing for a combination | That puzzle is skipped at selection time; the round is never dealt short. |
+| Phone clock is wrong | The server `start_at` and `server_now` offset correct it; only the elapsed render could jitter. |
+| Rotation / resize | Tiles are positioned by percentage; hit testing reads the live bounding box on every pointer event. |
+| Reduced motion | No shake, no tile transition, no progress transition. |
+
+---
+
+## 10. Verification and release checklist
+
+Automated (all passing at the time of writing):
+
+- `npx tsc -p tsconfig.app.json --noEmit` — clean.
+- `npx oxlint` — 0 warnings, 0 errors on the Word Wheel files.
+- `npm test` — 91/91. Three Word Wheel suites:
+  - **logic**: buildability, normalization, grouping, hint selection, shuffle, clock/time
+    formatting, tie-break;
+  - **database** (PGlite): one shared wheel, both-ready start, filtered submissions, sealed
+    partner, tie-break, full-clear, idempotent retry, sweep, one-open-round rule;
+  - **UI** (JSDOM): library settings, lobby handshake, seven tiles, blanks, clock, correct/wrong
+    words, hint spend, shuffle, result reveal, rematch, draw.
+- `supabase/verify-games.sql` — PASS on the live project after the migration and seed.
+- `npm run build` — compiles with production env vars (the sandbox has no live `.env.local`, so
+  the build was checked with placeholder public keys).
+
+Manual two-device acceptance (the only unticked item):
+
+- [ ] Both phones in the same couple; A starts Easy / 1 minute.
+- [ ] B sees the round in Ongoing games and readies; A readies second.
+- [ ] Both countdowns land on zero together and show `1:00`.
+- [ ] Both wheels show the same seven letters in the same order before any shuffle.
+- [ ] Both blank rows show the same hidden words in the same order.
+- [ ] A finds a word by swiping; the correct blank fills; B's board does not change.
+- [ ] A traces a wrong word; the wheel shakes and no blank fills.
+- [ ] A traces a letter twice; the second visit is ignored.
+- [ ] A traces three letters then swipes back one; only two remain on the line.
+- [ ] A taps Shuffle; the wheel reorders and the hidden words are unchanged.
+- [ ] A spends a hint; a letter appears in one blank and the counter drops from 2 to 1.
+- [ ] A finds every word; A's board immediately says the round is saved, without waiting for 1:00.
+- [ ] B lets the clock expire; B's found words submit automatically.
+- [ ] The result appears on both phones with the same winner and both word lists.
+- [ ] A taps Play again; a fresh wheel appears in the lobby with the same settings.
+- [ ] Put one phone in airplane mode during the lobby: the other phone cannot start alone; when
+      the connection returns, both can ready and the clock still starts together.
+- [ ] Force-close one phone mid-round and reopen after the deadline: the round settles and the
+      absent player counts as zero (after the 45-second grace window).
+
+---
+
+## 11. Deployment
+
+Order matters:
+
+1. Apply `supabase/migrations/202610190001_word_wheel.sql` (or the consolidated `schema.sql` on
+   a fresh project).
+2. Run `supabase/seed/word_puzzles.sql` once. It upserts on `base_word`.
+3. Run `supabase/verify.sql` and `supabase/verify-games.sql`; both should print PASS.
+4. Deploy the app with the existing `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. No new
+   environment variables are required.
+5. Complete the two-device checklist above.
+
+Rollback: the feature is additive. Removing the Games-tab code leaves the three tables and RPCs
+harmless; dropping them requires dropping the `word_*` functions first, then the tables. Do not
+drop the puzzle bank without backing up `word_puzzles` — regenerating without the original source
+word list will not reproduce the exact packs.
+
+---
+
+## 12. Deliberate v1 exclusions and future extensions
+
+**Excluded now**
+
+- Live partner progress or a word-by-word race feed (the user asked for no live connection; only
+  the final result is shared).
+- Spectating, emoji reactions during a round, or chat integration.
+- A free-play/warm-up mode (unlike Snake and Tetris).
+- Server-side hint budgets. Hints are local and limited to 2; a determined player could reload.
+- A 6-letter wheel. It cannot coexist with a true 7-letter grand prize.
+- Runtime puzzle generation, puzzle authoring, or per-couple custom words.
+- Global rankings, streaks, or rewards. Wins are counted in the existing couple wins map.
+
+**Natural next steps**
+
+1. Realtime progress (`word_round_results` row updates) once both phones are reliably subscribed.
+2. A rematch on the *same* puzzle, with a fresh hidden subset, for a fair grudge match.
+3. More puzzle bases, especially couple/relationship vocabulary, with the same curation gate.
+4. Difficulty discovered from the player's history rather than chosen.
+5. A daily shared Word Wheel with one puzzle for every couple.

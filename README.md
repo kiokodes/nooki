@@ -1326,6 +1326,10 @@ wins after the grace window), and a tie on both word count and last-word time.
 
 ### Word Wheel puzzles
 
+The full product and implementation spec — rules, round lifecycle, difficulty matrix,
+generation pipeline, RPC contract, edge cases and the two-device release checklist — is
+[`docs/WORD_WHEEL_PRODUCT_SPEC.md`](docs/WORD_WHEEL_PRODUCT_SPEC.md).
+
 The puzzle bank is generated ahead of time and stored; the server never invents a puzzle
 during a round. Each row in `word_puzzles` holds seven letters, the seven-letter
 `base_word` (the grand prize), the union of every word used by its packs (a searchable
