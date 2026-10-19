@@ -151,7 +151,7 @@ interface DashMatchState {
 
 ## 5. Database/API implementation contract
 
-Use a new sequential migration after Together visits: **`supabase/migrations/202610180008_dash_duel.sql`** (migration 006 is already Connect Four in this repository).
+Use the next sequential migration after the Together list enhancements: **`supabase/migrations/202610180009_dash_duel.sql`** (007 adds visits and the list; 008 adds list details/order and visit links; 006 is Connect Four).
 
 ### Schema
 
@@ -192,7 +192,7 @@ Follow existing patterns rather than introducing a separate backend abstraction:
 - Description: **Three lanes, one shared track. Grab hearts, dodge barriers, and beat your partner’s distance.**
 - Primary button: **Dash [partner] →** (or match existing library wording pattern).
 - Loading state names the game and does not show a generic spinner without context.
-- Start errors name `202610180008_dash_duel.sql` and `supabase/verify-games.sql` in the same way Snake/Tetris guide users to their setup migration. Show the live option only while partner presence is online; the async and free options stay visible.
+- Start errors name `202610180009_dash_duel.sql` and `supabase/verify-games.sql` in the same way Snake/Tetris guide users to their setup migration. Show the live option only while partner presence is online; the async and free options stay visible.
 
 ### Waiting/gate screen
 
@@ -243,7 +243,7 @@ Dash Duel is ready for a release candidate only when all are true:
 - [ ] Retry/reload/overlap, forfeit, expiry, invalid move, nonparticipant, and RLS/privilege cases are covered.
 - [ ] Pending badge, ongoing carousel, last-duel history, and rematch behavior agree with state.
 - [ ] `supabase/verify-games.sql`, full test suite, TypeScript, lint (no new warnings/errors), and production build pass.
-- [ ] README deployment sequence documents `202610180008_dash_duel.sql` after `202610180007_together_visits_and_someday_list.sql` and lists Dash verification.
+- [ ] README deployment sequence documents `202610180009_dash_duel.sql` after `202610180008_someday_details_order_and_visit_link.sql` and lists Dash verification.
 - [ ] At least one browser-level test plays a full run on mobile-sized viewport and one server test validates replay/settlement.
 
 ## 9. Suggested implementation order

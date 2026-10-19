@@ -182,7 +182,7 @@ export interface GamesSnapshot { wins: Record<string, number>; matches: GameMatc
 const SNAKE_SETUP_ERROR = 'Snake Duel needs a database update. Check 202610150010_snake_duel.sql after 202610150007_games.sql, and 202610150011_chess.sql for Chess. Run verify-games.sql; see README for repairing an existing Chess project before retrying.';
 const CHESS_SETUP_ERROR = 'Chess needs a database update. Apply 202610150011_chess.sql; if Chess is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
 const TETRIS_SETUP_ERROR = 'Tetris Duel needs a database update. Apply migration 202610150012_tetris_duel.sql after 202610150011_chess.sql; if Tetris is already installed but its start is rejected by the game check, apply 202610150014_restore_chess_tetris_game_check.sql. Run verify-games.sql before retrying.';
-const DASH_SETUP_ERROR = 'Dash Duel needs a database update. Apply supabase/migrations/202610180008_dash_duel.sql after 202610180007_together_visits_and_someday_list.sql, then run supabase/verify-games.sql before retrying.';
+const DASH_SETUP_ERROR = 'Dash Duel needs a database update. Apply supabase/migrations/202610180009_dash_duel.sql after 202610180008_someday_details_order_and_visit_link.sql, then run supabase/verify-games.sql before retrying.';
 
 async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args);

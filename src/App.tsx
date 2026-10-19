@@ -52,7 +52,7 @@ import {
   signOutUser,
   type AuthUser,
 } from './lib/authService';
-import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
+import type { Profile, Couple, DailyDecisionQuestion, SomedayItem } from './types/database';
 
 type TabKey = 'chat' | 'together' | 'home' | 'discuss' | 'games';
 
@@ -163,6 +163,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const [showCalendar, setShowCalendar] = useState(false);
   // Visit planning modal for the Together tab
   const [showVisitPlanning, setShowVisitPlanning] = useState(false);
+  // A someday idea waiting for the visit being planned: when the visit is saved,
+  // the idea joins it straight away ("Add to our next visit" with no visit yet).
+  const [somedayItemForVisit, setSomedayItemForVisit] = useState<string | null>(null);
   // A message is only "read" while the Chat tab is on screen *and* the app is awake.
   const [appVisible, setAppVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
 
@@ -555,6 +558,20 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     }
   };
 
+  const handleAddSomedayItemToVisit = async (item: SomedayItem) => {
+    if (visits.visit) {
+      await somedayList.attachToVisit(item, visits.visit.id);
+      return;
+    }
+    // No visit yet: plan one, then pin this idea to it once it is saved.
+    setSomedayItemForVisit(item.id);
+    setShowVisitPlanning(true);
+  };
+
+  const handleRemoveSomedayItemFromVisit = async (item: SomedayItem) => {
+    await somedayList.attachToVisit(item, null);
+  };
+
   // Backend failures are not missing profiles and must never silently restart onboarding.
   if (sessionError) {
     return (
@@ -721,9 +738,18 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
               setShowVisitPlanning(true);
             }}
             somedayItems={somedayList.items}
+            somedayError={somedayList.error}
             onAddSomedayItem={somedayList.addItem}
+            onUpdateSomedayItem={somedayList.updateItem}
             onToggleSomedayItem={somedayList.toggleItem}
             onDeleteSomedayItem={somedayList.deleteItem}
+            onReorderSomedayItems={somedayList.reorderItems}
+            onAddSomedayItemToVisit={handleAddSomedayItemToVisit}
+            onRemoveSomedayItemFromVisit={handleRemoveSomedayItemFromVisit}
+            onPlanSomedayItemVisit={(item) => {
+              setSomedayItemForVisit(item.id);
+              setShowVisitPlanning(true);
+            }}
           />
         ) : (
           <ChatView
@@ -961,7 +987,11 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
         {showVisitPlanning && couple && (
           <VisitPlanningModal
             isOpen={showVisitPlanning}
-            onClose={() => setShowVisitPlanning(false)}
+            onClose={() => {
+              setShowVisitPlanning(false);
+              // Cancelling the planner leaves the idea right where it was.
+              setSomedayItemForVisit(null);
+            }}
             onSave={async (startDate, endDate, location, timezone, isTentative) => {
               try {
                 if (visits.visit) {
@@ -974,8 +1004,13 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
                     is_tentative: isTentative,
                   });
                 } else {
-                  // Create new visit
-                  await visits.planVisit(startDate, endDate, location, timezone, isTentative);
+                  // Create new visit, then let the idea that asked for one join it.
+                  const created = await visits.planVisit(startDate, endDate, location, timezone, isTentative);
+                  if (somedayItemForVisit) {
+                    const item = somedayList.items.find((entry) => entry.id === somedayItemForVisit);
+                    if (item) await somedayList.attachToVisit(item, created.id);
+                    setSomedayItemForVisit(null);
+                  }
                 }
               } catch {
                 // The modal shows the save error beside the form.

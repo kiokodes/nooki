@@ -153,22 +153,22 @@ BEGIN
  -- Dash Duel: one server-dealt Lagos route, three lanes, and database-replayed runs.
  IF NOT EXISTS (
    SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='game_matches' AND column_name='dash'
- ) THEN RAISE EXCEPTION 'Apply supabase/migrations/202610180008_dash_duel.sql before deploying Dash Duel.'; END IF;
+ ) THEN RAISE EXCEPTION 'Apply supabase/migrations/202610180009_dash_duel.sql before deploying Dash Duel.'; END IF;
  IF NOT EXISTS (
    SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='game_matches' AND column_name='dash_mode'
  ) OR NOT EXISTS (
    SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='game_matches' AND column_name='dash_level'
- ) THEN RAISE EXCEPTION 'Dash Duel needs its mode and first-player course level: rerun migration 202610180008_dash_duel.sql.'; END IF;
+ ) THEN RAISE EXCEPTION 'Dash Duel needs its mode and first-player course level: rerun migration 202610180009_dash_duel.sql.'; END IF;
  IF NOT EXISTS (
    SELECT 1 FROM pg_constraint WHERE conrelid='public.game_matches'::regclass AND contype='c'
      AND pg_get_constraintdef(oid) LIKE '%dash-duel%'
- ) THEN RAISE EXCEPTION 'The game_matches game check does not allow Dash Duel: apply migration 202610180008_dash_duel.sql.'; END IF;
+ ) THEN RAISE EXCEPTION 'The game_matches game check does not allow Dash Duel: apply migration 202610180009_dash_duel.sql.'; END IF;
  IF to_regprocedure('public.dash_replay(jsonb,jsonb,integer,integer)') IS NULL THEN
-   RAISE EXCEPTION 'Missing the Dash replay that derives distance and hearts: apply migration 202610180008_dash_duel.sql.';
+   RAISE EXCEPTION 'Missing the Dash replay that derives distance and hearts: apply migration 202610180009_dash_duel.sql.';
  END IF;
  IF position('dash_view' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0
     OR position('dash_sweep' IN pg_get_functiondef('public.games_state()'::regprocedure)) = 0 THEN
-   RAISE EXCEPTION 'games_state is missing the Dash snapshot or seven-day expiry sweep: rerun migration 202610180008_dash_duel.sql.';
+   RAISE EXCEPTION 'games_state is missing the Dash snapshot or seven-day expiry sweep: rerun migration 202610180009_dash_duel.sql.';
  END IF;
  FOREACH fn IN ARRAY ARRAY['public.start_dash(text,text)','public.dash_start(uuid)','public.dash_beat(uuid,integer,jsonb)','public.dash_finish(uuid,integer,jsonb)','public.dash_forfeit(uuid)'] LOOP
    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Dash Duel RPC: %',fn; END IF;
