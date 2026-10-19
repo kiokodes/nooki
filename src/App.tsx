@@ -255,7 +255,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
   // Shared ideas can be private, voted on, and attached to a day in the next visit.
   const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
 
-  // Scheduled date nights and the photo/one-line memory timeline.
+  // Suggested-then-agreed date nights and the photo/one-line memory timeline.
   const togetherTime = useTogetherTime(couple?.id ?? null, currentUser?.id ?? null);
   const memories = useVisitMemories(couple?.id ?? null, currentUser?.id ?? null);
 
@@ -351,6 +351,35 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
     setShowDailyDecision(false);
     setActiveTab('chat');
   }, [sendChatMessage]);
+
+  // "Talk about it" on a Together time: share the exact activity and time as a normal
+  // message and land in the chat, so the couple can deliberate there before anyone
+  // agrees (or suggest a different time back on the Together tab).
+  const handleTalkAboutTogetherTime = useCallback(async (session: TogetherTimeSession) => {
+    const date = new Date(session.scheduled_at);
+    let when: string;
+    try {
+      when = new Intl.DateTimeFormat(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        timeZone: session.timezone || undefined,
+      }).format(date);
+    } catch {
+      when = date.toLocaleString();
+    }
+    const suggester = session.proposed_by ?? session.created_by;
+    const content = session.status === 'scheduled'
+      ? [
+        `About our Together time: ${session.activity_name}`,
+        `We’re locked in for ${when} (${session.timezone}).`,
+      ].join('\n')
+      : [
+        `Together time idea: ${session.activity_name}`,
+        `${suggester === currentUser?.id ? 'I suggested' : 'You suggested'} ${when} (${session.timezone}).`,
+        'Does that work for you, or shall we find another time?',
+      ].join('\n');
+    await sendChatMessage(content);
+    setActiveTab('chat');
+  }, [sendChatMessage, currentUser?.id]);
 
   // The quote on a linked bubble: jump back to that question and its answers.
   const handleOpenQuestion = useCallback((sessionId: string) => {
@@ -761,7 +790,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null, initialSessionId = 
             togetherTimeError={togetherTime.error}
             togetherTimeSaving={togetherTime.saving}
             timezone={profile.timezone}
-            onScheduleTogetherTime={togetherTime.schedule}
+            onProposeTogetherTime={togetherTime.propose}
+            onAgreeTogetherTime={togetherTime.agree}
+            onSuggestTogetherTime={togetherTime.suggestTime}
+            onTalkAboutTogetherTime={handleTalkAboutTogetherTime}
             onUpdateTogetherTime={(session: TogetherTimeSession, status: 'done' | 'cancelled') => status === 'done' ? togetherTime.complete(session) : togetherTime.cancel(session)}
             onOpenActivity={(session) => {
               if (session.activity_type === 'book') openReader(session.activity_id);

@@ -87,7 +87,9 @@ apply and verify the database migrations separately.
    obstacles, dodge-only controls and referee-checked acceleration), then
    `202610190003_word_wheel_async_practice.sql` (solo practice and independent multiplayer
    clocks), then `202610190004_together_tab_restructure.sql` (visit wishes, day-by-day plans,
-   private/matched Someday ideas, scheduled Together time and visit memories). Finally run
+   private/matched Someday ideas, scheduled Together time and visit memories), then
+   `202610190005_together_time_agreement.sql` (a Together time is a suggestion until the
+   other partner agrees to it; dates already scheduled stay scheduled). Finally run
    `supabase/seed/word_puzzles.sql` once to install the pregenerated puzzle bank.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
@@ -1207,6 +1209,10 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] After a past visit, each partner can add one photo and one short best-moment line.
       Both contributions appear in the memory timeline and each partner can edit only
       their own entry.
+- [ ] Device A proposing a Together time shows it on device B as a suggestion, not a plan;
+      A has no way to agree to its own suggestion, **Talk about it** posts the activity and
+      time into the chat and opens it, and B can **Suggest another time** (flipping who
+      waits) or **Agree & lock it in**. Nothing reminds either phone before both agree.
 - [ ] A scheduled Together-time push opens its exact book or game from the notification;
       tapping the reminder with the app open switches tabs without a reload.
 - [ ] Couple Settings shows **Notifications**; on Android/desktop the switch turns on after
@@ -1257,7 +1263,8 @@ is involved — with a per-device switch in Couple Settings, the platform requir
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
 tab, and an unread count on the installed app's icon. Together hosts **Next visit** (a
 countdown, private-until-both-answered wishes, a day-by-day plan and an owner-assigned
-checklist), **Together time** (scheduled shared books or games with a due-time reminder,
+checklist), **Together time** (shared books or games at a time one partner suggests and
+the other agrees to, with a due-time reminder once it is locked in,
 plus Read together), **Someday** (private or shared ideas with quiet yes-votes and mutual
 matches), and a timeline of visit memories from both partners. Shared books still include
 one EPUB or PDF in play per couple, a full-screen reader, saved places, "Jump to {partner}",
@@ -1586,10 +1593,19 @@ get the same tables and functions from `schema.sql`.
 
 ### Together time and memories
 
-- Schedule **Read together**, **Word Wheel** or another game at a specific time. Both
-  partners see the session; the scheduled push reminder opens the exact activity from a
-  single tap. Read together now lives inside Together time. The card summarizes joint
-  progress in words without putting two percentages side by side.
+- Suggest a time for **Read together**, **Word Wheel** or another game. Nobody can fix a
+  time on the other person: a Together time starts as one partner's suggestion and only
+  locks in when the other partner agrees to that exact time. While it waits, either
+  partner can tap **Talk about it** (the suggestion's details land in the chat, ready to
+  deliberate over) or **Suggest another time**, which hands the suggestion back the other
+  way. Moving a locked-in time reopens it the same way, and the reminder sweep only ever
+  claims locked-in dates, so an un-agreed suggestion never buzzes either phone. The
+  database's guard trigger holds the line: it refuses a directly-scheduled insert, an
+  agreement from the partner who suggested the time, an "agreement" that quietly moves
+  the time, and any client-written agreement stamp. Once locked in, the scheduled push
+  reminder opens the exact activity from a single tap. Read together now lives inside
+  Together time. The card summarizes joint progress in words without putting two
+  percentages side by side.
 - After a visit ends, each partner can add one private-bucket photo and one short line about
   the best moment. Contributions build the visit timeline; both can see the memories, while
   each partner can edit only their own entry. The prompt appears in the Together tab after
@@ -1617,12 +1633,13 @@ and visit days, and checks that a memory belongs to the author and has ended its
 Memory images use a private storage bucket with short-lived signed URLs. Realtime keeps the
 shared plan, matches, sessions and timeline in step.
 
-Local coverage: `node --test --test-force-exit tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs tests/together-restructure.test.mjs tests/together-hooks.test.mjs tests/together-tab.test.mjs`. The force-exit flag closes the existing Supabase/Vite test handles after all assertions finish.
+Local coverage: `node --test --test-force-exit tests/someday-database.test.mjs tests/someday-hook.test.mjs tests/someday-list.test.mjs tests/together-restructure.test.mjs tests/together-time-agreement.test.mjs tests/together-hooks.test.mjs tests/together-tab.test.mjs`. The force-exit flag closes the existing Supabase/Vite test handles after all assertions finish.
 
 Before release, use two real paired accounts: submit private visit wishes on both phones
 and confirm they reveal together; put an open idea into one visit day; assign and complete
-checklist items; vote yes on the same open idea from both accounts; schedule a Together time
-and tap its push notification; then add one photo and one best-moment line from each partner
+checklist items; vote yes on the same open idea from both accounts; propose a Together time
+from one phone, talk it over in the chat, agree to it from the other and tap its push
+notification; then add one photo and one best-moment line from each partner
 after a visit. Check that private ideas and an unanswered wish stay hidden from the partner,
 and a third account sees none of the couple's data.
 

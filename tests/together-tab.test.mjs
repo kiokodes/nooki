@@ -59,7 +59,8 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     const session = {
       id: 'session-1', couple_id: 'c1', created_by: 'me', activity_type: 'game',
       activity_id: 'word-wheel', activity_name: 'Word Wheel', scheduled_at: '2099-01-10T18:00:00.000Z',
-      timezone: 'Africa/Lagos', status: 'scheduled', reminder_sent_at: null, created_at: '', updated_at: '',
+      timezone: 'Africa/Lagos', status: 'scheduled', proposed_by: 'me', agreed_by: 'partner',
+      agreed_at: '2026-01-01T00:00:00Z', reminder_sent_at: null, created_at: '', updated_at: '',
     };
     const openReader = (id) => calls.push(['reader', id]);
     const onOpenActivity = (value) => calls.push(['openActivity', value.id]);
@@ -80,7 +81,10 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
       onUpdateSomedayItem: async (...args) => calls.push(['updateSomeday', args[0].id, args[3]]),
       onToggleSomedayWant: async (item) => calls.push(['want', item.id]),
       onDeleteSomedayItem: async (item) => calls.push(['deleteSomeday', item.id]),
-      onScheduleTogetherTime: async (input) => calls.push(['schedule', input]),
+      onProposeTogetherTime: async (input) => calls.push(['propose', input]),
+      onAgreeTogetherTime: async (item) => calls.push(['agree', item.id]),
+      onSuggestTogetherTime: async (item, scheduledAt, timezone) => calls.push(['suggest', item.id, scheduledAt, timezone]),
+      onTalkAboutTogetherTime: async (item) => calls.push(['talk', item.id]),
       onUpdateTogetherTime: async (item, status) => calls.push(['updateSession', item.id, status]),
       onOpenActivity,
       onSaveVisitMemory: async (...args) => calls.push(['memory', ...args]),
@@ -149,7 +153,9 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     assert(togetherTime.textContent.includes('around the middle of the story'));
     assert(!togetherTime.textContent.includes('%'));
 
-    // One tap on a scheduled session opens that activity; scheduling is available for tonight or any time this week.
+    // A locked-in session says both partners agreed, and one tap opens that activity.
+    assert(document.querySelector('[data-together-time-locked="session-1"]'));
+    assert(body().includes('Locked in'));
     await click(document.querySelector('[data-open-scheduled-activity="session-1"]'));
     assert.deepEqual(calls.pop(), ['openActivity', 'session-1']);
     const typeSelect = document.querySelector('[aria-label="Together time activity type"]');
@@ -159,7 +165,7 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     const scheduleForm = document.querySelector('[data-together-time-scheduler] form');
     await act(async () => scheduleForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
     const scheduled = calls.pop();
-    assert.equal(scheduled[0], 'schedule');
+    assert.equal(scheduled[0], 'propose');
     assert.equal(scheduled[1].activityType, 'game');
     assert.equal(scheduled[1].activityId, 'word-wheel');
     assert.equal(scheduled[1].activityName, 'Word Wheel');
@@ -172,7 +178,46 @@ test('Together tab: private wishes reveal together, plans are actionable, and me
     }).formatToParts(new Date(scheduled[1].scheduledAt)).map((part) => [part.type, part.value]));
     assert.equal(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`, pickedWallClock,
       'a datetime-local value is interpreted in the profile timezone saved with the reminder');
-    assert(body().includes('Turn on notifications on both phones'));
+    assert(body().includes('turn on notifications on both phones'));
+    assert(body().includes('This is a suggestion, not a fixed plan'));
+
+    // A suggestion from Ana waits for my yes: I can lock it in, take it to the chat to
+    // deliberate, or counter-suggest a time that works better — it is not scheduled yet.
+    const partnerSuggestion = {
+      ...session, id: 'session-proposal', status: 'proposed', created_by: 'partner',
+      proposed_by: 'partner', agreed_by: null, agreed_at: null,
+    };
+    const mySuggestion = {
+      ...session, id: 'session-mine', status: 'proposed', agreed_by: null, agreed_at: null,
+    };
+    await render({ togetherTimeSessions: [session, partnerSuggestion, mySuggestion] });
+    const proposalCard = document.querySelector('[data-together-time-session="session-proposal"]');
+    assert(proposalCard);
+    assert.equal(proposalCard.getAttribute('data-together-time-status'), 'proposed');
+    assert(proposalCard.textContent.includes('Ana suggested this'));
+    assert(!proposalCard.querySelector('[data-open-scheduled-activity]'),
+      'an un-agreed suggestion does not open the activity as if it were scheduled');
+    await click(proposalCard.querySelector('[data-talk-about-together-time="session-proposal"]'));
+    assert.deepEqual(calls.pop(), ['talk', 'session-proposal']);
+    await click(proposalCard.querySelector('[data-agree-together-time="session-proposal"]'));
+    assert.deepEqual(calls.pop(), ['agree', 'session-proposal']);
+    await click(proposalCard.querySelector('[data-suggest-together-time="session-proposal"]'));
+    const suggestForm = document.querySelector('[data-suggest-time-form="session-proposal"]');
+    assert(suggestForm);
+    await setValue(suggestForm.querySelector('input[type="datetime-local"]'), '2099-01-12T19:30');
+    await act(async () => suggestForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+    const suggestion = calls.pop();
+    assert.equal(suggestion[0], 'suggest');
+    assert.equal(suggestion[1], 'session-proposal');
+    assert(new Date(suggestion[2]).getTime() > Date.now());
+    assert.equal(suggestion[3], 'Africa/Lagos');
+
+    // My own suggestion only waits: there is no button to agree with myself.
+    const myCard = document.querySelector('[data-together-time-session="session-mine"]');
+    assert(myCard);
+    assert(myCard.textContent.includes('Waiting for Ana to agree'));
+    assert(!myCard.querySelector('[data-agree-together-time]'));
+    assert(myCard.querySelector('[data-talk-about-together-time="session-mine"]'));
 
     // Every completed visit prompts for the user's contribution and shows the shared timeline lane.
     const memoriesSection = document.querySelector('[data-section="memories"]');

@@ -13,6 +13,7 @@ import {
   Heart,
   LockKeyhole,
   MapPin,
+  MessageCircle,
   Plus,
   Sparkles,
   Trash2,
@@ -66,7 +67,11 @@ interface TogetherViewProps {
   togetherTimeError?: string | null;
   togetherTimeSaving?: boolean;
   timezone?: string;
-  onScheduleTogetherTime?: (input: { activityType: TogetherActivityType; activityId: string; activityName: string; scheduledAt: string; timezone: string }) => Promise<void>;
+  onProposeTogetherTime?: (input: { activityType: TogetherActivityType; activityId: string; activityName: string; scheduledAt: string; timezone: string }) => Promise<void>;
+  onAgreeTogetherTime?: (session: TogetherTimeSession) => Promise<void>;
+  onSuggestTogetherTime?: (session: TogetherTimeSession, scheduledAt: string, timezone: string) => Promise<void>;
+  /** "Talk about it": carry this date into the chat so the couple can settle on a time there. */
+  onTalkAboutTogetherTime?: (session: TogetherTimeSession) => Promise<void> | void;
   onUpdateTogetherTime?: (session: TogetherTimeSession, status: 'done' | 'cancelled') => Promise<void>;
   onOpenActivity?: (session: TogetherTimeSession) => void;
   memories?: VisitMemoryEntry[];
@@ -554,17 +559,21 @@ function localActivityOptions(books: SharedBook[]) {
 }
 
 function TogetherTimeSection({
-  sessions = [], state, userId, onOpenReader, timezone, saving = false, error, remindersEnabled, onSchedule, onUpdate, onOpen,
+  sessions = [], state, userId, partnerName, onOpenReader, timezone, saving = false, error, remindersEnabled, onPropose, onAgree, onSuggest, onTalkAbout, onUpdate, onOpen,
 }: {
   sessions?: TogetherTimeSession[];
   state: BooksState;
   userId: string;
+  partnerName: string;
   onOpenReader: (bookId: string) => void;
   timezone?: string;
   saving?: boolean;
   error?: string | null;
   remindersEnabled?: boolean;
-  onSchedule?: (input: { activityType: TogetherActivityType; activityId: string; activityName: string; scheduledAt: string; timezone: string }) => Promise<void>;
+  onPropose?: (input: { activityType: TogetherActivityType; activityId: string; activityName: string; scheduledAt: string; timezone: string }) => Promise<void>;
+  onAgree?: (session: TogetherTimeSession) => Promise<void>;
+  onSuggest?: (session: TogetherTimeSession, scheduledAt: string, timezone: string) => Promise<void>;
+  onTalkAbout?: (session: TogetherTimeSession) => Promise<void> | void;
   onUpdate?: (session: TogetherTimeSession, status: 'done' | 'cancelled') => Promise<void>;
   onOpen?: (session: TogetherTimeSession) => void;
 }) {
@@ -574,6 +583,9 @@ function TogetherTimeSection({
   const [activityId, setActivityId] = useState(firstActivity.activityId);
   const [scheduledAt, setScheduledAt] = useState(() => defaultDateTime(timezone));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // The one card whose "Suggest another time" picker is open, and its draft value.
+  const [suggestingFor, setSuggestingFor] = useState<string | null>(null);
+  const [suggestedAt, setSuggestedAt] = useState('');
   useEffect(() => {
     const newOptions = localActivityOptions(state.books);
     if (activityType === 'book' && !newOptions.books.some((book) => book.id === activityId)) {
@@ -583,12 +595,17 @@ function TogetherTimeSection({
   }, [state.books, activityType, activityId]);
   const currentOptions = activityType === 'book' ? options.books : options.games;
   const selectedActivity = currentOptions.find((option) => option.id === activityId) ?? currentOptions[0] ?? null;
+  const proposed = sessions.filter((session) => session.status === 'proposed');
   const scheduled = sessions.filter((session) => session.status === 'scheduled');
-  const past = sessions.filter((session) => session.status !== 'scheduled');
+  const past = sessions.filter((session) => session.status === 'done' || session.status === 'cancelled');
+  // Whose suggestion the current time is. Rows from before the agreement flow have no
+  // proposed_by until the migration backfills it, so fall back to the creator.
+  const suggestedBy = (session: TogetherTimeSession) => session.proposed_by ?? session.created_by;
+  const myTimezone = () => timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedActivity || !onSchedule) return;
-    const scheduleTimezone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    if (!selectedActivity || !onPropose) return;
+    const scheduleTimezone = myTimezone();
     const date = dateFromWallClock(scheduledAt, scheduleTimezone);
     if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
       setErrorMessage('Choose a time in the future.');
@@ -596,7 +613,7 @@ function TogetherTimeSection({
     }
     setErrorMessage(null);
     try {
-      await onSchedule({
+      await onPropose({
         activityType,
         activityId: selectedActivity.id,
         activityName: selectedActivity.name,
@@ -604,7 +621,7 @@ function TogetherTimeSection({
         timezone: scheduleTimezone,
       });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'This date could not be scheduled.');
+      setErrorMessage(error instanceof Error ? error.message : 'This suggestion could not be sent.');
     }
   };
   const updateSession = async (session: TogetherTimeSession, status: 'done' | 'cancelled') => {
@@ -613,9 +630,68 @@ function TogetherTimeSection({
     try { await onUpdate(session, status); }
     catch (error) { setErrorMessage(error instanceof Error ? error.message : 'This date could not be updated.'); }
   };
+  const agreeToSession = async (session: TogetherTimeSession) => {
+    if (!onAgree) return;
+    setErrorMessage(null);
+    try { await onAgree(session); }
+    catch (error) { setErrorMessage(error instanceof Error ? error.message : 'This time could not be locked in.'); }
+  };
+  const openSuggest = (session: TogetherTimeSession) => {
+    setErrorMessage(null);
+    setSuggestedAt(dateTimeLocalValue(new Date(session.scheduled_at), myTimezone()));
+    setSuggestingFor(session.id);
+  };
+  const submitSuggestion = async (event: React.FormEvent, session: TogetherTimeSession) => {
+    event.preventDefault();
+    if (!onSuggest) return;
+    const suggestTimezone = myTimezone();
+    const date = dateFromWallClock(suggestedAt, suggestTimezone);
+    if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+      setErrorMessage('Choose a time in the future.');
+      return;
+    }
+    setErrorMessage(null);
+    try {
+      await onSuggest(session, date.toISOString(), suggestTimezone);
+      setSuggestingFor(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Your suggestion could not be sent.');
+    }
+  };
+  const talkAboutSession = async (session: TogetherTimeSession) => {
+    if (!onTalkAbout) return;
+    setErrorMessage(null);
+    try { await onTalkAbout(session); }
+    catch (error) { setErrorMessage(error instanceof Error ? error.message : 'The chat could not be opened.'); }
+  };
+  // The two ways to answer a time without simply agreeing to it: take it to the chat
+  // and deliberate there, or counter-suggest a time that works better.
+  const renderTalkAndSuggest = (session: TogetherTimeSession) => (
+    <div style={{ display: 'flex', gap: '7px', marginTop: '7px' }}>
+      <button type="button" data-talk-about-together-time={session.id} onClick={() => { void talkAboutSession(session); }} style={{ ...secondaryButtonStyle, flex: 1, minHeight: '37px', padding: '8px 10px', fontSize: '0.74rem', color: tokens.colors.primaryPinkDeep }}>
+        <MessageCircle size={14} />Talk about it
+      </button>
+      <button type="button" data-suggest-together-time={session.id} aria-expanded={suggestingFor === session.id} onClick={() => (suggestingFor === session.id ? setSuggestingFor(null) : openSuggest(session))} style={{ ...secondaryButtonStyle, flex: 1, minHeight: '37px', padding: '8px 10px', fontSize: '0.74rem' }}>
+        <Clock3 size={14} />Suggest another time
+      </button>
+    </div>
+  );
+  const renderSuggestForm = (session: TogetherTimeSession) => suggestingFor === session.id && (
+    <form data-suggest-time-form={session.id} onSubmit={(event) => { void submitSuggestion(event, session); }} style={{ display: 'grid', gap: '8px', marginTop: '10px', padding: '11px', borderRadius: tokens.radii.md, background: tokens.colors.bgSurfaceSubtle }}>
+      <label style={{ display: 'grid', gap: '5px', color: tokens.colors.textSecondary, fontSize: '0.69rem', fontWeight: 800 }}>
+        A time that works better for you
+        <input type="datetime-local" aria-label={`Suggest a different time for ${session.activity_name}`} required value={suggestedAt} onChange={(event) => setSuggestedAt(event.target.value)} style={fieldStyle} />
+      </label>
+      <div style={{ display: 'flex', gap: '7px', alignItems: 'center' }}>
+        <button type="submit" disabled={saving} style={{ ...buttonStyle, flex: 1, minHeight: '38px', padding: '8px 12px', fontSize: '0.74rem', opacity: saving ? 0.6 : 1 }}>{saving ? 'Sending…' : 'Send suggestion'}</button>
+        <button type="button" onClick={() => setSuggestingFor(null)} style={{ ...secondaryButtonStyle, minHeight: '38px', padding: '8px 12px', fontSize: '0.74rem' }}>Not now</button>
+      </div>
+      <p style={{ margin: 0, color: tokens.colors.textMuted, fontSize: '0.66rem', lineHeight: 1.45 }}>{partnerName} will need to agree before this new time locks in.</p>
+    </form>
+  );
   return (
     <section data-section="together-time" style={{ display: 'grid', gap: '10px' }}>
-      <SectionHeading icon={<Clock3 size={17} />} title="Together time" subtitle="Make a little time to do something at the same time." />
+      <SectionHeading icon={<Clock3 size={17} />} title="Together time" subtitle="Suggest a time to do something together — it only locks in once you both agree." />
       <SectionCard data-together-time-scheduler style={{ padding: 15 }}>
         <form onSubmit={(event) => { void submit(event); }} style={{ display: 'grid', gap: '10px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: '8px' }}>
@@ -638,28 +714,65 @@ function TogetherTimeSection({
             <input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} style={fieldStyle} />
           </label>
           <button type="submit" disabled={saving || !selectedActivity} style={{ ...buttonStyle, width: '100%', minHeight: '44px', opacity: saving || !selectedActivity ? 0.6 : 1 }}>
-            <CalendarHeart size={16} />{saving ? 'Saving your date…' : 'Schedule our date'}
+            <CalendarHeart size={16} />{saving ? 'Sending your suggestion…' : 'Propose this time'}
           </button>
+          <p style={{ margin: 0, color: tokens.colors.textMuted, fontSize: '0.68rem', lineHeight: 1.45 }}>
+            This is a suggestion, not a fixed plan. {partnerName} can agree to it, suggest a different time, or talk it over with you in the chat — nothing is locked in until you have both said yes.
+          </p>
           <p style={{ margin: 0, display: 'flex', alignItems: 'flex-start', gap: '6px', color: tokens.colors.textMuted, fontSize: '0.68rem', lineHeight: 1.45 }}>
             <Bell size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
-            {remindersEnabled === false ? 'Turn on notifications on both phones to get a reminder when it’s time.' : 'Both of you will get a reminder when it’s time. Turn on notifications in Settings on each phone.'}
+            {remindersEnabled === false ? 'Once a time is locked in, turn on notifications on both phones to get a reminder when it’s time.' : 'Once a time is locked in, both of you will get a reminder when it’s time. Turn on notifications in Settings on each phone.'}
           </p>
           {(error || errorMessage) && <p role="alert" style={{ margin: 0, color: tokens.colors.primaryPinkDeep, fontSize: '0.72rem' }}>{errorMessage || error}</p>}
         </form>
       </SectionCard>
+      {proposed.length > 0 && (
+        <div data-together-time-proposals style={{ display: 'grid', gap: '8px' }}>
+          {proposed.map((session) => {
+            const mine = suggestedBy(session) === userId;
+            return (
+              <SectionCard key={session.id} data-together-time-session={session.id} data-together-time-status="proposed" style={{ padding: '13px 14px', border: `1.5px dashed ${tokens.colors.accentLavender}` }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '9px' }}>
+                  <div style={{ width: '38px', height: '38px', flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: tokens.radii.md, background: session.activity_type === 'book' ? tokens.colors.primaryGreenSoft : tokens.colors.accentLavenderSoft, color: session.activity_type === 'book' ? tokens.colors.primaryGreenDeep : tokens.colors.accentLavenderDeep }}>
+                    {session.activity_type === 'book' ? <BookOpen size={17} /> : <Gamepad2 size={17} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, color: tokens.colors.textPrimary, fontSize: '0.84rem', fontWeight: 900, overflowWrap: 'anywhere' }}>{session.activity_name}</p>
+                    <p style={{ margin: '3px 0 0', color: tokens.colors.textMuted, fontSize: '0.7rem', fontWeight: 800 }}>{formatTime(session.scheduled_at, session.timezone)} ({session.timezone})</p>
+                    <p data-together-time-waiting={session.id} style={{ margin: '6px 0 0', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: tokens.radii.pill, background: tokens.colors.accentLavenderSoft, color: tokens.colors.accentLavenderDeep, fontSize: '0.64rem', fontWeight: 900 }}>
+                      <Clock3 size={11} />{mine ? `Waiting for ${partnerName} to agree` : `${partnerName} suggested this — it needs your yes to lock in`}
+                    </p>
+                  </div>
+                  <button type="button" aria-label={`Cancel ${session.activity_name}`} onClick={() => { void updateSession(session, 'cancelled'); }} style={{ border: 0, padding: '3px', background: 'transparent', color: tokens.colors.textMuted, cursor: 'pointer', lineHeight: 0, flexShrink: 0 }}><Trash2 size={14} /></button>
+                </div>
+                {!mine && (
+                  <button type="button" data-agree-together-time={session.id} disabled={saving} onClick={() => { void agreeToSession(session); }} style={{ ...buttonStyle, width: '100%', minHeight: '40px', padding: '8px 10px', marginTop: '10px', fontSize: '0.78rem', opacity: saving ? 0.6 : 1 }}>
+                    <Check size={15} />{saving ? 'Locking it in…' : 'Agree & lock in this time'}
+                  </button>
+                )}
+                {renderTalkAndSuggest(session)}
+                {renderSuggestForm(session)}
+              </SectionCard>
+            );
+          })}
+        </div>
+      )}
       {scheduled.length > 0 && (
         <div data-together-time-list style={{ display: 'grid', gap: '8px' }}>
           {scheduled.map((session) => {
             const due = new Date(session.scheduled_at).getTime() <= Date.now();
             return (
-              <SectionCard key={session.id} data-together-time-session={session.id} data-highlighted={undefined} style={{ padding: '13px 14px', border: due ? `1.5px solid ${tokens.colors.primaryPink}` : `1px solid ${tokens.colors.borderSubtle}` }}>
+              <SectionCard key={session.id} data-together-time-session={session.id} data-together-time-status="scheduled" data-highlighted={undefined} style={{ padding: '13px 14px', border: due ? `1.5px solid ${tokens.colors.primaryPink}` : `1px solid ${tokens.colors.borderSubtle}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
                   <div style={{ width: '38px', height: '38px', flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: tokens.radii.md, background: session.activity_type === 'book' ? tokens.colors.primaryGreenSoft : tokens.colors.accentLavenderSoft, color: session.activity_type === 'book' ? tokens.colors.primaryGreenDeep : tokens.colors.accentLavenderDeep }}>
                     {session.activity_type === 'book' ? <BookOpen size={17} /> : <Gamepad2 size={17} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, color: tokens.colors.textPrimary, fontSize: '0.84rem', fontWeight: 900, overflowWrap: 'anywhere' }}>{session.activity_name}</p>
-                    <p style={{ margin: '3px 0 0', color: due ? tokens.colors.primaryPinkDeep : tokens.colors.textMuted, fontSize: '0.7rem', fontWeight: 800 }}>{due ? 'It’s time' : formatTime(session.scheduled_at, session.timezone)}</p>
+                    <p style={{ margin: '3px 0 0', color: due ? tokens.colors.primaryPinkDeep : tokens.colors.textMuted, fontSize: '0.7rem', fontWeight: 800 }}>{due ? 'It’s time' : `${formatTime(session.scheduled_at, session.timezone)} (${session.timezone})`}</p>
+                    <p data-together-time-locked={session.id} style={{ margin: '6px 0 0', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: tokens.radii.pill, background: tokens.colors.primaryGreenSoft, color: tokens.colors.primaryGreenDeep, fontSize: '0.64rem', fontWeight: 900 }}>
+                      <CheckCircle2 size={11} />Locked in · you both agreed
+                    </p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '7px', marginTop: '10px' }}>
@@ -669,6 +782,8 @@ function TogetherTimeSection({
                   <button type="button" aria-label={`Cancel ${session.activity_name}`} onClick={() => { void updateSession(session, 'cancelled'); }} style={{ ...secondaryButtonStyle, minHeight: '37px', padding: '7px 10px', color: tokens.colors.textMuted }}><Trash2 size={14} /></button>
                   {due && <button type="button" aria-label={`Mark ${session.activity_name} complete`} onClick={() => { void updateSession(session, 'done'); }} style={{ ...secondaryButtonStyle, minHeight: '37px', padding: '7px 10px', color: tokens.colors.primaryGreenDeep }}><Check size={14} /></button>}
                 </div>
+                {renderTalkAndSuggest(session)}
+                {renderSuggestForm(session)}
               </SectionCard>
             );
           })}
@@ -916,7 +1031,10 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
   togetherTimeError = null,
   togetherTimeSaving = false,
   timezone,
-  onScheduleTogetherTime,
+  onProposeTogetherTime,
+  onAgreeTogetherTime,
+  onSuggestTogetherTime,
+  onTalkAboutTogetherTime,
   onUpdateTogetherTime,
   onOpenActivity,
   memories = [],
@@ -963,12 +1081,16 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
         sessions={togetherTimeSessions}
         state={state}
         userId={userId}
+        partnerName={partnerName}
         onOpenReader={onOpenReader}
         timezone={timezone}
         saving={togetherTimeSaving}
         error={togetherTimeError}
         remindersEnabled={remindersEnabled}
-        onSchedule={onScheduleTogetherTime}
+        onPropose={onProposeTogetherTime}
+        onAgree={onAgreeTogetherTime}
+        onSuggest={onSuggestTogetherTime}
+        onTalkAbout={onTalkAboutTogetherTime}
         onUpdate={onUpdateTogetherTime}
         onOpen={onOpenActivity}
       />

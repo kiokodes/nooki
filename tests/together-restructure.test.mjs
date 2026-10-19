@@ -123,12 +123,15 @@ test('Together restructure: wish reveal privacy, checklist ownership, idea match
     assert.match(fakeReminder.error?.message || '', /Only the reminder service/);
 
     // The due-time claim is atomic and one-shot: overlapping sweeps cannot claim it twice.
+    // Only a locked-in ('scheduled') date can be claimed — inserts now default to a
+    // suggestion, so the trusted backend row names its status explicitly, with no auth
+    // user acting (a signed-in partner could only ever create a suggestion).
+    await backend.query("SELECT set_config('request.jwt.claim.sub', '', false)");
     await backend.query(`
       INSERT INTO public.together_time_sessions
-        (couple_id, created_by, activity_type, activity_id, activity_name, scheduled_at, timezone)
-      VALUES ($1, $2, 'game', 'word-wheel', 'Due Word Wheel', now() - interval '1 minute', 'Africa/Lagos')
+        (couple_id, created_by, activity_type, activity_id, activity_name, scheduled_at, timezone, status)
+      VALUES ($1, $2, 'game', 'word-wheel', 'Due Word Wheel', now() - interval '1 minute', 'Africa/Lagos', 'scheduled')
     `, [couple.id, alice.id]);
-    await backend.query("SELECT set_config('request.jwt.claim.sub', '', false)");
     const { rows: claimed } = await backend.query('SELECT * FROM public.claim_due_together_time_reminders()');
     assert.equal(claimed.length, 1);
     assert.equal(claimed[0].activity_name, 'Due Word Wheel');

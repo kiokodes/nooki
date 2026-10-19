@@ -85,12 +85,16 @@ test('Together hooks: wishes, checklist, scheduled time and private visit-memory
     assert.equal(latest.planning.checklist[0].completed, true);
 
     const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    await act(async () => latest.togetherTime.schedule({
+    await act(async () => latest.togetherTime.propose({
       activityType: 'game', activityId: 'word-wheel', activityName: 'Word Wheel',
       scheduledAt, timezone: 'Africa/Lagos',
     }));
     assert.equal(latest.togetherTime.sessions.length, 1);
     assert.equal(latest.togetherTime.sessions[0].activity_id, 'word-wheel');
+    // Suggesting a time does not lock it in: Alice waits for Bob's yes.
+    assert.equal(latest.togetherTime.sessions[0].status, 'proposed');
+    assert.equal(latest.togetherTime.sessions[0].proposed_by, alice.id);
+    assert.equal(latest.togetherTime.sessions[0].agreed_by, null);
 
     const photo = new Blob(['small test photo'], { type: 'image/jpeg' });
     let ownMemory;
@@ -109,6 +113,27 @@ test('Together hooks: wishes, checklist, scheduled time and private visit-memory
     await act(async () => latest.planning.saveWish('A walk after dinner.'));
     assert.equal(latest.planning.wishes.length, 2);
     assert.equal(latest.togetherTime.sessions.length, 1);
+    // Bob's agreement is what locks Alice's suggested time in.
+    await act(async () => latest.togetherTime.agree(latest.togetherTime.sessions[0]));
+    assert.equal(latest.togetherTime.sessions[0].status, 'scheduled');
+    assert.equal(latest.togetherTime.sessions[0].agreed_by, bob.id);
+    // Bob suggesting a different time reopens it — now he is the one waiting.
+    const later = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    await act(async () => latest.togetherTime.suggestTime(latest.togetherTime.sessions[0], later, 'Africa/Lagos'));
+    assert.equal(latest.togetherTime.sessions[0].status, 'proposed');
+    assert.equal(latest.togetherTime.sessions[0].proposed_by, bob.id);
+    assert.equal(latest.togetherTime.sessions[0].agreed_by, null);
+    await auth.signInWithEmail('alice@example.com', 'password');
+    activeUserId = alice.id;
+    await render();
+    await refreshAll();
+    await act(async () => latest.togetherTime.agree(latest.togetherTime.sessions[0]));
+    assert.equal(latest.togetherTime.sessions[0].status, 'scheduled');
+    assert.equal(latest.togetherTime.sessions[0].agreed_by, alice.id);
+    await auth.signInWithEmail('bob@example.com', 'password');
+    activeUserId = bob.id;
+    await render();
+    await refreshAll();
     assert.equal(latest.memories.entries.length, 1);
     assert.equal(latest.memories.entries[0].user_id, alice.id);
     const partnerMemory = await act(async () => latest.memories.save(past.id, new Blob(['another photo'], { type: 'image/png' }), 'The walk in the rain.'));
