@@ -172,6 +172,7 @@ export function WordWheel({ match, userId, partnerName, games, onExit }: {
     if (foundRef.current.includes(word)) {
       setPath([]);
       pathRef.current = [];
+      shake();
       flash('info', 'Already found.');
       return;
     }

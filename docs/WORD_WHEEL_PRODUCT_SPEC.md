@@ -406,10 +406,10 @@ and do not alter the submitted score.
   tile transitions.
 - The wheel is capped at 330 px, the blanks region at 30 vh on short phones, and the board is
   usable one-handed with no hover reliance.
-- All interactive controls are real `<button>`s; the wheel has `role="application"` and an
-  accessible label explaining both swipe and typing. Tiles themselves are hidden from the
-  accessibility tree because they are not individually tabbable; the typed input is the
-  keyboard path.
+- Shuffle, hint, ready, check, rematch and exit are real `<button>`s. The wheel container is a
+  `role="application"` region with a label explaining both swipe and typing; its tiles are
+  hidden from the accessibility tree because they are not individually tabbable. The typed
+  input is the keyboard path for every word.
 
 ---
 
@@ -422,7 +422,7 @@ and do not alter the submitted score.
 | Player opens the app after `start_at` | Board opens with the clock already partly gone; the countdown screen is skipped. |
 | Player leaves mid-round | Clock keeps running. On return the same round is resumed. If the clock expired, unmount saves the local result. |
 | Player submits but partner never does | After `start_at + duration + 45s`, sweep stores a zero-word result and settles. |
-| Same word found twice | Second attempt says "Already found." and does not change the score. |
+| Same word found twice | Second attempt shakes the wheel, says "Already found." and does not change the score. |
 | Word is valid English but not on the list | "Not one of the hidden words." No blank fills, no score. |
 | Word repeats a tile | Local path prevents it; a typed repeat is refused because it cannot be in the buildable list. |
 | Wrong word | Path clears, wheel shakes, message appears for 2.2 s. |
