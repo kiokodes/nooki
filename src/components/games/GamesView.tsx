@@ -12,7 +12,7 @@ import { ChessDuel } from './ChessDuel';
 import { ConnectFour } from './ConnectFour';
 import { DashDuel, DashFreePlay } from './DashDuel';
 import { WordWheel } from './WordWheel';
-import { LastDuelRow, OngoingGames, type OngoingSlide } from './OngoingGames';
+import { OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import { DASH_LEVELS, dashLevelLabel, type DashLevel } from '../../lib/dash';
 import {
@@ -73,15 +73,21 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
   const startSnakeWarmUp = () => setWarmUp({ game: 'snake', foods: dealPracticeFoods(), pieces: [], nonce: Date.now() });
   // Keep failed starts beside the button that was tapped, not above an offscreen header.
   const inlineErrorGame = !m && !sudokuOpen && !warmUp ? games.errorGame : null;
-  /** The most recent *settled* duel of either kind, so its result stays reachable below the library. */
-  const lastDuel = games.data?.matches?.find((match) => (match.game === 'snake' || match.game === 'tetris' || match.game === 'dash-duel' || match.game === 'word-wheel') && match.finished);
-  /** The couple's live matches: still to be played, one swipe away in their own card. */
+  /**
+   * The couple's live matches: games still to be played, one swipe away in their own
+   * card. A duel whose two runs are in is waiting on the referee, not on a player, and
+   * a settled one is history — neither belongs here.
+   */
   const ongoing = (games.data?.matches ?? []).filter((match) => !match.finished && !runDuelConcluded(match));
-  const ongoingSlides: OngoingSlide[] = ongoing.map((match) => ({
-    id: match.id,
-    name: GAMES.find(g => g.id === match.game)?.name ?? 'Game',
-    statusLine: `${needsMyMove(match, userId) ? 'Your turn · ' : ''}With your partner →`,
-  }));
+  const ongoingSlides: OngoingSlide[] = ongoing.map((match) => {
+    const mine = needsMyMove(match, userId);
+    return {
+      id: match.id,
+      name: GAMES.find(g => g.id === match.game)?.name ?? 'Game',
+      waitingOn: mine ? 'me' : 'partner',
+      statusLine: mine ? 'Your move' : `Waiting for ${partnerName}`,
+    };
+  });
   // A warm-up stands in for whatever the Games tab was showing: the duel panel, or the
   // whole library. It is the same board either way, and it never touches the database.
   // It yields the moment the duel is decided: nobody wants to be practising through the
@@ -92,24 +98,6 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       : <SnakeBoard key={warmUp.nonce} foods={warmUp.foods} warmUp onExit={() => setWarmUp(null)} onRestart={startSnakeWarmUp} />}
     <p className="game-hint">A warm-up is yours alone: it is never reported, and it never scores.</p>
   </> : null;
-  /** The name and score line for the "last duel" row, whichever game it was. */
-  const lastDuelLine = lastDuel?.finished ? {
-    name: GAMES.find(g => g.id === lastDuel.game)?.name ?? 'Duel',
-    won: lastDuel.winner_id === userId,
-    drawn: lastDuel.winner_id === null,
-    mine: lastDuel.game === 'word-wheel'
-      ? lastDuel.word?.mine.count ?? 0
-      : lastDuel.snake?.mine?.score ?? lastDuel.tetris?.mine?.score ?? lastDuel.dash?.mine?.distance ?? 0,
-    // Optional chaining all the way down: each duel's own column is absent until its
-    // migration is installed, and a missing field is never shown as a claimed score.
-    theirs: lastDuel.game === 'word-wheel'
-      ? lastDuel.word?.partner.count ?? 0
-      : lastDuel.snake?.partner?.score ?? lastDuel.tetris?.partner?.score ?? lastDuel.dash?.partner?.distance ?? 0,
-    mineHearts: lastDuel.game === 'word-wheel' ? null : lastDuel.dash?.mine?.hearts ?? null,
-    theirHearts: lastDuel.game === 'word-wheel' ? null : lastDuel.dash?.partner?.hearts ?? null,
-    words: lastDuel.game === 'word-wheel',
-  } : null;
-
   /** One game's settings and call to action, shown for the game picked in the rail. */
   const renderGameCard = (game: GameEntry) => (
     <article
@@ -271,19 +259,13 @@ export function GamesView({ games, userId, partnerName, partnerOnline = false }:
       <button className="game-back" onClick={() => setWarmUp(null)}>← All games</button>
       {practice}
     </> : <>
-      {/* Ongoing games live in their own swipeable card — ten open matches are ten
-          swipes, not ten screens. Finished duels are history and sit below the library,
-          never among the games that can still be played. */}
+      {/* Exactly two things on this tab: the couple's live matches (one swipeable card
+          however many are open) and the game catalogue under it. A settled duel, or one
+          whose two runs are both in, is history and is not listed here at all. */}
       <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
-      {lastDuelLine && <LastDuelRow
-        name={lastDuelLine.name}
-        outcome={`${lastDuelLine.won ? 'You won' : lastDuelLine.drawn ? 'A draw' : `${partnerName} won`} · You ${lastDuelLine.mine}${lastDuelLine.words ? ' words' : ''}${lastDuelLine.mineHearts === null ? '' : ` 💗 ${lastDuelLine.mineHearts}`} — ${lastDuelLine.theirs}${lastDuelLine.words ? ' words' : ''}${lastDuelLine.theirHearts === null ? '' : ` 💗 ${lastDuelLine.theirHearts}`} ${partnerName} →`}
-        onOpen={() => openMatch(lastDuel?.id ?? null)}
-      />}
       <GameLibrary activeIndex={libraryIndex} onSelect={selectGame}>
         {renderGameCard(activeGame)}
       </GameLibrary>
-      <p className="game-hint">Games are always open for a rematch.</p>
     </>}
   </section>;
 }

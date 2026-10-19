@@ -302,7 +302,7 @@ inventing sentinel values.
 | `word_settle(p_id uuid)` | `word_rounds` | Compare the two attempts and write the winner. |
 | `word_sweep(couple uuid)` | `void` | Cancel stale lobbies, settle expired live rounds with zero-filled missing results. |
 | `word_layout(words text[])` | `jsonb` | Length/count summary used by the round view. |
-| `games_state()` | `jsonb` | Rewritten to include Word Wheel rounds in the same list as the other duels, so Ongoing games, the Games badge, Last duel and wins work without a second polling loop. |
+| `games_state()` | `jsonb` | Rewritten to include Word Wheel rounds in the same list as the other duels, so Ongoing games, the Games badge and wins work without a second polling loop. |
 
 `word_settle` compares, in order:
 
@@ -392,7 +392,7 @@ and do not alter the submitted score.
   settings and start button — is on the page. Word Wheel's panel carries the difficulty picker,
   the duration picker, and a button that calls `startWordRound(level, seconds)`.
 - Word rounds ride in `games_state()['matches']` as `game: 'word-wheel'` with a `word` payload,
-  so the existing Ongoing games swipe card, badge and Last duel row keep working.
+  so the existing Ongoing games swipe card and badge keep working.
 - `needsMyMove` shows the badge when the player still has to ready up, or is in a live round
   they have not submitted.
 - `lastDuelLine` shows word counts instead of hearts/distance.

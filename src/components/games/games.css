@@ -72,18 +72,16 @@
 .ongoing-track::-webkit-scrollbar { display:none; }
 .ongoing-track:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; border-radius:14px; }
 .ongoing-games .ongoing-slide { flex:0 0 100%; min-width:0; scroll-snap-align:center; display:block; width:100%; text-align:left; background:#e8efdf; border-radius:16px; padding:16px 18px; }
+.ongoing-slide-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .ongoing-slide strong { display:block; font-size:.95rem; }
 .ongoing-slide small { display:block; margin-top:5px; }
+/* A match waiting on this phone wears the bell; one waiting on the partner stays plain,
+   so the card answers "which game wants me?" without opening any of them. */
+.ongoing-games .ongoing-slide.is-my-move { background:#fdf0f5; box-shadow:inset 0 0 0 1px #ed91ad59; }
+.ongoing-bell { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; width:22px; height:22px; border-radius:999px; background:#ed91ad; color:#3d2733; }
 .ongoing-dots { display:flex; justify-content:center; align-items:center; gap:6px; margin-top:10px; }
 .ongoing-games .ongoing-dot { width:7px; min-width:0; height:7px; padding:0; border-radius:999px; background:#ddc6e4; transition:width .18s ease, background .18s ease; }
 .ongoing-games .ongoing-dot.is-active { width:18px; background:#8a6c93; }
-
-/* A finished duel is history: its own quiet row under the ongoing card, never a
-   card among the games that can still be played. */
-.game-last-duel { font:inherit; font-size:.85rem; font-weight:700; display:block; width:100%; text-align:left; background:transparent; border:1px dashed #e3d4e6; border-radius:16px; color:#795d88; padding:12px 16px; margin-bottom:14px; cursor:pointer; }
-.game-last-duel:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; }
-.game-last-duel > small:first-child { display:block; text-transform:uppercase; letter-spacing:.12em; font-size:.62rem; font-weight:800; opacity:.75; margin-bottom:3px; }
-.game-last-duel small { display:block; margin-top:3px; color:#85767e; font-weight:600; }
 
 /* Card rhythm.
    The global reset in index.css sets every margin to 0, so the blocks inside a

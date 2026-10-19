@@ -15,7 +15,7 @@ import { PreviewSnake } from './PreviewSnake';
 import { PreviewTetris } from './PreviewTetris';
 import { PreviewWordWheel } from './PreviewWordWheel';
 import { ChessDuel } from '../components/games/ChessDuel';
-import { LastDuelRow, OngoingGames } from '../components/games/OngoingGames';
+import { OngoingGames } from '../components/games/OngoingGames';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
 import { MissYouReveal } from '../components/home/MissYouReveal';
@@ -568,13 +568,12 @@ export const AppPreview = () => {
                 </header>
                 <OngoingGames
                   slides={[
-                    { id: 'sample-tetris', name: 'Tetris Duel', statusLine: 'Your turn · With your partner →' },
-                    { id: 'sample-chess', name: 'Chess', statusLine: 'Your turn · With your partner →' },
-                    { id: 'sample-snake', name: 'Snake Duel', statusLine: 'With your partner →' },
+                    { id: 'sample-tetris', name: 'Tetris Duel', waitingOn: 'me', statusLine: 'Your move' },
+                    { id: 'sample-chess', name: 'Chess', waitingOn: 'me', statusLine: 'Your move' },
+                    { id: 'sample-snake', name: 'Snake Duel', waitingOn: 'partner', statusLine: `Waiting for ${partner.name}` },
                   ]}
                   onOpen={() => {}}
                 />
-                <LastDuelRow name="Tetris Duel" outcome="You won · You 4100 — 900 Ana →" onOpen={() => {}} />
                 {/* The same rail the app uses: game titles on top, one board under them.
                     Chess is a chip like the others — it is a library game, not a fixture
                     of the page. A toggle rather than a router: this is a page, not an app. */}

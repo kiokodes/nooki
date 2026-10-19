@@ -1320,10 +1320,13 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
   title, use the arrow keys, or swipe the card sideways to walk the rail; a swipe that
   ends on a button is never mistaken for a tap on it. Adding a game means adding one entry
   to `GAMES` and one panel — the rail, the focus order and the swipe come for free.
-- An unfinished match resumes when either partner opens the same game; the live matches
-  stand in the Games tab's swipeable **Ongoing games** card — one card's height however
-  many are open. Finished duels stay available through the **Last duel** row beneath it,
-  as history and never among the games that can still be played. The Games tab badge
+- **The Games tab is two things.** An **Ongoing games** card, always showing how many
+  games are open, holding one swipe per live match at a single card's height; and the
+  game catalogue carousel beneath it. Nothing else sits on the tab. A match waiting on
+  you wears a 🔔 bell and says **Your move**; a match waiting on your partner says
+  **Waiting for {partner}** and wears no bell, so you can see at a glance which game to
+  open. A duel whose two runs are in — and every settled match — leaves the card
+  entirely: finished duels are history, not something to "resume". The Games tab badge
   counts matches waiting for this phone.
 - Secret picks and live opponent scores are never exposed through direct table access or a
   realtime payload; the app receives only the sanitized Games RPC snapshot.
