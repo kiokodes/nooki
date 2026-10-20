@@ -89,9 +89,11 @@ apply and verify the database migrations separately.
    clocks), then `202610190004_together_tab_restructure.sql` (visit wishes, day-by-day plans,
    idea matching, scheduled activities and visit memories), then
    `202610190005_together_time_agreement.sql`, then
-   `202610190006_remove_shared_books.sql` (removes Read together), and finally
+   `202610190006_remove_shared_books.sql` (removes Read together), then
    `202610190007_someday_notebook_and_remove_together_time.sql` (removes Together time,
-   private Someday visibility and votes; the list becomes a shared, ordered notebook). Finally run
+   private Someday visibility and votes; the list becomes a shared, ordered notebook), and
+   finally `202610200001_epistles.sql` (the couple's long sealed letters — the mailbox in
+   the nook). Finally run
    `supabase/seed/word_puzzles.sql` once to install the pregenerated puzzle bank.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
@@ -551,7 +553,44 @@ realtime publication entry and the private bucket. Without it the frame still re
 invites the upload, but the upload is refused with a readable sentence instead of appearing
 to work.
 
+## Epistles — the long letters in the nook
+
+The mailbox standing in the nook's corner is the way into the couple's **epistles**: long,
+sealed letters written to each other, deliberately kept apart from the chat. Where a chat
+bubble is a sentence, a letter is a page — the interface is paper and wax, not bubbles, and
+nothing about it is instant except the arrival.
+
+- **The life of a letter.** An author writes on the writing desk (serif type, a dateline
+  naming their own town, an optional title, a word counter) and the draft autosaves as
+  they write — a letter is too heavy to lose to a closed app. Sealing is a ceremony, not a
+  button: read it once more exactly as the partner will see it, choose *when it may be
+  opened* (as soon as they like, or a chosen day — an anniversary letter waits sealed with
+  a countdown), then press the wax, which carries the writer's initial the way a signet
+  does. Recalled, resealed, rewritten: all of it is possible only while the letter is
+  still unopened.
+- **The reading.** An openable letter glows on its shelf — *tap to break the seal*. The
+  wax cracks, the flap lifts, the paper rises out of the envelope, and the ink arrives
+  paragraph by paragraph. The database performs the one real write
+  (`open_epistle(p_epistle_id)`): it decides whether the day has come, marks `opened_at`
+  once, and is the only write the reading partner ever makes. After it, the letter is
+  final for both of them, and it stays on the keepsake shelf forever — sealed letters
+  cannot be deleted.
+- **The shelves.** The mailbox sorts itself: *Waiting for you* (the partner's openable
+  letters — the number on the nook's flag), *Sealed until their day* (visible, but the wax
+  refuses until the day — decided by the server's clock, not the phone's), *On their way*
+  (my own standing letters, each with Read and Take back), keepsakes, and drafts. Realtime
+  keeps every shelf honest: a letter sealed on the other side of the world appears without
+  a refresh.
+- **Storage and rules** (`epistles`, `202610200001_epistles.sql`, additive and rerunnable).
+  Body up to 20,000 characters, title up to 80. RLS: the couple reads sealed and opened
+  letters; a draft is its author's alone; an author reworks their own letter only while it
+  is unopened; drafts alone may be deleted. The table is in the Realtime publication, and
+  a Database Webhook on seal tells the partner's phone (see **Push notifications**); a
+  project without the migration names it in the error the mailbox shows, the way
+  miss-you does.
+
 ## The Chat tab
+
 
 A plain, WhatsApp-shaped conversation between the two partners — the second tab from the
 left, live, with no refresh anywhere. It is built from:
@@ -827,9 +866,12 @@ platform.
    `PUSH_WEBHOOK_SECRET` you set below, or at minimum the Authorization header every
    Supabase webhook sends). The private half must never appear in a `VITE_` variable, in
    the repository, or in the app bundle.
-5. **Add the webhook** (Dashboard → Database → Webhooks → Create):
+5. **Add the webhooks** (Dashboard → Database → Webhooks → Create). One for chat, and —
+   after running `202610200001_epistles.sql` — one for the letters:
    - Table `messages`, event **Insert**.
-   - Type **Supabase Edge Function**, function `send-push`, method `POST`.
+   - Table `epistles`, events **Insert** and **Update** (a letter knocks only at the
+     moment it is sealed; drafts, recalls and rewrites are deliberately silence).
+   - Both: type **Supabase Edge Function**, function `send-push`, method `POST`.
    - HTTP header `Authorization: Bearer <the same PUSH_WEBHOOK_SECRET>`.
 6. **Verify**, then switch it on per device: Couple Settings → **Notifications**. The
    switch is per browser, not per account — a phone and a laptop are two independent
@@ -895,7 +937,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the Games
 retirement migration deletes daily-game and Tic Tac Toe match history,

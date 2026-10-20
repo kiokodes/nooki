@@ -18,6 +18,9 @@
  *                                (Discuss tab) — only while the session is still open
  *   game_matches UPDATE        → tell the player whose *turn_id* just arrived it is
  *                                their move (Games tab) — only while the game is live
+ *   epistles INSERT / UPDATE   → tell the *partner* a letter was sealed for them
+ *                                (the mailbox in the nook) — only the moment it is
+ *                                sealed, never for drafts, recalls or rewrites
 
  * Every event is something the recipient must act on, so a Nooki notification is always
  * meaningful: a new message, a question waiting for your answer, a move waiting for you.
@@ -59,6 +62,15 @@ interface MessageRecord {
   session_id?: string | null;
   reply_to_id?: string | null;
   created_at?: string;
+}
+
+interface EpistleRecord {
+  id?: string;
+  couple_id?: string;
+  sender_id?: string | null;
+  title?: string | null;
+  sealed_at?: string | null;
+  opens_at?: string | null;
 }
 
 interface WebhookPayload {
@@ -225,6 +237,79 @@ async function gamesWaiting(admin: Admin, coupleId: string, userId: string): Pro
     .eq('turn_id', userId)
     .eq('finished', false);
   return typeof count === 'number' ? count : 0;
+}
+
+/** The `YYYY-MM-DD` a scheduled letter opens on, said aloud for a lock screen. */
+function epistleOpenDay(opensAt: string | null): string | null {
+  if (!opensAt) return null;
+  const parsed = new Date(`${opensAt}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString('en-GB', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+/**
+ * epistles sealed (INSERT with a seal, or UPDATE from draft to sealed) → tell the
+ * partner a letter is standing in their mailbox. Drafts, recalls, rewrites and
+ * re-seals of an already-sealed letter are all silence: one letter, one knock.
+ * The mailbox lives in the nook, so the deep link opens Home.
+ */
+async function handleEpistle(
+  admin: Admin,
+  record: Record<string, unknown>,
+  oldRecord: Record<string, unknown> | undefined,
+): Promise<Response> {
+  const letter = record as EpistleRecord;
+  const coupleId = str(letter.couple_id);
+  const senderId = letter.sender_id ?? null;
+  const letterId = str(letter.id);
+  if (!coupleId || !letterId || !senderId) return json({ skipped: 'the letter has no couple, sender or id' });
+
+  // Only the moment a letter becomes sealed is worth a knock on the phone. An INSERT
+  // is always a first seal (drafts are inserted unsealed); an UPDATE counts only when
+  // it is the transition — a recalled-and-resealed letter keeps its first knock.
+  const sealedNow = Boolean(letter.sealed_at);
+  const sealedBefore = Boolean(oldRecord && oldRecord.sealed_at);
+  if (!sealedNow || sealedBefore) return json({ skipped: 'not the moment of sealing' });
+
+  const { data: partner, error: partnerError } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('couple_id', coupleId)
+    .neq('id', senderId)
+    .maybeSingle();
+  if (partnerError) return json({ error: `Could not read the partner: ${partnerError.message}` }, 500);
+  if (!partner) return json({ skipped: 'no partner yet' });
+
+  const actor = await displayName(admin, senderId);
+  const title = str(letter.title);
+  const openDay = epistleOpenDay(str(letter.opens_at));
+  const body = openDay
+    ? title
+      ? `Sealed a letter for you — “${truncate(title, 60)}”. The wax opens on ${openDay}.`
+      : `Sealed a letter for you. The wax opens on ${openDay}.`
+    : title
+      ? `Sealed a letter for you — “${truncate(title, 60)}”. It is standing in your mailbox.`
+      : 'Sealed a letter for you. It is standing in your mailbox.';
+
+  // The number on the mailbox flag: this letter plus any other sealed ones still unopened.
+  const { count: waiting } = await admin
+    .from('epistles')
+    .select('id', { count: 'exact', head: true })
+    .eq('couple_id', coupleId)
+    .neq('sender_id', partner.id)
+    .not('sealed_at', 'is', null)
+    .is('opened_at', null);
+
+  const notification: PushNotification = {
+    title: actor,
+    body,
+    tag: `nooki-epistle-${letterId}`,
+    tab: 'home',
+    url: '/?nooki=home',
+    badge: typeof waiting === 'number' ? waiting : 0,
+    messageId: null,
+  };
+  return deliver(admin, partner.id, notification);
 }
 
 /** messages INSERT → notify the partner who did not send it. */
@@ -404,7 +489,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const record = payload.record;
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-  if (!record || payload.table !== 'messages' && payload.table !== 'answers' && payload.table !== 'game_matches') {
+  if (!record || payload.table !== 'messages' && payload.table !== 'answers' && payload.table !== 'game_matches' && payload.table !== 'epistles') {
     return json({ skipped: 'not a watched table' });
   }
 
@@ -418,6 +503,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
     case 'game_matches':
       if (payload.type !== 'UPDATE') return json({ skipped: 'not a turn change' });
       return handleGameTurn(admin, record, payload.old_record);
+    case 'epistles':
+      if (payload.type !== 'INSERT' && payload.type !== 'UPDATE') return json({ skipped: 'not a seal or a rewrite' });
+      return handleEpistle(admin, record, payload.old_record);
     default:
       return json({ skipped: 'unhandled table' });
   }

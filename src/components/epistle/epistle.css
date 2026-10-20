@@ -1,0 +1,1170 @@
+/* =========================================================================
+   Epistles — long, sealed letters written to each other.
+   A world of its own inside Nooki: paper instead of bubbles, a wax seal
+   instead of a send button, a ceremony instead of a screen. The app's warm
+   cream stays underneath; the letters live on their own paper.
+   ========================================================================= */
+
+.epistle-view {
+  --ep-paper: #fffdf6;
+  --ep-paper-edge: #f3ead8;
+  --ep-ink: #43382f;
+  --ep-ink-soft: #8a7a6c;
+  --ep-wax: #c04a6b;
+  --ep-wax-deep: #96334f;
+  --ep-wax-light: #d97e97;
+
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 70% at 50% 0%, #fdf9f0 0%, transparent 60%),
+    linear-gradient(180deg, #f8f2e6 0%, #f4ecdd 100%);
+  color: var(--ep-ink);
+  font-family: var(--font-family);
+  animation: epistle-view-in 420ms ease both;
+}
+
+@keyframes epistle-view-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ------------------------------------------------------------------ */
+/* The mailbox                                                         */
+/* ------------------------------------------------------------------ */
+
+.epistle-mailbox {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 18px 108px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.epistle-mailbox-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.epistle-mailbox-title {
+  margin: 0;
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  font-size: 1.62rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ep-ink);
+}
+
+.epistle-mailbox-sub {
+  margin: 5px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ep-ink-soft);
+}
+
+.epistle-close {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--text-secondary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.epistle-section-label {
+  margin: 0 0 -6px;
+  padding-left: 2px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ep-wax);
+}
+
+.epistle-section-label.is-muted {
+  color: var(--ep-ink-soft);
+}
+
+.epistle-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The empty mailbox: a little mailbox waiting by the road. */
+.epistle-empty {
+  margin-top: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 30px 20px 22px;
+  border: 1.5px dashed var(--border-soft);
+  border-radius: var(--radius-card);
+  background: rgba(255, 253, 246, 0.65);
+}
+
+.epistle-empty-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(150deg, var(--primary-pink-soft), #fdf3f7);
+  color: var(--ep-wax);
+  margin-bottom: 8px;
+}
+
+.epistle-empty h3 {
+  margin: 0;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.08rem;
+  font-weight: 500;
+  color: var(--ep-ink);
+}
+
+.epistle-empty p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ep-ink-soft);
+  max-width: 34ch;
+}
+
+/* ------------------------------------------------------------------ */
+/* Envelopes                                                           */
+/* ------------------------------------------------------------------ */
+
+.epistle-envelope {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--ep-paper-edge);
+  border-radius: 22px;
+  background: var(--ep-paper);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-family);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.epistle-envelope:active {
+  transform: scale(0.985);
+}
+
+.epistle-envelope[data-openable='true'] {
+  border-color: #f2d9e2;
+  box-shadow: 0 12px 30px rgba(192, 74, 107, 0.13), 0 2px 8px rgba(78, 56, 44, 0.05);
+}
+
+.epistle-envelope[data-openable='true']::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 25px;
+  border: 1.5px solid rgba(192, 74, 107, 0.25);
+  animation: epistle-halo 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes epistle-halo {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.012); }
+}
+
+/* The little drawn envelope standing at the card's left. */
+.ep-env {
+  position: relative;
+  width: 58px;
+  height: 40px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 3px 5px rgba(78, 56, 44, 0.12));
+}
+
+.ep-env-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(170deg, #f7efdf 0%, #efe3cc 100%);
+}
+
+.ep-env-front {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fffdf6 0%, #f6eeda 100%);
+  clip-path: polygon(0 0, 50% 46%, 100% 0, 100% 100%, 0 100%);
+  border: 0;
+}
+
+.ep-env-flap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 46%;
+  background: linear-gradient(180deg, #fbf5e8 0%, #f1e5cd 100%);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: top center;
+  transition: transform 500ms ease;
+  z-index: 2;
+}
+
+.ep-env[data-open='true'] .ep-env-flap {
+  transform: rotateX(180deg);
+  background: #e8dcc2;
+}
+
+.ep-env[data-sealed='false'] .ep-env-flap {
+  opacity: 0.55;
+}
+
+/* The wax: a small disc carrying the writer's initial. */
+.ep-wax {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, var(--ep-wax-light) 0%, var(--ep-wax) 46%, var(--ep-wax-deep) 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.35),
+    inset 0 -2px 3px rgba(80, 20, 40, 0.35),
+    0 2px 4px rgba(96, 32, 55, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 3;
+}
+
+.ep-wax span {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  font-style: italic;
+  color: rgba(255, 245, 248, 0.92);
+  line-height: 1;
+}
+
+.ep-wax.is-waiting {
+  background: radial-gradient(circle at 34% 30%, #cfc3bb 0%, #a8988d 46%, #7d6d62 100%);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.3), inset 0 -2px 3px rgba(60, 45, 35, 0.35), 0 2px 4px rgba(60, 45, 35, 0.3);
+}
+
+.ep-wax.is-broken {
+  background: radial-gradient(circle at 34% 30%, #d9a4b2 0%, #b05e78 46%, #8a4258 100%);
+  opacity: 0.82;
+  transform: translate(-50%, -50%) rotate(10deg) scale(0.9);
+}
+
+/* The envelope's words, to its right. */
+.epistle-envelope-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ep-envelope-from {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ep-wax);
+}
+
+.ep-envelope-from.is-muted {
+  color: var(--ep-ink-soft);
+}
+
+.ep-envelope-title {
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-size: 0.98rem;
+  color: var(--ep-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ep-envelope-meta {
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--ep-ink-soft);
+}
+
+.ep-envelope-ribbon {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: #f3efe4;
+  color: var(--ep-ink-soft);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.ep-envelope-ribbon.is-ready {
+  background: var(--primary-pink-soft);
+  color: var(--ep-wax-deep);
+}
+
+.ep-envelope-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ep-mini-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9999px;
+  background: var(--bg-surface-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ep-mini-button.is-danger {
+  color: #b3425a;
+  border-color: #f0d4dc;
+  background: #fdf4f6;
+}
+
+/* A draft is not an envelope yet: a loose sheet with pencil lines. */
+.epistle-draft-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 22px;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 23px, #efe6d4 23px 24px),
+    var(--ep-paper);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-family);
+}
+
+.epistle-draft-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.epistle-draft-body h4 {
+  margin: 0 0 2px;
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--ep-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epistle-draft-body p {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--ep-ink-soft);
+}
+
+.epistle-draft-pencil {
+  color: var(--ep-ink-soft);
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* The writing desk                                                    */
+/* ------------------------------------------------------------------ */
+
+.epistle-desk {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 18px 0;
+}
+
+.epistle-desk-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0 8px;
+}
+
+.epistle-desk-mode {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ep-ink-soft);
+}
+
+.epistle-save-line {
+  font-size: 0.66rem;
+  color: var(--ep-ink-soft);
+  font-style: italic;
+  min-height: 1em;
+}
+
+/* The sheet itself: everything written sits directly on the paper. */
+.epistle-paper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--ep-paper-edge);
+  border-radius: 18px 18px 0 0;
+  border-bottom: none;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 30px, rgba(148, 125, 96, 0.12) 30px 31px),
+    linear-gradient(180deg, #fffef9 0%, #fffdf6 100%);
+  box-shadow: 0 -6px 26px rgba(78, 56, 44, 0.07);
+  padding: 22px 22px 30px;
+}
+
+.epistle-dateline {
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-size: 0.78rem;
+  color: var(--ep-ink-soft);
+  text-align: right;
+  margin: 0 0 4px;
+}
+
+.epistle-title-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.18rem;
+  color: var(--ep-ink);
+  padding: 6px 0;
+}
+
+.epistle-title-input::placeholder {
+  color: #c9bba9;
+  font-style: italic;
+}
+
+.epistle-body-input {
+  width: 100%;
+  min-height: 46vh;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.02rem;
+  line-height: 31px;
+  color: var(--ep-ink);
+  padding: 6px 0 20px;
+  field-sizing: content;
+}
+
+.epistle-body-input::placeholder {
+  color: #c9bba9;
+  font-style: italic;
+}
+
+/* The desk's edge: the pen rest. */
+.epistle-desk-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, rgba(248, 242, 230, 0), #f4ecdd 32%);
+}
+
+.epistle-word-count {
+  font-size: 0.68rem;
+  color: var(--ep-ink-soft);
+}
+
+.epistle-seal-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border: none;
+  border-radius: 9999px;
+  background: linear-gradient(140deg, var(--ep-wax) 0%, var(--ep-wax-deep) 100%);
+  color: #fff5f7;
+  font-family: var(--font-family);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(150, 51, 79, 0.35);
+  transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+}
+
+.epistle-seal-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.epistle-seal-button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* ------------------------------------------------------------------ */
+/* The sealing ceremony                                                */
+/* ------------------------------------------------------------------ */
+
+.epistle-ceremony {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 70% at 50% 0%, #fdf9f0 0%, transparent 60%),
+    linear-gradient(180deg, #f8f2e6 0%, #f1e8d6 100%);
+  animation: epistle-view-in 360ms ease both;
+}
+
+.epistle-ceremony-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 18px 4px;
+}
+
+.epistle-ceremony-step {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ep-wax);
+}
+
+.epistle-ceremony-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.epistle-ceremony-heading {
+  margin: 6px 0 0;
+  font-family: 'Lora', Georgia, serif;
+  font-weight: 500;
+  font-size: 1.3rem;
+  color: var(--ep-ink);
+}
+
+.epistle-ceremony-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ep-ink-soft);
+}
+
+/* Read-it-once-more preview carries the same paper the reader will see. */
+.epistle-ceremony-paper {
+  border: 1px solid var(--ep-paper-edge);
+  border-radius: 16px;
+  background: var(--ep-paper);
+  box-shadow: var(--shadow-card);
+  padding: 18px 18px 20px;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.epistle-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 15px;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 18px;
+  background: var(--ep-paper);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-family);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.epistle-choice[data-chosen='true'] {
+  border-color: var(--ep-wax);
+  box-shadow: 0 8px 22px rgba(192, 74, 107, 0.14);
+}
+
+.epistle-choice-radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #d8cbb8;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.epistle-choice[data-chosen='true'] .epistle-choice-radio {
+  border-color: var(--ep-wax);
+}
+
+.epistle-choice[data-chosen='true'] .epistle-choice-radio::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ep-wax);
+}
+
+.epistle-choice-text h4 {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--ep-ink);
+}
+
+.epistle-choice-text p {
+  margin: 3px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--ep-ink-soft);
+}
+
+.epistle-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 2px 0;
+}
+
+.epistle-date-field label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ep-ink-soft);
+}
+
+.epistle-date-input {
+  border: 1.5px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--ep-paper);
+  padding: 11px 13px;
+  font-family: var(--font-family);
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--ep-ink);
+}
+
+.epistle-ceremony-foot {
+  flex-shrink: 0;
+  padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(248, 242, 230, 0), #f1e8d6 30%);
+}
+
+.epistle-ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.epistle-ceremony-foot .epistle-seal-button,
+.epistle-ceremony-foot .epistle-primary-button {
+  flex: 1;
+  justify-content: center;
+}
+
+.epistle-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border: none;
+  border-radius: 9999px;
+  background: linear-gradient(140deg, var(--ep-wax) 0%, var(--ep-wax-deep) 100%);
+  color: #fff5f7;
+  font-family: var(--font-family);
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(150, 51, 79, 0.35);
+}
+
+.epistle-primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The big wax stamp, waiting to be pressed. */
+.epistle-stamp-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 0 8px;
+}
+
+.epistle-stamp {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 34% 30%, var(--ep-wax-light) 0%, var(--ep-wax) 48%, var(--ep-wax-deep) 100%);
+  box-shadow:
+    inset 0 4px 8px rgba(255, 255, 255, 0.4),
+    inset 0 -5px 9px rgba(80, 20, 40, 0.4),
+    0 14px 30px rgba(150, 51, 79, 0.4);
+  display: grid;
+  place-items: center;
+  color: rgba(255, 245, 248, 0.95);
+  animation: epistle-stamp-breathe 2.6s ease-in-out infinite;
+}
+
+.epistle-stamp span {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 2.1rem;
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1;
+}
+
+@keyframes epistle-stamp-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+
+.epistle-stamp.is-pressed {
+  animation: epistle-stamp-press 680ms ease both;
+}
+
+@keyframes epistle-stamp-press {
+  0% { transform: scale(1.12); }
+  38% { transform: scale(0.82) rotate(-3deg); box-shadow: 0 4px 12px rgba(150, 51, 79, 0.45); }
+  62% { transform: scale(0.94) rotate(1deg); }
+  100% { transform: scale(1); }
+}
+
+.epistle-seal-ring {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(150, 51, 79, 0.4);
+  display: grid;
+  place-items: center;
+}
+
+.epistle-sealed-note {
+  text-align: center;
+}
+
+.epistle-sealed-note h3 {
+  margin: 4px 0 0;
+  font-family: 'Lora', Georgia, serif;
+  font-weight: 500;
+  font-size: 1.24rem;
+  color: var(--ep-ink);
+}
+
+.epistle-sealed-note p {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--ep-ink-soft);
+  max-width: 32ch;
+}
+
+/* The sealed envelope takes a bow before it goes. */
+.epistle-sealed-env {
+  position: relative;
+  width: 132px;
+  height: 92px;
+  margin: 8px auto 0;
+  filter: drop-shadow(0 10px 18px rgba(78, 56, 44, 0.18));
+  animation: epistle-sealed-float 3.4s ease-in-out infinite;
+}
+
+.epistle-sealed-env .ep-env-back { border-radius: 9px; }
+.epistle-sealed-env .ep-env-front { border-radius: 9px; }
+
+.epistle-sealed-env .ep-wax {
+  width: 40px;
+  height: 40px;
+}
+
+.epistle-sealed-env .ep-wax span {
+  font-size: 1.05rem;
+}
+
+@keyframes epistle-sealed-float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-6px) rotate(1deg); }
+}
+
+/* ------------------------------------------------------------------ */
+/* The reading ceremony                                                */
+/* ------------------------------------------------------------------ */
+
+.epistle-reading {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Stage one: the envelope itself, alone, waiting for the tap. */
+.epistle-ceremony-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 30px 26px;
+  text-align: center;
+  position: relative;
+}
+
+.epistle-stage-env {
+  position: relative;
+  width: min(78vw, 264px);
+  aspect-ratio: 8 / 5.4;
+  cursor: pointer;
+  animation: epistle-env-present 700ms ease both;
+}
+
+@keyframes epistle-env-present {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.epistle-stage-env .ep-env-back,
+.epistle-stage-env .ep-env-front {
+  border-radius: 10px;
+  box-shadow: 0 18px 40px rgba(78, 56, 44, 0.16);
+}
+
+.epistle-stage-env .ep-env-flap { z-index: 3; }
+.epistle-stage-env .ep-env-letter-mini { z-index: 2; }
+.epistle-stage-env[data-opening='true'] .ep-env-flap { z-index: 1; }
+
+.epistle-stage-env .ep-wax {
+  width: 52px;
+  height: 52px;
+  z-index: 4;
+}
+
+.epistle-stage-env .ep-wax span {
+  font-size: 1.3rem;
+}
+
+.ep-env-letter-mini {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 7%;
+  bottom: 8%;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #fffef9 0%, #fdf8ec 100%);
+  box-shadow: 0 3px 10px rgba(78, 56, 44, 0.14);
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.epistle-stage-env[data-opening='true'] .ep-env-letter-mini {
+  transform: translateY(-58%);
+}
+
+.epistle-stage-env[data-opening='true'] .ep-wax {
+  animation: epistle-wax-break 620ms ease both;
+}
+
+@keyframes epistle-wax-break {
+  0% { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; }
+  30% { transform: translate(-50%, -50%) scale(1.18) rotate(-6deg); opacity: 1; }
+  100% { transform: translate(-50%, -58%) scale(0.6) rotate(16deg); opacity: 0; }
+}
+
+.epistle-stage-caption {
+  margin: 0;
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--ep-ink-soft);
+  animation: epistle-fade-in 900ms ease both;
+}
+
+.epistle-stage-caption strong {
+  color: var(--ep-ink);
+  font-style: normal;
+}
+
+@keyframes epistle-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The letter itself, full page. */
+.epistle-letter-paper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 14px;
+  border: 1px solid var(--ep-paper-edge);
+  border-radius: 18px;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 31px, rgba(148, 125, 96, 0.1) 31px 32px),
+    linear-gradient(180deg, #fffef9 0%, #fffdf6 100%);
+  box-shadow: 0 16px 40px rgba(78, 56, 44, 0.12);
+  padding: 26px 24px 30px;
+  animation: epistle-paper-unfold 640ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes epistle-paper-unfold {
+  from { opacity: 0; transform: perspective(700px) rotateX(10deg) translateY(16px); }
+  to { opacity: 1; transform: perspective(700px) rotateX(0) translateY(0); }
+}
+
+.epistle-letter-title {
+  margin: 2px 0 14px;
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.3rem;
+  color: var(--ep-ink);
+}
+
+.epistle-letter-body p {
+  margin: 0 0 12px;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.02rem;
+  line-height: 32px;
+  color: var(--ep-ink);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  animation: epistle-ink-appear 800ms ease both;
+}
+
+/* The ink arrives paragraph by paragraph, the way it was thought. */
+.epistle-letter-body p:nth-child(1) { animation-delay: 150ms; }
+.epistle-letter-body p:nth-child(2) { animation-delay: 300ms; }
+.epistle-letter-body p:nth-child(3) { animation-delay: 450ms; }
+.epistle-letter-body p:nth-child(4) { animation-delay: 600ms; }
+.epistle-letter-body p:nth-child(5) { animation-delay: 750ms; }
+.epistle-letter-body p:nth-child(6) { animation-delay: 900ms; }
+.epistle-letter-body p:nth-child(n + 7) { animation-delay: 1000ms; }
+
+@keyframes epistle-ink-appear {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.epistle-letter-sign {
+  margin: 18px 0 0;
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-size: 0.92rem;
+  color: var(--ep-ink-soft);
+  animation: epistle-ink-appear 800ms ease 1100ms both;
+}
+
+.epistle-letter-foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.epistle-letter-meta {
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--ep-ink-soft);
+  max-width: 24ch;
+}
+
+/* A sentence that went wrong: quiet, on its own line, never a red siren. */
+.epistle-error {
+  margin: 0;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: #fdf1f4;
+  border: 1px solid #f2d7df;
+  color: #a13c58;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ */
+/* The mailbox standing in the nook                                    */
+/* ------------------------------------------------------------------ */
+
+.nooki-mailbox-flag {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.nooki-mailbox-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ep-wax, #c04a6b);
+  box-shadow: var(--shadow-subtle);
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  line-height: 1.1;
+  transition: transform 160ms ease;
+}
+
+.nooki-mailbox-button:active {
+  transform: scale(0.94);
+}
+
+.nooki-mailbox-count {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--ep-wax, #c04a6b);
+  border: 2px solid #fffbf2;
+  color: #fff5f7;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 13px;
+  text-align: center;
+}
+
+.nooki-mailbox-hint {
+  margin: 0;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-subtle);
+  color: var(--text-muted);
+  font-family: var(--font-family);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: nooki-mailbox-hint-in 500ms ease 600ms both;
+}
+
+@keyframes nooki-mailbox-hint-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion: every ceremony keeps its meaning, loses its theatre */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .epistle-view,
+  .epistle-ceremony,
+  .epistle-stage-env,
+  .epistle-paper,
+  .epistle-letter-paper,
+  .epistle-letter-body p,
+  .epistle-letter-sign,
+  .epistle-stage-caption,
+  .epistle-sealed-env,
+  .nooki-mailbox-hint {
+    animation: none !important;
+  }
+
+  .epistle-letter-body p,
+  .epistle-letter-sign {
+    opacity: 1 !important;
+  }
+
+  .epistle-stamp,
+  .epistle-envelope[data-openable='true']::after {
+    animation: none !important;
+  }
+
+  .epistle-stage-env[data-opening='true'] .ep-env-letter-mini {
+    transition: none;
+  }
+}
