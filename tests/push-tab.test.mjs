@@ -343,6 +343,12 @@ test('push sending: the Edge Function exists, is documented, and never leaks the
   assert(fn.includes('count: unread'), 'the icon badge comes from the exact count (head: true puts it in `count`, not `data`)');
   assert(fn.includes("requiredSecret('SUPABASE_SECRET_KEY')"), 'and it works on projects that use the new secret key names');
   assert(fn.includes("payload.table !== 'messages'"), 'only new messages trigger it');
+  assert(fn.includes('handleEpistle'), 'a sealed letter knocks on the partner’s phone');
+  assert(fn.includes('handleMissYou'), 'a first waiting tap knocks too');
+  assert(fn.includes("payload.table !== 'miss_you_taps'"), 'the miss-you table is a watched table');
+  assert(fn.includes('nooki-miss-you-'), 'taps of one day share a tag, so a re-knock replaces the old one');
+  assert(fn.includes('Misses you'), 'the tap says what it is');
+  assert(fn.includes("'not the first waiting tap'"), 'later taps and the opening itself stay silent');
   assert(fn.includes('status === 404 || status === 410'), 'a device that is gone is deleted, not retried forever');
   assert(fn.includes("tab: 'chat'"), 'the notification deep links into the chat');
   assert(!fn.includes('TogetherTimeReminder'), 'the scheduled date-night reminder path is removed');
@@ -351,4 +357,16 @@ test('push sending: the Edge Function exists, is documented, and never leaks the
   const config = readSource('../supabase/config.toml');
   assert(config.includes('[functions.send-push]'), 'the function\'s gateway settings travel with the code');
   assert(config.includes('verify_jwt = false'), 'the webhook calls it with a service key, so the function does its own auth check');
+});
+
+test('push runbook: the letters’ trigger sends a real payload, and miss-yous have their webhook', () => {
+  const readme = readSource('../README.md');
+  // The function skips any body without `table`/`record`, so the runbook's trigger SQL
+  // must build the webhook-shaped body around the sealed row — an empty body would be
+  // silence, however correctly the function itself is written.
+  assert(readme.includes('notify_epistle_sealed'), 'the letters’ knock is built in a wrapper function');
+  assert(readme.includes('row_to_json(NEW)'), '…sending the sealed row itself, not an empty body');
+  assert(readme.includes('row_to_json(OLD)'), '…with the unsealed row beside it, so the moment of sealing is provable');
+  assert(readme.includes('Table `miss_you_taps`'), 'miss-yous have their own dashboard webhook step');
+  assert(readme.includes('202610210002_miss_you_push.sql'), '…and the grant migration that lets the sender read the taps');
 });

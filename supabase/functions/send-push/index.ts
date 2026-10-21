@@ -21,6 +21,9 @@
  *   epistles INSERT / UPDATE   → tell the *partner* a letter was sealed for them
  *                                (the mailbox in the nook) — only the moment it is
  *                                sealed, never for drafts, recalls or rewrites
+ *   miss_you_taps INSERT / UPDATE → tell the *partner* they are missed (Home, where
+ *                                the heart opens) — only the first tap of a waiting
+ *                                batch, never every tap and never the opening itself
 
  * Every event is something the recipient must act on, so a Nooki notification is always
  * meaningful: a new message, a question waiting for your answer, a move waiting for you.
@@ -71,6 +74,15 @@ interface EpistleRecord {
   title?: string | null;
   sealed_at?: string | null;
   opens_at?: string | null;
+}
+
+interface MissYouTapRecord {
+  id?: string;
+  couple_id?: string;
+  sender_id?: string | null;
+  tap_date?: string;
+  tap_count?: number;
+  delivered_count?: number;
 }
 
 interface WebhookPayload {
@@ -312,6 +324,71 @@ async function handleEpistle(
   return deliver(admin, partner.id, notification);
 }
 
+/**
+ * miss_you_taps (INSERT, or UPDATE from none-waiting to some-waiting) → tell the
+ * partner they are missed. The button is for tapping freely, so only the *first*
+ * tap of a waiting batch knocks: an INSERT (a new day's row) or an UPDATE whose old
+ * row had nothing waiting (fresh taps after the partner already opened theirs).
+ * Taps piling onto an unopened heart stay silent, and so does the opening itself —
+ * one batch, one knock. The heart opens over Home, so the deep link goes there.
+ */
+async function handleMissYou(
+  admin: Admin,
+  type: string | undefined,
+  record: Record<string, unknown>,
+  oldRecord: Record<string, unknown> | undefined,
+): Promise<Response> {
+  const tap = record as MissYouTapRecord;
+  const coupleId = str(tap.couple_id);
+  const senderId = tap.sender_id ?? null;
+  const tapDate = str(tap.tap_date);
+  const waitingNow = (typeof tap.tap_count === 'number' ? tap.tap_count : 0)
+    - (typeof tap.delivered_count === 'number' ? tap.delivered_count : 0);
+  if (!coupleId || !senderId || !tapDate) return json({ skipped: 'the tap has no couple, sender or day' });
+
+  if (type === 'UPDATE') {
+    const old = (oldRecord ?? {}) as MissYouTapRecord;
+    const waitingBefore = (typeof old.tap_count === 'number' ? old.tap_count : 0)
+      - (typeof old.delivered_count === 'number' ? old.delivered_count : 0);
+    if (waitingBefore > 0 || waitingNow <= 0) return json({ skipped: 'not the first waiting tap' });
+  } else if (waitingNow <= 0) {
+    return json({ skipped: 'nothing waiting' });
+  }
+
+  const { data: partner, error: partnerError } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('couple_id', coupleId)
+    .neq('id', senderId)
+    .maybeSingle();
+  if (partnerError) return json({ error: `Could not read the partner: ${partnerError.message}` }, 500);
+  if (!partner) return json({ skipped: 'no partner yet' });
+
+  const actor = await displayName(admin, senderId);
+
+  // Every tap still waiting across the sender's days: the number the heart is for.
+  const { data: rows } = await admin
+    .from('miss_you_taps')
+    .select('tap_count, delivered_count')
+    .eq('couple_id', coupleId)
+    .eq('sender_id', senderId);
+  const waiting = (rows ?? []).reduce((total: number, row) => {
+    const counts = row as { tap_count?: number; delivered_count?: number };
+    return total + Math.max(0, (counts.tap_count ?? 0) - (counts.delivered_count ?? 0));
+  }, 0);
+
+  const notification: PushNotification = {
+    title: actor,
+    body: 'Misses you. Tap to open it.',
+    tag: `nooki-miss-you-${coupleId}-${tapDate}`,
+    tab: 'home',
+    url: '/?nooki=home',
+    badge: waiting,
+    messageId: null,
+  };
+  return deliver(admin, partner.id, notification);
+}
+
 /** messages INSERT → notify the partner who did not send it. */
 async function handleMessage(admin: Admin, record: Record<string, unknown>): Promise<Response> {
   const message = record as MessageRecord;
@@ -489,7 +566,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const record = payload.record;
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-  if (!record || payload.table !== 'messages' && payload.table !== 'answers' && payload.table !== 'game_matches' && payload.table !== 'epistles') {
+  if (!record || payload.table !== 'messages' && payload.table !== 'answers' && payload.table !== 'game_matches' && payload.table !== 'epistles' && payload.table !== 'miss_you_taps') {
     return json({ skipped: 'not a watched table' });
   }
 
@@ -506,6 +583,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
     case 'epistles':
       if (payload.type !== 'INSERT' && payload.type !== 'UPDATE') return json({ skipped: 'not a seal or a rewrite' });
       return handleEpistle(admin, record, payload.old_record);
+    case 'miss_you_taps':
+      if (payload.type !== 'INSERT' && payload.type !== 'UPDATE') return json({ skipped: 'not a tap or an opening' });
+      return handleMissYou(admin, payload.type, record, payload.old_record);
     default:
       return json({ skipped: 'unhandled table' });
   }
