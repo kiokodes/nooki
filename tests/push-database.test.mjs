@@ -200,3 +200,32 @@ test('verify.sql sends the owner to the web-push migration when the device table
     await server.close();
   }
 });
+
+test('push sending: send-push may read miss-you taps, once the grant migration runs', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://test-project.supabase.co'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('sb_publishable_test_only'),
+  } });
+  let backend;
+  try {
+    const { supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts');
+    backend = await installTestBackend(supabase);
+    const migration = await readFile(new URL('../supabase/migrations/202610210002_miss_you_push.sql', import.meta.url), 'utf8');
+    const senderMayRead = async () => (await backend.query(
+      "SELECT has_table_privilege('service_role','public.miss_you_taps','SELECT') allowed",
+    )).rows[0].allowed;
+
+    // A project whose taps table never got the automatic service_role grant.
+    await backend.exec('REVOKE SELECT ON public.miss_you_taps FROM service_role');
+    assert.equal(await senderMayRead(), false, 'without the grant the sender cannot count the waiting taps');
+
+    await backend.exec(migration);
+    assert.equal(await senderMayRead(), true, 'the migration lets send-push read the taps');
+
+    await backend.exec(migration);
+    assert.equal(await senderMayRead(), true, 'rerunning the migration changes nothing');
+  } finally {
+    await backend?.close();
+    await server.close();
+  }
+});

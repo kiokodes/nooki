@@ -876,29 +876,51 @@ platform.
    `PUSH_WEBHOOK_SECRET` you set below, or at minimum the Authorization header every
    Supabase webhook sends). The private half must never appear in a `VITE_` variable, in
    the repository, or in the app bundle.
-5. **Add the webhooks** (Dashboard → Database → Webhooks → Create). One for chat, and —
-   after running `202610200001_epistles.sql` — one for the letters:
+5. **Add the webhooks** (Dashboard → Database → Webhooks → Create) — one for chat, one
+   for "I miss you", and — after running `202610200001_epistles.sql` — the letters' knock:
    - Table `messages`, event **Insert**.
-   - Both: type **Supabase Edge Function**, function `send-push`, method `POST`.
+   - Table `miss_you_taps`, events **Insert** and **Update** (after running
+     `202610210002_miss_you_push.sql`, so the function may read the taps).
+   - All: type **Supabase Edge Function**, function `send-push`, method `POST`.
    - HTTP header `Authorization: Bearer <the same PUSH_WEBHOOK_SECRET>`.
    - The letters' knock is a plain SQL trigger rather than a dashboard webhook, because it
      must fire **only at the moment of sealing** — a dashboard Insert/Update webhook would
      also fire on every draft autosave. Run this once in the SQL Editor (it is what this
-     project runs; the endpoint and secret are the send-push webhook's own):
+     project runs; the endpoint and secret are the send-push webhook's own). The wrapper
+     matters: the function expects the webhook-shaped body (`type`, `table`, `record`,
+     `old_record`), and an empty body is silently skipped.
 
      ```sql
+     CREATE OR REPLACE FUNCTION public.notify_epistle_sealed()
+     RETURNS TRIGGER
+     LANGUAGE plpgsql
+     SECURITY DEFINER
+     SET search_path = public
+     AS $$
+     BEGIN
+       PERFORM supabase_functions.http_request(
+         'https://<project-ref>.supabase.co/functions/v1/send-push',
+         'POST',
+         '{"Content-type":"application/json","Authorization":"Bearer <PUSH_WEBHOOK_SECRET>"}',
+         json_build_object(
+           'type', 'UPDATE',
+           'table', 'epistles',
+           'schema', 'public',
+           'record', row_to_json(NEW),
+           'old_record', row_to_json(OLD)
+         )::text,
+         '5000'
+       );
+       RETURN NEW;
+     END;
+     $$;
+
      DROP TRIGGER IF EXISTS epistles_sealed ON public.epistles;
      CREATE TRIGGER epistles_sealed
      AFTER UPDATE ON public.epistles
      FOR EACH ROW
      WHEN (NEW.sealed_at IS NOT NULL AND OLD.sealed_at IS NULL)
-     EXECUTE FUNCTION supabase_functions.http_request(
-       'https://<project-ref>.supabase.co/functions/v1/send-push',
-       'POST',
-       '{"Content-type":"application/json","Authorization":"Bearer <PUSH_WEBHOOK_SECRET>"}',
-       '{}',
-       '5000'
-     );
+     EXECUTE FUNCTION public.notify_epistle_sealed();
      ```
 6. **Verify**, then switch it on per device: Couple Settings → **Notifications**. The
    switch is per browser, not per account — a phone and a laptop are two independent
@@ -950,6 +972,7 @@ a function secret. `send-push` needs the service key because the sender must rea
 | The card says notifications are off "for this Nooki yet" | `VITE_VAPID_PUBLIC_KEY` is missing or malformed in the environment the build used. Rebuild and redeploy; check the build log for the warning. |
 | The switch turns itself off again | The RPC failed: the push migration was not applied, or `PUSH_WEBHOOK_SECRET`/VAPID secrets are missing on the function. `verify.sql` and the function's logs will say which. |
 | Subscribed, nothing arrives | The webhook is not on `messages`/Insert, its Authorization header does not match `PUSH_WEBHOOK_SECRET`, or the message had a NULL `sender_id` (system notes are deliberately not announced). Supabase → Edge Functions → `send-push` logs show every call. |
+| Chats notify but letters or miss-yous stay silent | The letters need the `epistles_sealed` SQL trigger above (a dashboard webhook is not enough, and the trigger must send the webhook-shaped body — an empty body is skipped); miss-yous need the `miss_you_taps` webhook (Insert **and** Update) plus `202610210002_miss_you_push.sql`, without which the function cannot read the taps. |
 | Works on Android, silent on iPhone | The app is in a Safari tab rather than added to the Home Screen. Push cannot exist there. |
 | The function will not boot: `Cannot find module 'https'` (or a web-push error at import) | The pinned `npm:web-push@3.6.7` could not run on that runtime. Replace it with Deno's own implementation (`jsr:@negrel/webpush`), which changes only the import and the two calls (`setVapidDetails`/`sendNotification`) — the payload, the secrets and the webhook stay exactly as they are. |
 | It worked, then stopped after a few days | The browser rotated its subscription. Opening the app re-claims it automatically (the registration refresh runs on load); if it recurs weekly, check the function logs for 410s against a stale endpoint. |
@@ -1006,7 +1029,8 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
 - **Edge Functions** (only for push notifications): deploy `send-push` from this
   repository (`supabase functions deploy send-push --no-verify-jwt`, or paste
   `supabase/functions/send-push/index.ts` into the dashboard), set its `VAPID_*` and
-  `PUSH_WEBHOOK_SECRET` secrets, and add the Database Webhook on `messages` (Insert). The
+  `PUSH_WEBHOOK_SECRET` secrets, and add the Database Webhooks on `messages` (Insert)
+  and `miss_you_taps` (Insert, Update) plus the letters' SQL trigger. The
   step-by-step list, with the exact commands, is under **Push notifications** above.
 - **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
   chat messages ride Postgres Changes on `messages`, Discuss rides a second couple-scoped
