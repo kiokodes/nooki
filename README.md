@@ -869,10 +869,27 @@ platform.
 5. **Add the webhooks** (Dashboard → Database → Webhooks → Create). One for chat, and —
    after running `202610200001_epistles.sql` — one for the letters:
    - Table `messages`, event **Insert**.
-   - Table `epistles`, events **Insert** and **Update** (a letter knocks only at the
-     moment it is sealed; drafts, recalls and rewrites are deliberately silence).
    - Both: type **Supabase Edge Function**, function `send-push`, method `POST`.
    - HTTP header `Authorization: Bearer <the same PUSH_WEBHOOK_SECRET>`.
+   - The letters' knock is a plain SQL trigger rather than a dashboard webhook, because it
+     must fire **only at the moment of sealing** — a dashboard Insert/Update webhook would
+     also fire on every draft autosave. Run this once in the SQL Editor (it is what this
+     project runs; the endpoint and secret are the send-push webhook's own):
+
+     ```sql
+     DROP TRIGGER IF EXISTS epistles_sealed ON public.epistles;
+     CREATE TRIGGER epistles_sealed
+     AFTER UPDATE ON public.epistles
+     FOR EACH ROW
+     WHEN (NEW.sealed_at IS NOT NULL AND OLD.sealed_at IS NULL)
+     EXECUTE FUNCTION supabase_functions.http_request(
+       'https://<project-ref>.supabase.co/functions/v1/send-push',
+       'POST',
+       '{"Content-type":"application/json","Authorization":"Bearer <PUSH_WEBHOOK_SECRET>"}',
+       '{}',
+       '5000'
+     );
+     ```
 6. **Verify**, then switch it on per device: Couple Settings → **Notifications**. The
    switch is per browser, not per account — a phone and a laptop are two independent
    devices, and turning one off never touches the other.
