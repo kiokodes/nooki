@@ -13,7 +13,7 @@ export interface MailboxButtonProps {
 }
 
 /**
- * The mailbox standing in the nook's corner.
+ * The mailbox standing in the nook's bottom-left corner.
  *
  * A quiet little object, the way the "I miss you" button is: when the partner has
  * sealed a letter that is ready, the flag goes up — a number, and a whispered line

@@ -35,8 +35,8 @@ interface HomeViewProps {
    */
   missYou?: MissYouButtonProps;
   /**
-   * The mailbox standing in the nook's corner: the way into Epistles, the couple's
-   * long letters. Its count is the partner's sealed letters openable right now.
+   * The mailbox standing in the nook's bottom-left corner: the way into Epistles, the
+   * couple's long letters. Its count is the partner's sealed letters openable right now.
    */
   mailbox?: MailboxButtonProps;
 }
@@ -160,7 +160,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             in the app. It stays exactly where it has always been, in the nook's
             top-left corner. */}
         {missYou && <MissYouButton {...missYou} />}
-        {/* The mailbox, standing in the nook's corner: the couple's long letters. */}
+        {/* The mailbox, standing in the nook's bottom-left corner: the couple's long
+            letters. */}
         {mailbox && <MailboxButton {...mailbox} />}
         <NookPhotoFrame
           src={photo?.src ?? null}
