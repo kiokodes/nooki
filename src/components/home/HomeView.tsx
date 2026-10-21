@@ -3,6 +3,7 @@ import { TodayCard } from './TodayCard';
 import { DailyDecisionCard, type DailyDecisionCardProps } from './DailyDecisionCard';
 import { NookPhotoFrame, type NookPhotoFrameProps } from './NookPhotoFrame';
 import { MissYouButton, type MissYouButtonProps } from './MissYouButton';
+import { MailboxButton, type MailboxButtonProps } from './MailboxButton';
 import { useNow } from '../../hooks/useNow';
 import { tokens } from '../../tokens/designTokens';
 import type { CoupleEvent } from '../../types/database';
@@ -33,6 +34,11 @@ interface HomeViewProps {
    * couple is not both paired and apart — the button is for the partner who is alone.
    */
   missYou?: MissYouButtonProps;
+  /**
+   * The mailbox standing in the nook's corner: the way into Epistles, the couple's
+   * long letters. Its count is the partner's sealed letters openable right now.
+   */
+  mailbox?: MailboxButtonProps;
 }
 
 /**
@@ -60,6 +66,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   dailyDecision,
   photo,
   missYou,
+  mailbox,
 }) => {
   // Minute granularity is plenty for a date, and it keeps the tab from re-rendering every second.
   const today = useNow(60_000);
@@ -153,6 +160,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             in the app. It stays exactly where it has always been, in the nook's
             top-left corner. */}
         {missYou && <MissYouButton {...missYou} />}
+        {/* The mailbox, standing in the nook's corner: the couple's long letters. */}
+        {mailbox && <MailboxButton {...mailbox} />}
         <NookPhotoFrame
           src={photo?.src ?? null}
           uploading={photo?.uploading ?? false}

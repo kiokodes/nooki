@@ -330,3 +330,30 @@ export interface SomedayItem {
   created_at: string;
   updated_at: string;
 }
+
+/* ---------------------------------------------------------------------------
+   Epistles: long, sealed letters written to each other, kept apart from the
+   chat. A letter is a draft (sealed_at NULL, the sender's alone), then sealed
+   (standing in the partner's mailbox with the wax intact), optionally waiting
+   for a chosen day (opens_at), and finally opened — the moment it becomes a
+   final keepsake for both. See supabase/migrations/202610200001_epistles.sql.
+   --------------------------------------------------------------------------- */
+
+export interface Epistle {
+  id: string;
+  couple_id: string;
+  /** Who wrote it. Only they may rework it, and only until it is opened. */
+  sender_id: string;
+  /** An optional name for the letter, shown on the envelope; at most 80 characters. */
+  title: string | null;
+  /** The letter itself — long-form on purpose, at most 20,000 characters. */
+  body: string;
+  /** When it was sealed and sent; NULL while it is still a draft. */
+  sealed_at: string | null;
+  /** The calendar day before which the partner's seal refuses to break, or NULL for "as soon as they like". */
+  opens_at: string | null;
+  /** When the partner broke the seal; NULL while it is still waiting. Once set, the letter is final. */
+  opened_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

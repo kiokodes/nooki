@@ -25,11 +25,13 @@ import { ChatView } from './components/chat/ChatView';
 import { DiscussView } from './components/discuss/DiscussView';
 import { CalendarModal } from './components/calendar/CalendarModal';
 import { TogetherView } from './components/together/TogetherView';
+import { EpistleView } from './components/epistle/EpistleView';
 import { useCoupleEvents } from './hooks/useCoupleEvents';
 import { useChat } from './hooks/useChat';
 import { useDiscuss, type SessionDetail } from './hooks/useDiscuss';
 import { useVisits } from './hooks/useVisits';
 import { useSomedayList } from './hooks/useSomedayList';
+import { useEpistles } from './hooks/useEpistles';
 import { DangerSettingsModal } from './components/common/DangerSettingsModal';
 import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
@@ -161,6 +163,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const [showCalendar, setShowCalendar] = useState(false);
   // Visit planning modal for the Together tab
   const [showVisitPlanning, setShowVisitPlanning] = useState(false);
+  // The couple's letters: a full-screen world over whatever tab is open, entered
+  // from the mailbox standing in the Home nook.
+  const [showEpistles, setShowEpistles] = useState(false);
   // A message is only "read" while the Chat tab is on screen *and* the app is awake.
   const [appVisible, setAppVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
 
@@ -234,6 +239,15 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
 
   // Shared, manually ordered notebook tasks for the couple.
   const somedayList = useSomedayList(couple?.id ?? null, currentUser?.id ?? null);
+
+  // The couple's letters, alive at app level: the mailbox's count stays honest
+  // while this phone is on any tab, and a letter sealed on the other side
+  // arrives in real time.
+  const epistles = useEpistles({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+    active: splashDone && Boolean(couple),
+  });
 
   // This device's notification switch, and the deep link a tapped notification carries.
   // App-level like the chat: the home-screen badge is cleared from here, and a
@@ -639,6 +653,12 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
               error: missYou.error,
               onTap: () => { void missYou.tap(); },
             }}
+            mailbox={{
+              count: epistles.unopenedCount,
+              waitingCount: epistles.waitingCount,
+              partnerName: partner.name,
+              onOpen: () => setShowEpistles(true),
+            }}
           />
         ) : activeTab === 'together' ? (
           <TogetherView
@@ -831,6 +851,29 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             batch={missYou.reveal}
             senderName={partner.name}
             onDismiss={missYou.dismissReveal}
+          />
+        )}
+
+        {/* The couple's letters: a world of its own over the whole app — mailbox,
+            writing desk, wax seal, reading — entered from the nook's mailbox. */}
+        {showEpistles && (
+          <EpistleView
+            letters={epistles.letters}
+            loading={epistles.loading}
+            error={epistles.error}
+            userId={currentUser.id}
+            myName={profile.name}
+            partnerName={partner.name}
+            myPlace={[profile.city_name, profile.country_name].filter(Boolean).join(', ') || null}
+            todayKey={epistles.todayKey}
+            onClose={() => setShowEpistles(false)}
+            onCreateDraft={(title, body) => epistles.createDraft(title, body)}
+            onSaveDraft={(id, title, body) => epistles.saveDraft(id, title, body)}
+            onSeal={(id, opensAt) => epistles.seal(id, opensAt)}
+            onRecall={(id) => epistles.recall(id)}
+            onOpen={(id) => epistles.open(id)}
+            onDiscard={(id) => epistles.removeDraft(id)}
+            onClearError={() => epistles.clearError()}
           />
         )}
 

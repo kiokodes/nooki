@@ -6,6 +6,7 @@ import {
   Heart,
   Home as HomeIcon,
   Image as ImageIcon,
+  Mailbox as MailboxIcon,
   MessageCircle,
   MessageSquare,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ import { CoupleHeader } from '../components/common/CoupleHeader';
 import { PreviewSnake } from './PreviewSnake';
 import { PreviewTetris } from './PreviewTetris';
 import { PreviewWordWheel } from './PreviewWordWheel';
+import { PreviewEpistles } from './PreviewEpistles';
 import { ChessDuel } from '../components/games/ChessDuel';
 import { OngoingGames } from '../components/games/OngoingGames';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
@@ -109,7 +111,7 @@ const PRESETS: Preset[] = [
   { label: 'Long distance (6Y 8M 1D)', anniversary: '2020-02-14' },
 ];
 
-type PreviewTab = 'home' | 'chat' | 'games';
+type PreviewTab = 'home' | 'chat' | 'games' | 'epistles';
 type PreviewGame = 'snake' | 'chess' | 'tetris' | 'word';
 
 /**
@@ -260,6 +262,9 @@ export const AppPreview = () => {
   const [tab, setTab] = useState<PreviewTab>('home');
   // Which duel the Games tab is showing: the preview has both, one at a time.
   const [previewGame, setPreviewGame] = useState<PreviewGame>('tetris');
+  // How many letters Ana has sealed for this phone: the mailbox's number, and the
+  // envelope the epistles preview delivers when it is opened.
+  const [epistleNudge, setEpistleNudge] = useState(0);
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -517,6 +522,13 @@ export const AppPreview = () => {
         <button type="button" style={controlStyle(missYouTaps > 0)} onClick={() => setMissYouTaps(0)}>
           {missYouTaps > 0 ? `Reset the ${missYouTaps} miss-you taps` : 'I miss you (tap it in the nook)'}
         </button>
+        <button
+          type="button"
+          style={controlStyle(epistleNudge > 0)}
+          onClick={() => { setEpistleNudge((value) => value + 1); setTab('epistles'); }}
+        >
+          {epistleNudge > 0 ? `Ana seals another letter (${epistleNudge} so far)` : 'Epistles: Ana seals a letter for you'}
+        </button>
         <button type="button" style={controlStyle(!photoFramed)} onClick={() => setPhotoFramed((value) => !value)}>
           {photoFramed ? 'Empty the picture frame' : 'Frame the sample picture'}
         </button>
@@ -574,7 +586,11 @@ export const AppPreview = () => {
               onOpenSettings={() => setShowSettings(true)}
             />
 
-            {tab === 'games' ? (
+            {tab === 'epistles' ? (
+              /* The real epistle experience over an in-memory mailbox: the mailbox,
+                 the writing desk, the wax seal and the reading ceremony, no backend. */
+              <PreviewEpistles inboxNudge={epistleNudge} />
+            ) : tab === 'games' ? (
               /* The Games tab head — the real eyebrow, the real swipeable Ongoing games
                  card and the real Last duel row, fed sample matches — and below it the
                  duels played out on this page: same boards, same rules, no backend.
@@ -658,6 +674,12 @@ export const AppPreview = () => {
                   partnerName: partner.name,
                   error: null,
                   onTap: () => setMissYouTaps((value) => value + 1),
+                }}
+                mailbox={{
+                  count: epistleNudge > 0 ? 1 : 0,
+                  waitingCount: epistleNudge > 0 ? 1 : 0,
+                  partnerName: partner.name,
+                  onOpen: () => setTab('epistles'),
                 }}
               />
             ) : (
@@ -817,6 +839,52 @@ export const AppPreview = () => {
 
               <button
                 type="button"
+                aria-label="Epistles"
+                onClick={() => setTab('epistles')}
+                style={navItemStyle(tab === 'epistles')}
+              >
+                <span
+                  style={{
+                    position: 'relative',
+                    width: '30px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: tokens.radii.sm,
+                    backgroundColor: tab === 'epistles' ? tokens.colors.primaryPinkSoft : 'transparent',
+                    color: tab === 'epistles' ? tokens.colors.primaryPinkDeep : tokens.colors.textMuted,
+                  }}
+                >
+                  <MailboxIcon size={19} />
+                  {epistleNudge > 0 && (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: 'absolute',
+                        top: -4,
+                        right: -6,
+                        minWidth: '15px',
+                        height: '15px',
+                        padding: '0 3px',
+                        borderRadius: 9999,
+                        background: tokens.colors.primaryPinkDeep,
+                        border: `2px solid ${tokens.colors.bgSurface}`,
+                        color: tokens.colors.textWhite,
+                        fontSize: '9px',
+                        fontWeight: 800,
+                        lineHeight: '11px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {epistleNudge}
+                    </span>
+                  )}
+                </span>
+                Letters
+              </button>
+              <button
+                type="button"
                 aria-label="Games"
                 onClick={() => setTab('games')}
                 style={navItemStyle(tab === 'games')}
@@ -866,7 +934,9 @@ export const AppPreview = () => {
                 : previewGame === 'word'
                   ? 'Word Wheel preview · sample wheel, played on this page · the real round is timed and scored by the database'
                   : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
-            : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
+            : tab === 'epistles'
+              ? 'Epistles preview · the real experience over sample letters · write, seal, open, and let Ana send you one'
+              : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}
       </p>
     </div>
   );
