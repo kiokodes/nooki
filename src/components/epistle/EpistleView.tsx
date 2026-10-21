@@ -579,7 +579,7 @@ function MailboxScreen({
             <p className="epistle-section-label is-muted">On their way</p>
             <div className="epistle-shelf">
               {sections.mine.map((epistle) => (
-                <div key={epistle.id} className="epistle-row">
+                <div key={epistle.id} className="epistle-row is-sent-letter">
                   <div className="epistle-row-main">
                     <EnvelopeCard
                       epistle={epistle}
