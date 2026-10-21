@@ -15,6 +15,7 @@ test('database pairing, anniversary locks, cancellation and RLS', async () => {
     await db.exec(`
       CREATE ROLE authenticated NOLOGIN;
       CREATE ROLE anon NOLOGIN;
+      CREATE ROLE service_role NOLOGIN BYPASSRLS;
       CREATE SCHEMA auth;
       CREATE TABLE auth.users (id UUID PRIMARY KEY);
       CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE SQL STABLE AS $$
