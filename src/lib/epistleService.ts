@@ -14,6 +14,8 @@ import type { Epistle } from '../types/database';
 
 /** Rerun before deploying. */
 const EPISTLES_MIGRATION = 'supabase/migrations/202610200001_epistles.sql';
+/** Rerun before deploying replies. */
+const EPISTLE_REPLIES_MIGRATION = 'supabase/migrations/202610210001_epistle_replies.sql';
 
 /**
  * A project that has not run the migration answers with no function or no table rather
@@ -29,6 +31,19 @@ function isMissingMigration(error: { message: string; code?: string }): boolean 
 
 function missingMigration(): Error {
   return new Error(`The database needs an update. Please ask the app owner to apply ${EPISTLES_MIGRATION}.`);
+}
+
+/**
+ * A project that ran the letters migration but not the replies one answers a reply
+ * with an unknown column rather than an error worth showing, so it is named as the
+ * missing migration it is.
+ */
+function isMissingRepliesMigration(error: { message: string; code?: string }): boolean {
+  return error.code === '42703' && /reply_to_id/i.test(error.message);
+}
+
+function missingRepliesMigration(): Error {
+  return new Error(`The database needs an update. Please ask the app owner to apply ${EPISTLE_REPLIES_MIGRATION}.`);
 }
 
 function throwDescribed(error: { message: string; code?: string }): never {
@@ -49,26 +64,50 @@ export async function fetchEpistles(coupleId: string): Promise<Epistle[]> {
 export interface EpistleDraftInput {
   title: string | null;
   body: string;
+  /**
+   * The answered letter's id. Left out while the letter starts its own
+   * correspondence — and on a save, `undefined` leaves the link untouched while
+   * `null` clears it back to a letter of its own.
+   */
+  replyToId?: string | null;
 }
 
 /** Starts a letter as a draft — the author's alone until it is sealed. */
-export async function createEpistleDraft(coupleId: string, senderId: string, { title, body }: EpistleDraftInput): Promise<Epistle> {
+export async function createEpistleDraft(coupleId: string, senderId: string, { title, body, replyToId }: EpistleDraftInput): Promise<Epistle> {
   const { data, error } = await requireSupabase().from('epistles')
-    .insert({ couple_id: coupleId, sender_id: senderId, title: title || null, body })
+    .insert({
+      couple_id: coupleId,
+      sender_id: senderId,
+      title: title || null,
+      body,
+      // Named only for actual replies, so a project without the replies migration
+      // keeps accepting ordinary letters and fails loudly only on a reply.
+      ...(replyToId ? { reply_to_id: replyToId } : {}),
+    })
     .select()
     .single();
-  if (error) throwDescribed(error);
+  if (error) {
+    if (isMissingRepliesMigration(error)) throw missingRepliesMigration();
+    throwDescribed(error);
+  }
   return data as Epistle;
 }
 
 /** Saves a draft's words. Only the author, and only while it is still theirs. */
-export async function saveEpistleDraft(id: string, { title, body }: EpistleDraftInput): Promise<Epistle> {
+export async function saveEpistleDraft(id: string, { title, body, replyToId }: EpistleDraftInput): Promise<Epistle> {
   const { data, error } = await requireSupabase().from('epistles')
-    .update({ title: title || null, body })
+    .update({
+      title: title || null,
+      body,
+      ...(replyToId !== undefined ? { reply_to_id: replyToId } : {}),
+    })
     .eq('id', id)
     .select()
     .single();
-  if (error) throwDescribed(error);
+  if (error) {
+    if (isMissingRepliesMigration(error)) throw missingRepliesMigration();
+    throwDescribed(error);
+  }
   return data as Epistle;
 }
 

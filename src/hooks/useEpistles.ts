@@ -42,9 +42,9 @@ export interface EpistlesState {
   todayKey: string;
 
   /** Creates a draft and returns the row the database now holds. */
-  createDraft: (title: string, body: string) => Promise<Epistle>;
+  createDraft: (title: string, body: string, replyToId?: string | null) => Promise<Epistle>;
   /** Saves a draft's words and returns the saved row. */
-  saveDraft: (id: string, title: string, body: string) => Promise<Epistle>;
+  saveDraft: (id: string, title: string, body: string, replyToId?: string | null) => Promise<Epistle>;
   /** Seals a letter: it stands in the partner's mailbox from this moment. */
   seal: (id: string, opensAt: string | null) => Promise<Epistle>;
   /** Takes a still-unopened letter back to draft. */
@@ -139,21 +139,21 @@ export function useEpistles({ coupleId, userId, active }: UseEpistlesOptions): E
     };
   }, [coupleId, userId, active, refresh]);
 
-  const createDraft = useCallback((title: string, body: string): Promise<Epistle> => {
+  const createDraft = useCallback((title: string, body: string, replyToId?: string | null): Promise<Epistle> => {
     const clean = cleanEpistleDraft(title, body);
     if (!coupleId || !userId || !clean) return Promise.reject(new Error('Write something before saving.'));
     return wrap(async () => {
-      const row = await createEpistleDraft(coupleId, userId, clean);
+      const row = await createEpistleDraft(coupleId, userId, { ...clean, replyToId });
       setLetters((current) => [row, ...current.filter((letter) => letter.id !== row.id)]);
       return row;
     });
   }, [wrap, coupleId, userId]);
 
-  const saveDraft = useCallback((id: string, title: string, body: string): Promise<Epistle> => {
+  const saveDraft = useCallback((id: string, title: string, body: string, replyToId?: string | null): Promise<Epistle> => {
     const clean = cleanEpistleDraft(title, body);
     if (!clean) return Promise.reject(new Error('Write something before saving.'));
     return wrap(async () => {
-      const row = await saveEpistleDraft(id, clean);
+      const row = await saveEpistleDraft(id, { ...clean, replyToId });
       setLetters((current) => current.map((letter) => (letter.id === id ? row : letter)));
       return row;
     });

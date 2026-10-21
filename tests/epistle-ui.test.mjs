@@ -16,6 +16,7 @@ const letter = (overrides = {}) => ({
   sealed_at: '2026-10-19T09:00:00.000Z',
   opens_at: null,
   opened_at: null,
+  reply_to_id: null,
   created_at: '2026-10-19T09:00:00.000Z',
   updated_at: '2026-10-19T09:00:00.000Z',
   ...overrides,
@@ -82,39 +83,85 @@ test('epistle UI: the mailbox, the desk, the seal and the nook mailbox flag', as
       letter({ id: 'ready', title: 'The long way home', created_at: '2026-10-19T09:00:00.000Z' }),
       letter({ id: 'waiting', opens_at: '2026-10-21', created_at: '2026-10-18T09:00:00.000Z' }),
       letter({ id: 'mine', sender_id: 'alice', created_at: '2026-10-17T09:00:00.000Z' }),
-      letter({ id: 'keepsake', sender_id: 'alice', opened_at: '2026-10-18T10:00:00.000Z', created_at: '2026-10-16T09:00:00.000Z' }),
+      letter({ id: 'mine-waiting', sender_id: 'alice', opens_at: '2026-10-25', created_at: '2026-10-17T12:00:00.000Z' }),
+      letter({ id: 'keepsake-sent', sender_id: 'alice', title: 'The first one', opened_at: '2026-10-18T10:00:00.000Z', created_at: '2026-10-16T09:00:00.000Z' }),
+      letter({ id: 'keepsake-received', opened_at: '2026-10-15T10:00:00.000Z', created_at: '2026-10-14T09:00:00.000Z' }),
+      letter({ id: 'answer', title: 'Re: The first one', reply_to_id: 'keepsake-sent', opened_at: '2026-10-15T11:00:00.000Z', created_at: '2026-10-15T09:00:00.000Z' }),
       letter({ id: 'draft', sender_id: 'alice', sealed_at: null, created_at: '2026-10-19T20:00:00.000Z' }),
     ];
-    await act(async () => {
-      root.render(React.createElement(EpistleView, {
-        letters,
-        loading: false,
-        error: null,
-        userId: 'alice',
-        myName: 'Alice',
-        partnerName: 'Bob',
-        myPlace: null,
-        todayKey: '2026-10-20',
-        onClose: () => {},
-        onCreateDraft: noop,
-        onSaveDraft: noop,
-        onSeal: noop,
-        onRecall: noop,
-        onOpen: noop,
-        onDiscard: noop,
-        onClearError: () => {},
-      }));
-    });
+    let mailboxKey = 0;
+    const renderMailbox = async (rows) => {
+      mailboxKey += 1;
+      await act(async () => {
+        root.render(React.createElement(EpistleView, {
+          key: `mailbox-${mailboxKey}`,
+          letters: rows,
+          loading: false,
+          error: null,
+          userId: 'alice',
+          myName: 'Alice',
+          partnerName: 'Bob',
+          myPlace: null,
+          todayKey: '2026-10-20',
+          onClose: () => {},
+          onCreateDraft: noop,
+          onSaveDraft: noop,
+          onSeal: noop,
+          onRecall: noop,
+          onOpen: noop,
+          onDiscard: noop,
+          onClearError: () => {},
+        }));
+      });
+    };
+    const clickTab = async (name) => {
+      await act(async () => {
+        document.querySelector(`[data-epistle-tab="${name}"]`).dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      });
+    };
+    await renderMailbox(letters);
+
+    // The mailbox opens on what arrived, with its waiting counted on the tab.
+    assert.equal(document.querySelector('[data-epistle-tab="received"]')?.getAttribute('aria-selected'), 'true');
+    assert.equal(document.querySelector('[data-epistle-tab="received"] .epistle-tab-count')?.textContent, '1');
+    assert.equal(document.querySelector('[data-epistle-tab="sent"] .epistle-tab-count')?.textContent, '2');
+    assert.equal(document.querySelector('[data-epistle-tab="drafts"] .epistle-tab-count')?.textContent, '1');
+
     assert(document.querySelector('[data-epistle-section="unopened"] [data-epistle-card="ready"]'), 'the openable letter waits at the top');
     assert.equal(document.querySelector('[data-epistle-card="ready"]')?.dataset.epistleState, 'sealed-unopened');
     assert.match(document.querySelector('[data-epistle-card="ready"]')?.getAttribute('aria-label') ?? '', /tap to break the seal/);
+    assert.equal(document.querySelector('[data-epistle-card="ready"] .ep-envelope-from')?.textContent, 'From Bob');
     assert(document.querySelector('[data-epistle-section="waiting"] [data-epistle-card="waiting"]'), 'a scheduled letter stands visible but sealed');
+    assert.equal(document.querySelector('[data-epistle-card="waiting"]').tagName, 'DIV', 'a sealed letter is looked at, not touched');
     assert.match(body(), /Sealed until their day/);
     assert.match(document.querySelector('[data-epistle-section="waiting"]')?.textContent ?? '', /Opens tomorrow/, 'the day is counted from the reader’s own calendar');
+    assert(document.querySelector('[data-epistle-section="received-kept"] [data-epistle-card="keepsake-received"]'), 'received letters, once read, are kept');
+    assert.match(
+      document.querySelector('[data-epistle-card="answer"]')?.textContent ?? '',
+      /In reply to “The first one”/,
+      'an answer says which letter it answers',
+    );
+
+    // Sent: one's own letters, to the partner rather than from them.
+    await clickTab('sent');
     assert(document.querySelector('[data-epistle-section="mine"] [data-epistle-card="mine"]'), 'my own standing letter is on its shelf');
+    assert.equal(document.querySelector('[data-epistle-card="mine"]').tagName, 'BUTTON', 'my own letter may always be reread');
+    assert.equal(document.querySelector('[data-epistle-card="mine"] .ep-envelope-from')?.textContent, 'To Bob');
+    assert.match(document.querySelector('[data-epistle-card="mine"]')?.textContent ?? '', /Waiting for Bob to open/);
+    assert.equal(document.querySelector('[data-epistle-card="mine"]')?.getAttribute('aria-label'), 'Your letter to Bob — read it again');
+    assert.match(document.querySelector('[data-epistle-card="mine-waiting"]')?.textContent ?? '', /Opens in 5 days/, 'my own scheduled letter counts its day too');
     assert(document.querySelector('[data-epistle-section="mine"]')?.textContent.includes('Take back'), 'an unopened letter may still be taken back');
-    assert(document.querySelector('[data-epistle-section="keepsakes"] [data-epistle-card="keepsake"]'), 'opened letters become keepsakes');
+    assert(document.querySelector('[data-epistle-section="sent-kept"] [data-epistle-card="keepsake-sent"]'), 'sent letters, once opened, are kept');
+    assert.match(
+      document.querySelector('[data-epistle-card="keepsake-sent"]')?.textContent ?? '',
+      /1 reply in this correspondence/,
+      'an answered letter says it was answered',
+    );
+
+    // Drafts keep their own shelf.
+    await clickTab('drafts');
     assert(document.querySelector('[data-epistle-section="drafts"] [data-epistle-card="draft"]'), 'drafts keep their own shelf');
+    await clickTab('received');
 
     // --- The writing desk: the paper, the dateline, the counter, the seal ------------
     let sealedWith = 'never';
@@ -167,14 +214,21 @@ test('epistle UI: the mailbox, the desk, the seal and the nook mailbox flag', as
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(node, value);
       node.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     };
+    // The desk opens with the pen on the paper — but after that, writing the letter
+    // must never drag the cursor out of its name.
+    await act(async () => {
+      titleInput.focus();
+    });
     await act(async () => {
       setNativeValue(titleInput, 'Forty-one days');
     });
     await act(async () => {
       setNativeValue(bodyInput, 'My dearest Bob,\n\nIt has been forty-one days, and the distance is only geography.');
     });
+    assert.equal(document.activeElement, titleInput, 'writing the letter never steals the name’s cursor');
     await waitFor(() => (document.querySelector('[data-epistle-words]')?.textContent ?? '').startsWith('14'), 'the word counter counts');
     await waitFor(() => sealedWith !== 'never', 'the desk autosaves the draft as it is written');
+    assert.equal(document.activeElement, titleInput, 'not even the autosave steals the name’s cursor');
     assert.deepEqual(JSON.parse(sealedWith), {
       title: 'Forty-one days',
       bodyText: 'My dearest Bob,\n\nIt has been forty-one days, and the distance is only geography.',
@@ -205,6 +259,56 @@ test('epistle UI: the mailbox, the desk, the seal and the nook mailbox flag', as
     });
     await waitFor(() => ceremony()?.dataset.sealingStep === 'press', 'and ends at the wax');
     assert(document.querySelector('[data-epistle-stamp]'), 'the wax waits to be pressed');
+
+    // --- Answering a letter: the reading shows the chain, the reply continues it ----
+    const chain = [
+      letter({ id: 'first', sender_id: 'alice', title: 'The first one', opened_at: '2026-10-16T10:00:00.000Z', created_at: '2026-10-15T09:00:00.000Z' }),
+      letter({ id: 'second', sender_id: 'bob', title: 'Re: The first one', reply_to_id: 'first', opened_at: '2026-10-17T10:00:00.000Z', created_at: '2026-10-16T09:00:00.000Z' }),
+    ];
+    await renderMailbox(chain);
+    const clickCard = async (id) => {
+      await act(async () => {
+        document.querySelector(`[data-epistle-card="${id}"]`).dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      });
+    };
+    await clickCard('second');
+    const reading = () => document.querySelector('[data-epistle-reading]');
+    await waitFor(() => reading(), 'the answer opens for reading');
+    assert.match(
+      document.querySelector('[data-epistle-in-reply-to]')?.textContent ?? '',
+      /The first one/,
+      'the reading names the answered letter',
+    );
+    assert(document.querySelector('[data-epistle-thread-letter="first"]'), 'the correspondence behind it stands ready to reread');
+    assert.match(body(), /Letter 2 of 2/, 'the letter knows its place in the chain');
+
+    // The answered letter reads back — and points forward to its answer.
+    await act(async () => {
+      document.querySelector('[data-epistle-in-reply-to]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    await waitFor(() => (document.querySelector('.epistle-letter-title')?.textContent ?? '') === 'The first one', 'the chain walks back');
+    assert(document.querySelector('[data-epistle-latest-answer]'), 'an answered letter points at its answer');
+    await act(async () => {
+      document.querySelector('[data-epistle-latest-answer]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    await waitFor(() => (document.querySelector('.epistle-letter-title')?.textContent ?? '') === 'Re: The first one', 'and forward again');
+
+    // Replying opens the desk already answering: the name prefixed once, the
+    // answered letter quoted above the paper.
+    await act(async () => {
+      document.querySelector('[data-epistle-reply]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    await waitFor(() => desk(), 'the desk opens for the reply');
+    assert.equal(document.querySelector('[data-epistle-title]').value, 'Re: The first one', 'a reply is named after its letter, prefixed once');
+    assert.match(
+      document.querySelector('[data-epistle-reply-banner]')?.textContent ?? '',
+      /Replying to Bob/,
+      'the desk says which letter is being answered',
+    );
+    await act(async () => {
+      document.querySelector('.epistle-reply-banner-remove').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    assert(!document.querySelector('[data-epistle-reply-banner]'), 'a reply may still become a letter of its own');
 
     // --- The nook's mailbox flag raises itself for a ready letter --------------------
     await act(async () => {

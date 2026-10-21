@@ -31,6 +31,7 @@ const SAMPLE_LETTERS: Epistle[] = [
     sealed_at: NOW,
     opens_at: null,
     opened_at: null,
+    reply_to_id: 'ep-keepsake',
     created_at: NOW,
     updated_at: NOW,
   },
@@ -43,6 +44,7 @@ const SAMPLE_LETTERS: Epistle[] = [
     sealed_at: NOW,
     opens_at: daysFromToday(3),
     opened_at: null,
+    reply_to_id: null,
     created_at: new Date(Date.now() - 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 86_400_000).toISOString(),
   },
@@ -55,8 +57,22 @@ const SAMPLE_LETTERS: Epistle[] = [
     sealed_at: new Date(Date.now() - 6 * 86_400_000).toISOString(),
     opens_at: null,
     opened_at: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+    reply_to_id: null,
     created_at: new Date(Date.now() - 6 * 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+  },
+  {
+    id: 'ep-reply-keepsake',
+    couple_id: 'preview-couple',
+    sender_id: 'preview-ana',
+    title: 'Re: The first one',
+    body: 'Sam —\n\nAn exception that proves me right is still an exception, and I keep rereading it. Consider this the second of many.\n\nYours,\nAna',
+    sealed_at: new Date(Date.now() - 4 * 86_400_000).toISOString(),
+    opens_at: null,
+    opened_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    reply_to_id: 'ep-keepsake',
+    created_at: new Date(Date.now() - 4 * 86_400_000).toISOString(),
+    updated_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
   },
 ];
 
@@ -71,6 +87,7 @@ function letterFromAna(n: number): Epistle {
     sealed_at: new Date().toISOString(),
     opens_at: null,
     opened_at: null,
+    reply_to_id: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -93,7 +110,7 @@ export const PreviewEpistles = ({ inboxNudge }: { inboxNudge: number }) => {
 
   // Every action is the database's job in the real app; here it is one list.
   const actions = useMemo(() => ({
-    onCreateDraft: async (title: string, body: string): Promise<Epistle> => {
+    onCreateDraft: async (title: string, body: string, replyToId?: string | null): Promise<Epistle> => {
       const row: Epistle = {
         id: `ep-draft-${Math.random().toString(36).slice(2, 8)}`,
         couple_id: 'preview-couple',
@@ -103,18 +120,20 @@ export const PreviewEpistles = ({ inboxNudge }: { inboxNudge: number }) => {
         sealed_at: null,
         opens_at: null,
         opened_at: null,
+        reply_to_id: replyToId ?? null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       setLetters((current) => [row, ...current]);
       return row;
     },
-    onSaveDraft: async (id: string, title: string, body: string): Promise<Epistle> => {
+    onSaveDraft: async (id: string, title: string, body: string, replyToId?: string | null): Promise<Epistle> => {
       const saved: Epistle = {
         ...(letters.find((letter) => letter.id === id) ?? SAMPLE_LETTERS[0]),
         id,
         title: title || null,
         body,
+        ...(replyToId !== undefined ? { reply_to_id: replyToId } : {}),
         updated_at: new Date().toISOString(),
       };
       setLetters((current) => current.map((letter) => (letter.id === id ? saved : letter)));

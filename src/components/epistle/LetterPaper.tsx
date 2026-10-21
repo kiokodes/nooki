@@ -13,6 +13,8 @@ export interface LetterPaperProps {
   animate?: boolean;
   /** False for previews, which are not yet a fact: no seal history under the words. */
   showSealLine?: boolean;
+  /** A quiet line under the dateline naming the answered letter, for replies. */
+  replyContext?: string | null;
   className?: string;
 }
 
@@ -20,6 +22,10 @@ export interface LetterPaperProps {
  * The letter itself, on its paper — the same sheet in the preview before sealing,
  * in the reading ceremony, and in the keepsakes. No bubbles, no chrome: a dateline,
  * an optional name, the words, and who they came from.
+ *
+ * Every line of it sits on the paper's ruling: the dateline, the name, each line of
+ * ink and the sign-off are all one ruling tall, and the gaps between them are whole
+ * rulings too — so the words never drift off their lines, however long the letter.
  */
 export const LetterPaper: React.FC<LetterPaperProps> = ({
   letter,
@@ -27,6 +33,7 @@ export const LetterPaper: React.FC<LetterPaperProps> = ({
   dateline,
   animate = false,
   showSealLine = true,
+  replyContext,
   className,
 }) => {
   const paragraphs = letterParagraphs(letter.body);
@@ -38,6 +45,7 @@ export const LetterPaper: React.FC<LetterPaperProps> = ({
       data-animate={animate ? 'true' : 'false'}
     >
       {dateline && <p className="epistle-dateline">{dateline}</p>}
+      {replyContext && <p className="epistle-reply-context">{replyContext}</p>}
       {letter.title?.trim() && <h2 className="epistle-letter-title">{letter.title.trim()}</h2>}
       <div className="epistle-letter-body">
         {paragraphs.map((paragraph, index) => (
@@ -47,7 +55,7 @@ export const LetterPaper: React.FC<LetterPaperProps> = ({
       <p className="epistle-letter-sign">— {senderName}</p>
       {/* Sealed and opened dates, for the keepsake shelf's quiet honesty. */}
       {showSealLine && (
-        <p className="epistle-letter-meta" style={{ margin: '10px 0 0' }}>
+        <p className="epistle-seal-line">
           Sealed {letter.sealed_at ? formatEpistleDate(letter.sealed_at) : '—'}
           {letter.opened_at ? ` · Opened ${formatEpistleDate(letter.opened_at)}` : ''}
         </p>

@@ -867,8 +867,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             myPlace={[profile.city_name, profile.country_name].filter(Boolean).join(', ') || null}
             todayKey={epistles.todayKey}
             onClose={() => setShowEpistles(false)}
-            onCreateDraft={(title, body) => epistles.createDraft(title, body)}
-            onSaveDraft={(id, title, body) => epistles.saveDraft(id, title, body)}
+            onCreateDraft={(title, body, replyToId) => epistles.createDraft(title, body, replyToId)}
+            onSaveDraft={(id, title, body, replyToId) => epistles.saveDraft(id, title, body, replyToId)}
             onSeal={(id, opensAt) => epistles.seal(id, opensAt)}
             onRecall={(id) => epistles.recall(id)}
             onOpen={(id) => epistles.open(id)}
