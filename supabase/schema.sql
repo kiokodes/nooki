@@ -7658,4 +7658,204 @@ DROP POLICY IF EXISTS someday_items_delete ON public.someday_items;
 CREATE POLICY someday_items_delete ON public.someday_items FOR DELETE TO authenticated
 USING (couple_id = public.get_user_couple_id(auth.uid()));
 
+
+-- ===========================================================================
+-- Epistles: long, sealed letters written to each other, kept apart from the
+-- chat. A letter is a draft (sealed_at NULL, the sender's alone), then sealed
+-- (standing in the partner's mailbox with the wax intact), optionally waiting
+-- for a chosen day (opens_at), and finally opened — the moment it becomes a
+-- final keepsake for both. See supabase/migrations/202610200001_epistles.sql;
+-- this section matches it, and the migration stays rerunnable over it.
+-- ===========================================================================
+
+CREATE TABLE IF NOT EXISTS public.epistles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  couple_id UUID NOT NULL REFERENCES public.couples(id) ON DELETE CASCADE,
+  -- Who wrote it. The row carries the author's own words.
+  sender_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- An optional name for the letter, shown on the envelope.
+  title TEXT CHECK (char_length(btrim(title)) <= 80),
+  -- The letter itself. Long-form on purpose: at most 20,000 characters.
+  body TEXT NOT NULL CHECK (char_length(btrim(body)) BETWEEN 1 AND 20000),
+  -- NULL while it is a draft. Sealing stamps the moment it was sent.
+  sealed_at TIMESTAMPTZ,
+  -- The calendar day before which the partner's seal refuses to break.
+  opens_at DATE,
+  -- When the partner broke the seal; once set, the letter is final for both.
+  opened_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT epistles_draft_has_no_open_day CHECK (sealed_at IS NOT NULL OR opens_at IS NULL)
+);
+
+-- Keep updated_at honest without the client having to remember it.
+CREATE OR REPLACE FUNCTION public.set_epistle_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at := timezone('utc'::text, now());
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS epistles_set_updated_at ON public.epistles;
+CREATE TRIGGER epistles_set_updated_at
+BEFORE UPDATE ON public.epistles
+FOR EACH ROW EXECUTE FUNCTION public.set_epistle_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_epistles_couple_created
+ON public.epistles(couple_id, created_at DESC);
+
+ALTER TABLE public.epistles ENABLE ROW LEVEL SECURITY;
+
+-- Reading: the couple sees sealed and opened letters; a draft is the sender's alone.
+DROP POLICY IF EXISTS "Couple members can view their epistles" ON public.epistles;
+CREATE POLICY "Couple members can view their epistles" ON public.epistles
+FOR SELECT TO authenticated
+USING (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND (sender_id = auth.uid() OR sealed_at IS NOT NULL)
+);
+
+-- Writing: an author starts their own letter as a draft, in their own couple.
+DROP POLICY IF EXISTS "Authors start their own drafts" ON public.epistles;
+CREATE POLICY "Authors start their own drafts" ON public.epistles
+FOR INSERT TO authenticated
+WITH CHECK (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND sender_id = auth.uid()
+  AND sealed_at IS NULL
+  AND opens_at IS NULL
+  AND opened_at IS NULL
+);
+
+-- Rewriting: while the letter has not been opened it still belongs to its author.
+DROP POLICY IF EXISTS "Authors may rework an unopened letter" ON public.epistles;
+CREATE POLICY "Authors may rework an unopened letter" ON public.epistles
+FOR UPDATE TO authenticated
+USING (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND sender_id = auth.uid()
+  AND opened_at IS NULL
+)
+WITH CHECK (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND sender_id = auth.uid()
+);
+
+-- Drafts only: a sealed letter is a keepsake, and a keepsake is not deleted.
+DROP POLICY IF EXISTS "Authors may discard their own drafts" ON public.epistles;
+CREATE POLICY "Authors may discard their own drafts" ON public.epistles
+FOR DELETE TO authenticated
+USING (
+  couple_id = public.get_user_couple_id(auth.uid())
+  AND sender_id = auth.uid()
+  AND sealed_at IS NULL
+);
+
+-- The one write the partner ever makes: breaking the seal. "Is it the day yet?"
+-- is answered by the server's own clock, never the phone's.
+CREATE OR REPLACE FUNCTION public.open_epistle(p_epistle_id UUID)
+RETURNS SETOF public.epistles
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  caller UUID := auth.uid();
+  cid UUID;
+  letter public.epistles;
+BEGIN
+  IF caller IS NULL THEN
+    RAISE EXCEPTION 'Sign in to open a letter.';
+  END IF;
+  IF p_epistle_id IS NULL THEN
+    RAISE EXCEPTION 'That letter does not exist.';
+  END IF;
+
+  cid := public.get_user_couple_id(caller);
+  IF cid IS NULL THEN
+    RAISE EXCEPTION 'Pair with your partner before opening a letter.';
+  END IF;
+
+  SELECT * INTO letter FROM public.epistles WHERE id = p_epistle_id;
+  IF NOT FOUND OR letter.couple_id <> cid THEN
+    RAISE EXCEPTION 'That letter does not exist.';
+  END IF;
+  IF letter.sender_id = caller THEN
+    RAISE EXCEPTION 'Your own letter was never sealed to you.';
+  END IF;
+  IF letter.sealed_at IS NULL THEN
+    RAISE EXCEPTION 'That letter has not been sent yet.';
+  END IF;
+  IF letter.opened_at IS NOT NULL THEN
+    RETURN QUERY SELECT * FROM public.epistles WHERE id = p_epistle_id;
+    RETURN;
+  END IF;
+  IF letter.opens_at IS NOT NULL AND letter.opens_at > (timezone('utc'::text, now()))::date THEN
+    RAISE EXCEPTION 'This letter opens on %. Not yet.', letter.opens_at;
+  END IF;
+
+  UPDATE public.epistles
+  SET opened_at = timezone('utc'::text, now())
+  WHERE id = p_epistle_id;
+
+  RETURN QUERY SELECT * FROM public.epistles WHERE id = p_epistle_id;
+END;
+$$;
+
+-- Every role that reaches this table is granted here, by name: Supabase stopped
+-- granting Data API access to new "public" tables automatically (2026-10-30).
+-- service_role matters: send-push counts unopened letters with the service key.
+REVOKE ALL ON public.epistles FROM anon;
+REVOKE ALL ON public.epistles FROM authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.epistles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.epistles TO service_role;
+
+REVOKE ALL ON FUNCTION public.open_epistle(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.open_epistle(UUID) TO authenticated;
+
+-- Realtime: a sealed letter appears in the partner's mailbox without a refresh.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime'
+         AND schemaname = 'public'
+         AND tablename = 'epistles'
+     )
+  THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.epistles;
+  END IF;
+END;
+$$;
+
+-- ===========================================================================
+-- Data API exposure for service_role, spelled out.
+--
+-- Until 2026-10-30 Supabase granted every new "public" table to anon,
+-- authenticated and service_role automatically; new and existing projects stop
+-- receiving those automatic grants for tables created from that date onwards.
+-- The sections above always granted anon and authenticated explicitly, so the
+-- couple's own access never depended on the defaults — but service_role did:
+-- nothing in this file ever granted it, because the platform did. send-push
+-- runs with the service key and reads profiles, messages, push_subscriptions,
+-- question_sessions, answers, game_matches and epistles directly, so on a
+-- project built from this file after the cutover those reads would fail with
+-- "permission denied" without the grant below. This restores exactly what the
+-- old defaults did, for every table this schema ends up with (service_role
+-- bypasses RLS anyway, so this changes reachability, not row visibility).
+-- ===========================================================================
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format('GRANT ALL ON public.%I TO service_role', t);
+  END LOOP;
+END;
+$$;
+
 COMMIT;

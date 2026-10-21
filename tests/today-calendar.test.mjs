@@ -278,6 +278,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const authRoles = `
     CREATE ROLE authenticated NOLOGIN;
     CREATE ROLE anon NOLOGIN;
+    CREATE ROLE service_role NOLOGIN BYPASSRLS;
     CREATE SCHEMA auth;
     CREATE TABLE auth.users (id UUID PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE SQL STABLE AS $$
@@ -434,7 +435,7 @@ async function server_paths() {
   const schemaBeforeDiscuss = schema.split('-- 13. Discuss:')[0];
 
   const base = `
-    CREATE ROLE authenticated NOLOGIN; CREATE ROLE anon NOLOGIN; CREATE SCHEMA auth;
+    CREATE ROLE authenticated NOLOGIN; CREATE ROLE anon NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS; CREATE SCHEMA auth;
     CREATE TABLE auth.users (id UUID PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE SQL STABLE AS $$
       SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::UUID; $$;

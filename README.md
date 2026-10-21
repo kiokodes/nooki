@@ -152,10 +152,20 @@ pairing now. A frontend-only rollback does not undo database policy changes.
 
 Run `supabase/schema.sql` once, then `supabase/verify.sql`. The schema creates the tables
 (including `couple_events`, `messages`, the Discuss tables, visit wishes,
-checklists, visit memories, the shared Someday notebook, `push_subscriptions` and
-`miss_you_taps`), location columns and generated marketplace key, RLS policies, RPCs,
+checklists, visit memories, the shared Someday notebook, `push_subscriptions`,
+`miss_you_taps` and `epistles`), location columns and generated marketplace key, RLS policies, RPCs,
 triggers, Realtime publication membership and the private `visit-memories` storage bucket.
-Read together and Together time are not part of the end state. It does not populate
+Read together and Together time are not part of the end state.
+
+**Data API grants are explicit, per table.** Supabase stopped granting Data API access
+to new `public` tables automatically on **2026-10-30** (existing tables keep their
+grants; new projects, preview branches and `supabase db reset` are affected). This
+schema therefore grants every role by name: each table's own section grants `anon`
+(always nothing) and `authenticated` what the app needs, and the closing block grants
+`service_role` on every table — the server key `send-push` reads with. The same rule
+applies to any future migration that creates a table: grant each role that reaches it
+in the same migration, including `service_role` when the edge function reads it (see
+`202610200001_epistles.sql` for the pattern). It does not populate
 user/couple records, and it contains no Discuss or Daily Decisions questions — upload
 those separately. Push delivery still needs the `send-push` Edge Function and VAPID
 secrets; chat notifications need the `messages` Database Webhook.

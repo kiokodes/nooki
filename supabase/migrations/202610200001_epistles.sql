@@ -166,9 +166,14 @@ END;
 $$;
 
 -- The table is read and written by the couple's own phones under the policies above.
+-- Supabase stopped granting Data API access to new "public" tables automatically
+-- (announced for 2026-10-30), so every role that reaches this table is granted here,
+-- by name. service_role matters: send-push counts the couple's unopened letters with
+-- the service key, and a project that skips this grant breaks that query.
 REVOKE ALL ON public.epistles FROM anon;
 REVOKE ALL ON public.epistles FROM authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.epistles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.epistles TO service_role;
 
 REVOKE ALL ON FUNCTION public.open_epistle(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.open_epistle(UUID) TO authenticated;
