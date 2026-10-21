@@ -426,11 +426,15 @@
   flex-shrink: 0;
 }
 
-/* A card beside its small actions: read and take back, or discard. */
+/* A card beside its small actions, or above them for a sent letter. */
 .epistle-row {
   display: flex;
   gap: 8px;
   align-items: stretch;
+}
+
+.epistle-row.is-sent-letter {
+  flex-direction: column;
 }
 
 .epistle-row-main {
@@ -443,6 +447,12 @@
   flex-direction: column;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.is-sent-letter .ep-envelope-actions {
+  flex-direction: row;
+  justify-content: flex-end;
+  padding-inline: 4px;
 }
 
 .ep-mini-button {
