@@ -13,6 +13,10 @@
   --ep-wax: #c04a6b;
   --ep-wax-deep: #96334f;
   --ep-wax-light: #d97e97;
+  /* The ruling every sheet of paper shares: one line of writing is exactly this
+     tall, and every gap on the paper is a whole number of them — so the ink always
+     sits on its lines, never between them. */
+  --ep-rule: 32px;
 
   position: absolute;
   inset: 0;
@@ -41,7 +45,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px 18px 108px;
+  padding: 10px 18px 108px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -52,7 +56,71 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 10px;
+  padding: 10px 18px 0;
+}
+
+/* Received · Sent · Drafts: the three shelves of the mailbox. */
+.epistle-tabs {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 12px 18px 0;
+}
+
+.epistle-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ep-ink-soft);
+  font-family: var(--font-family);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.epistle-tab[aria-selected='true'] {
+  background: var(--ep-ink);
+  border-color: var(--ep-ink);
+  color: #fffdf6;
+}
+
+.epistle-tab-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: var(--ep-wax);
+  color: #fff5f7;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+
+.epistle-tab[aria-selected='true'] .epistle-tab-count {
+  background: rgba(255, 253, 246, 0.25);
+  color: #fffdf6;
+}
+
+/* A shelf with nothing on it says so quietly. */
+.epistle-tab-empty {
+  margin: 26px 0 0;
+  padding: 22px 20px;
+  border: 1.5px dashed var(--border-soft);
+  border-radius: var(--radius-card);
+  background: rgba(255, 253, 246, 0.65);
+  color: var(--ep-ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  text-align: center;
 }
 
 .epistle-mailbox-title {
@@ -84,8 +152,14 @@
   cursor: pointer;
 }
 
+.epistle-mailbox section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .epistle-section-label {
-  margin: 0 0 -6px;
+  margin: 0;
   padding-left: 2px;
   font-size: 0.62rem;
   font-weight: 800;
@@ -331,6 +405,39 @@
   color: var(--ep-wax-deep);
 }
 
+/* Where the letter stands in its correspondence, in a single quiet line. */
+.ep-envelope-thread {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ep-ink-soft);
+  font-size: 0.68rem;
+  font-style: italic;
+}
+
+.ep-envelope-thread > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ep-envelope-thread svg {
+  flex-shrink: 0;
+}
+
+/* A card beside its small actions: read and take back, or discard. */
+.epistle-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.epistle-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .ep-envelope-actions {
   display: flex;
   flex-direction: column;
@@ -361,7 +468,7 @@
   background: #fdf4f6;
 }
 
-/* A draft is not an envelope yet: a loose sheet with pencil lines. */
+/* A draft is not an envelope yet: a loose sheet, still pencil, still private. */
 .epistle-draft-card {
   position: relative;
   display: flex;
@@ -371,9 +478,8 @@
   padding: 14px 16px;
   border: 1px solid var(--border-subtle);
   border-radius: 22px;
-  background:
-    repeating-linear-gradient(180deg, transparent 0 23px, #efe6d4 23px 24px),
-    var(--ep-paper);
+  background: var(--ep-paper);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
   text-align: left;
   font-family: var(--font-family);
@@ -400,6 +506,14 @@
   margin: 0;
   font-size: 0.7rem;
   color: var(--ep-ink-soft);
+}
+
+.epistle-draft-reply {
+  margin-top: 3px !important;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .epistle-draft-pencil {
@@ -442,7 +556,10 @@
   min-height: 1em;
 }
 
-/* The sheet itself: everything written sits directly on the paper. */
+/* The sheet itself: everything written sits directly on the paper, on its lines.
+   The padding, the dateline, the name and every line of ink are each whole rulings
+   tall, and the lines scroll with the words (`local`) — so the ink never drifts off
+   its ruling, however far the letter runs. */
 .epistle-paper {
   flex: 1;
   min-height: 0;
@@ -452,23 +569,30 @@
   border-radius: 18px 18px 0 0;
   border-bottom: none;
   background:
-    repeating-linear-gradient(180deg, transparent 0 30px, rgba(148, 125, 96, 0.12) 30px 31px),
+    repeating-linear-gradient(180deg, transparent 0 calc(var(--ep-rule) - 1px), rgba(148, 125, 96, 0.14) calc(var(--ep-rule) - 1px) var(--ep-rule)),
     linear-gradient(180deg, #fffef9 0%, #fffdf6 100%);
+  background-attachment: local;
   box-shadow: 0 -6px 26px rgba(78, 56, 44, 0.07);
-  padding: 22px 22px 30px;
+  padding: var(--ep-rule) 24px var(--ep-rule);
 }
 
 .epistle-dateline {
   font-family: 'Lora', Georgia, serif;
   font-style: italic;
   font-size: 0.78rem;
+  line-height: var(--ep-rule);
+  min-height: var(--ep-rule);
   color: var(--ep-ink-soft);
   text-align: right;
-  margin: 0 0 4px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .epistle-title-input {
   width: 100%;
+  height: var(--ep-rule);
   border: none;
   outline: none;
   background: transparent;
@@ -476,8 +600,10 @@
   font-style: italic;
   font-weight: 500;
   font-size: 1.18rem;
+  line-height: var(--ep-rule);
   color: var(--ep-ink);
-  padding: 6px 0;
+  padding: 0;
+  margin: 0;
 }
 
 .epistle-title-input::placeholder {
@@ -487,22 +613,85 @@
 
 .epistle-body-input {
   width: 100%;
-  min-height: 46vh;
+  min-height: calc(var(--ep-rule) * 8);
   border: none;
   outline: none;
   background: transparent;
   resize: none;
   font-family: 'Lora', Georgia, serif;
   font-size: 1.02rem;
-  line-height: 31px;
+  line-height: var(--ep-rule);
   color: var(--ep-ink);
-  padding: 6px 0 20px;
+  padding: 0;
+  margin: 0;
   field-sizing: content;
 }
 
 .epistle-body-input::placeholder {
   color: #c9bba9;
   font-style: italic;
+}
+
+/* Answering a letter: the desk says which one, and offers the way out. */
+.epistle-reply-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ep-paper-edge);
+  border-radius: 14px;
+  background: rgba(255, 253, 246, 0.85);
+  box-shadow: var(--shadow-card);
+}
+
+.epistle-reply-banner-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--ep-wax);
+}
+
+.epistle-reply-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.epistle-reply-banner-text h4 {
+  margin: 0;
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.86rem;
+  color: var(--ep-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epistle-reply-banner-text p {
+  margin: 2px 0 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--ep-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epistle-reply-banner-remove {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 4px 2px;
+  color: var(--ep-ink-soft);
+  font-family: var(--font-family);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 /* The desk's edge: the pen rest. */
@@ -607,13 +796,17 @@
   color: var(--ep-ink-soft);
 }
 
-/* Read-it-once-more preview carries the same paper the reader will see. */
+/* Read-it-once-more preview carries the same ruled paper the reader will see. */
 .epistle-ceremony-paper {
   border: 1px solid var(--ep-paper-edge);
   border-radius: 16px;
-  background: var(--ep-paper);
+  background:
+    repeating-linear-gradient(180deg, transparent 0 calc(var(--ep-rule) - 1px), rgba(148, 125, 96, 0.14) calc(var(--ep-rule) - 1px) var(--ep-rule)),
+    linear-gradient(180deg, #fffef9 0%, #fffdf6 100%);
+  background-attachment: local;
   box-shadow: var(--shadow-card);
-  padding: 18px 18px 20px;
+  padding: var(--ep-rule) 24px var(--ep-rule);
+  margin: 0;
   max-height: 42vh;
   overflow-y: auto;
 }
@@ -964,20 +1157,178 @@
   to { opacity: 1; }
 }
 
-/* The letter itself, full page. */
-.epistle-letter-paper {
+/* The reading scrolls as one page: the answered letter, the correspondence so far,
+   the letter itself, and what followed it. */
+.epistle-reading-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: 2px 0 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The answered letter, one tap above the words it earned. */
+.epistle-reading-reply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 28px);
+  margin: 0 14px 10px;
+  padding: 9px 14px;
+  border: 1px solid var(--ep-paper-edge);
+  border-radius: 9999px;
+  background: rgba(255, 253, 246, 0.9);
+  box-shadow: var(--shadow-card);
+  color: var(--ep-ink);
+  font-family: var(--font-family);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.epistle-reading-reply > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epistle-reading-reply svg {
+  flex-shrink: 0;
+  color: var(--ep-wax);
+}
+
+p.epistle-reading-reply {
+  cursor: default;
+  color: var(--ep-ink-soft);
+}
+
+/* The correspondence so far: every letter behind this one, oldest first. */
+.epistle-thread {
+  margin: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.epistle-thread-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--ep-paper-edge);
+  border-radius: 16px;
+  background: var(--ep-paper);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-family);
+}
+
+.epistle-thread-item.is-static {
+  cursor: default;
+}
+
+.epistle-thread-item:active:not(.is-static) {
+  transform: scale(0.985);
+}
+
+.epistle-thread-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-pink-soft);
+  color: var(--ep-wax-deep);
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 24px;
+  text-align: center;
+}
+
+.epistle-thread-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.epistle-thread-text h4 {
+  margin: 0;
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--ep-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epistle-thread-text p {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--ep-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epistle-thread-meta {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ep-ink-soft);
+}
+
+/* What followed the letter: the newest answer already readable, one tap away. */
+.epistle-answers-note {
+  margin: 12px 14px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.epistle-answers-note.is-static {
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--ep-ink-soft);
+  text-align: center;
+}
+
+.epistle-answers-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--ep-wax-deep);
+  font-family: var(--font-family);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* The letter itself, full page: every line on its ruling, every gap a whole one. */
+.epistle-letter-paper {
   margin: 0 14px;
   border: 1px solid var(--ep-paper-edge);
   border-radius: 18px;
   background:
-    repeating-linear-gradient(180deg, transparent 0 31px, rgba(148, 125, 96, 0.1) 31px 32px),
+    repeating-linear-gradient(180deg, transparent 0 calc(var(--ep-rule) - 1px), rgba(148, 125, 96, 0.1) calc(var(--ep-rule) - 1px) var(--ep-rule)),
     linear-gradient(180deg, #fffef9 0%, #fffdf6 100%);
   box-shadow: 0 16px 40px rgba(78, 56, 44, 0.12);
-  padding: 26px 24px 30px;
+  padding: var(--ep-rule) 24px var(--ep-rule);
   animation: epistle-paper-unfold 640ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
@@ -986,20 +1337,35 @@
   to { opacity: 1; transform: perspective(700px) rotateX(0) translateY(0); }
 }
 
+/* A reply names the letter it answers under its own dateline. */
+.epistle-reply-context {
+  margin: 0;
+  min-height: var(--ep-rule);
+  line-height: var(--ep-rule);
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--ep-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .epistle-letter-title {
-  margin: 2px 0 14px;
+  margin: 0 0 var(--ep-rule);
   font-family: 'Lora', Georgia, serif;
   font-style: italic;
   font-weight: 500;
   font-size: 1.3rem;
+  line-height: var(--ep-rule);
   color: var(--ep-ink);
+  overflow-wrap: break-word;
 }
 
 .epistle-letter-body p {
-  margin: 0 0 12px;
+  margin: 0 0 var(--ep-rule);
   font-family: 'Lora', Georgia, serif;
   font-size: 1.02rem;
-  line-height: 32px;
+  line-height: var(--ep-rule);
   color: var(--ep-ink);
   white-space: pre-wrap;
   overflow-wrap: break-word;
@@ -1021,7 +1387,9 @@
 }
 
 .epistle-letter-sign {
-  margin: 18px 0 0;
+  margin: 0;
+  min-height: var(--ep-rule);
+  line-height: var(--ep-rule);
   font-family: 'Lora', Georgia, serif;
   font-style: italic;
   font-size: 0.92rem;
@@ -1029,11 +1397,19 @@
   animation: epistle-ink-appear 800ms ease 1100ms both;
 }
 
+/* Sealed and opened dates, for the keepsake shelf's quiet honesty. */
+.epistle-seal-line {
+  margin: 0;
+  min-height: var(--ep-rule);
+  line-height: var(--ep-rule);
+  font-size: 0.68rem;
+  color: var(--ep-ink-soft);
+}
+
 .epistle-letter-foot {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 10px;
   padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px));
 }
@@ -1042,7 +1418,21 @@
   font-size: 0.68rem;
   line-height: 1.5;
   color: var(--ep-ink-soft);
-  max-width: 24ch;
+  text-align: center;
+}
+
+.epistle-letter-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.epistle-letter-actions .epistle-ghost-button {
+  flex: 1;
+}
+
+.epistle-letter-actions .epistle-seal-button {
+  flex: 1;
+  justify-content: center;
 }
 
 /* A sentence that went wrong: quiet, on its own line, never a red siren. */

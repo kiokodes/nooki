@@ -17,6 +17,7 @@ const letter = (overrides = {}) => ({
   sealed_at: '2026-10-19T09:00:00.000Z',
   opens_at: null,
   opened_at: null,
+  reply_to_id: null,
   created_at: '2026-10-19T09:00:00.000Z',
   updated_at: '2026-10-19T09:00:00.000Z',
   ...overrides,
@@ -123,6 +124,14 @@ test('epistles: the mailbox shelves, newest first, drafts private to their autho
     assert.deepEqual(fromBob.unopened.map((row) => row.id), ['mine-standing']);
     assert.equal(fromBob.drafts.length, 0, 'a partner can never see the other one drafting');
 
+    // The keepsakes split into the two directions the mailbox tabs show.
+    const split = epistle.splitKeepsakes([
+      letter({ id: 'kept-mine', sender_id: 'alice', opened_at: '2026-10-18T10:00:00.000Z' }),
+      letter({ id: 'kept-theirs', sender_id: 'bob', opened_at: '2026-10-18T10:00:00.000Z' }),
+    ], 'alice');
+    assert.deepEqual(split.sent.map((row) => row.id), ['kept-mine']);
+    assert.deepEqual(split.received.map((row) => row.id), ['kept-theirs']);
+
     // Newest first means the letter that began later stands above it.
     const newestFirst = epistle.sortEpistlesNewestFirst([
       letter({ id: 'a', created_at: '2026-01-01T00:00:00.000Z' }),
@@ -154,6 +163,58 @@ test('epistles: the mailbox shelves, newest first, drafts private to their autho
   }
 });
 
+test('epistles: a correspondence — replies, chains, and who may read what', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
+  try {
+    const epistle = await server.ssrLoadModule('/src/lib/epistle.ts');
+
+    // A reply starts life named after the answered letter, prefixed exactly once.
+    assert.equal(epistle.replySubject('The long way home'), 'Re: The long way home');
+    assert.equal(epistle.replySubject('Re: The long way home'), 'Re: The long way home');
+    assert.equal(epistle.replySubject('re: already'), 're: already');
+    assert.equal(epistle.replySubject(null), '');
+    assert.equal(epistle.replySubject('   '), '');
+
+    // Three letters, each answering the one before: a long chain of correspondence.
+    const first = letter({ id: 'first', sender_id: 'alice', created_at: '2026-10-15T09:00:00.000Z' });
+    const second = letter({ id: 'second', sender_id: 'bob', reply_to_id: 'first', created_at: '2026-10-16T09:00:00.000Z' });
+    const third = letter({ id: 'third', sender_id: 'alice', reply_to_id: 'second', created_at: '2026-10-17T09:00:00.000Z' });
+    const rows = [first, second, third];
+    const byId = new Map(rows.map((row) => [row.id, row]));
+
+    assert.equal(epistle.replyParent(third, byId)?.id, 'second');
+    assert.equal(epistle.replyParent(first, byId), null, 'the first letter answers nothing');
+    assert.equal(epistle.replyParent(letter({ reply_to_id: 'missing' }), byId), null, 'a gone letter answers nothing either');
+
+    // Behind the third letter stand the second, then the first — oldest first, the
+    // way a correspondence is reread.
+    assert.deepEqual(epistle.replyAncestors(third, byId).map((row) => row.id), ['first', 'second']);
+    assert.deepEqual(epistle.replyAncestors(first, byId), []);
+    // Beneath the first stand both answers, newest first — the latest word first.
+    assert.deepEqual(epistle.replyDescendants('first', rows).map((row) => row.id), ['third', 'second']);
+    assert.deepEqual(epistle.replyDescendants('third', rows), []);
+    // From anywhere in the chain, the whole correspondence counts three.
+    assert.equal(epistle.threadSize(first, rows, byId), 3);
+    assert.equal(epistle.threadSize(second, rows, byId), 3);
+    assert.equal(epistle.threadSize(third, rows), 3, 'the lookup builds itself when it must');
+    assert.equal(epistle.threadSize(letter({ id: 'alone' }), [letter({ id: 'alone' })]), 1);
+
+    // Readability: one's own letters always, the partner's only once opened.
+    assert.equal(epistle.isEpistleReadable(letter({ sender_id: 'alice', sealed_at: null }), 'alice'), true, 'my draft is mine to read');
+    assert.equal(epistle.isEpistleReadable(letter({ sender_id: 'alice' }), 'alice'), true, 'my sealed letter is mine to read');
+    assert.equal(epistle.isEpistleReadable(letter({ sender_id: 'bob' }), 'alice'), false, 'an unopened letter waits for its ceremony');
+    assert.equal(epistle.isEpistleReadable(letter({ sender_id: 'bob', opened_at: '2026-10-19T10:00:00.000Z' }), 'alice'), true);
+
+    // Banners and thread lists show the first line or two, never the whole letter.
+    assert.equal(epistle.letterExcerpt('My dearest Alice,\n\nThe distance is only geography.'), 'My dearest Alice,');
+    assert.equal(epistle.letterExcerpt('One wrapped\nline here.'), 'One wrapped line here.');
+    assert.equal(epistle.letterExcerpt('   '), '');
+    assert.equal(epistle.letterExcerpt('A very long first line that runs on well past the limit', 20).endsWith('…'), true);
+  } finally {
+    await server.close();
+  }
+});
+
 test('epistles: the database keeps the promises the interface makes', async () => {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false, ws: false },
@@ -169,12 +230,17 @@ test('epistles: the database keeps the promises the interface makes', async () =
     const auth = await server.ssrLoadModule('/src/lib/authService.ts');
     const epistleService = await server.ssrLoadModule('/src/lib/epistleService.ts');
 
-    // The migration runs on the live schema and is safe to rerun.
+    // The migrations run on the live schema and are safe to rerun.
     const migration = await readFile(
       new URL('../supabase/migrations/202610200001_epistles.sql', import.meta.url),
       'utf8',
     );
+    const repliesMigration = await readFile(
+      new URL('../supabase/migrations/202610210001_epistle_replies.sql', import.meta.url),
+      'utf8',
+    );
     await backend.exec(migration);
+    await backend.exec(repliesMigration);
 
     const alice = (await auth.signUpWithEmail('alice@example.com', 'password')).user;
     await auth.saveOnboardingProfile(alice.id, { name: 'Alice', location: null, timezone: 'Africa/Lagos' });
@@ -299,6 +365,60 @@ test('epistles: the database keeps the promises the interface makes', async () =
       assert.equal(reread.find((row) => row.id === draft.id).body, 'It has been forty-one days.', 'a read letter is final');
     });
 
+    // --- Replies: a letter may answer another ----------------------------------------
+    let question = null;
+    let answer = null;
+    await asAlice(async () => {
+      question = await epistleService.createEpistleDraft(couple.id, alice.id, { title: 'A question', body: 'Do you remember the rain?' });
+      await epistleService.sealEpistle(question.id, null);
+    });
+    await asBob(async () => {
+      await epistleService.openEpistle(question.id);
+      answer = await epistleService.createEpistleDraft(couple.id, bob.id, {
+        title: 'Re: A question',
+        body: 'I remember everything.',
+        replyToId: question.id,
+      });
+      assert.equal(answer.reply_to_id, question.id, 'the answer points at the answered letter');
+    });
+
+    // A reply draft is still a draft: the answered side has never heard of it.
+    await asAlice(async () => {
+      const rows = await epistleService.fetchEpistles(couple.id);
+      assert.equal(rows.find((row) => row.id === answer.id), undefined, 'a reply draft is private until sealed');
+    });
+
+    // A draft answers nothing — not even its author's own.
+    await asAlice(async () => {
+      const unsent = await epistleService.createEpistleDraft(couple.id, alice.id, { title: null, body: 'Not yet sent.' });
+      await assert.rejects(
+        () => epistleService.createEpistleDraft(couple.id, alice.id, { title: null, body: 'Too soon.', replyToId: unsent.id }),
+        /sealed/,
+        'only a sealed letter may be answered',
+      );
+      // Nor does a letter outside the mailbox.
+      await assert.rejects(
+        () => epistleService.createEpistleDraft(couple.id, alice.id, { title: null, body: 'To nobody.', replyToId: '00000000-0000-0000-0000-000000000000' }),
+        /own mailbox/,
+        'only a letter in the mailbox may be answered',
+      );
+      // The link may be cleared while the reply is still a draft, and set again.
+      const cleared = await epistleService.saveEpistleDraft(unsent.id, { title: null, body: 'Not yet sent.', replyToId: null });
+      assert.equal(cleared.reply_to_id, null);
+    });
+
+    await asBob(async () => {
+      // A letter never answers itself.
+      await assert.rejects(
+        () => epistleService.saveEpistleDraft(anniversary.id, { title: 'Re: ours', body: 'Open this on our day.', replyToId: anniversary.id }),
+        /no_self_reply|own letter/i,
+        'a letter never answers itself',
+      );
+      // Sealing keeps the link: the answer arrives as an answer.
+      const sealed = await epistleService.sealEpistle(answer.id, null);
+      assert.equal(sealed.reply_to_id, question.id, 'sealing keeps the correspondence');
+    });
+
     // --- Drafts are discardable; sealed letters are keepsakes ------------------------
     await asBob(async () => {
       const disposable = await epistleService.createEpistleDraft(couple.id, bob.id, { title: null, body: 'Not my best work.' });
@@ -323,13 +443,16 @@ test('epistles: the database keeps the promises the interface makes', async () =
       'a third account may never break a couple’s seal',
     );
 
-    // --- Rerunning the migration changes nothing --------------------------------------
+    // --- Rerunning the migrations changes nothing -------------------------------------
     await backend.exec(migration);
+    await backend.exec(repliesMigration);
     await asAlice(async () => {
       const rows = await epistleService.fetchEpistles(couple.id);
-      assert.equal(rows.length, 2, 'the letters survive a rerun');
+      assert.equal(rows.length, 5, 'the letters survive a rerun');
       const again = rows.find((row) => row.id === draft.id);
       assert.ok(again.opened_at, 'the broken seal stays broken');
+      const kept = rows.find((row) => row.id === answer.id);
+      assert.equal(kept.reply_to_id, question.id, 'the correspondence survives a rerun');
     });
   } finally {
     if (backend) await backend.close();

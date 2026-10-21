@@ -184,6 +184,122 @@ export function sectionEpistles(rows: Epistle[], userId: string, todayKey: strin
   return { unopened, waiting, mine, keepsakes, drafts };
 }
 
+/**
+ * The keepsakes, sorted into the two directions a mailbox tab shows: the letters
+ * received from the partner, and the letters sent to them. Order within each side
+ * is untouched — newest first, as they arrived.
+ */
+export function splitKeepsakes(
+  keepsakes: Epistle[],
+  userId: string,
+): { received: Epistle[]; sent: Epistle[] } {
+  const received: Epistle[] = [];
+  const sent: Epistle[] = [];
+  for (const letter of keepsakes) {
+    (letter.sender_id === userId ? sent : received).push(letter);
+  }
+  return { received, sent };
+}
+
+/**
+ * True when the letter's words may be shown on this phone: one's own letters always
+ * (even unsealed drafts of them), the partner's only once the seal is broken. An
+ * openable-but-unopened letter answers false on purpose — its words wait for the
+ * ceremony, never for a quiet read.
+ */
+export function isEpistleReadable(
+  epistle: Pick<Epistle, 'sender_id' | 'opened_at'>,
+  userId: string,
+): boolean {
+  if (epistle.sender_id === userId) return true;
+  return epistle.opened_at !== null;
+}
+
+/**
+ * The name a reply starts life with: the answered letter's name, prefixed once. An
+ * answer to an answer keeps the single prefix — a correspondence is not a nest of
+ * ever-deeper names.
+ */
+export function replySubject(parentTitle: string | null | undefined): string {
+  const clean = (parentTitle ?? '').trim();
+  if (!clean) return '';
+  return /^re:/i.test(clean) ? clean : `Re: ${clean}`;
+}
+
+/** The answered letter, looked up among the letters this phone may see. */
+export function replyParent(
+  letter: Pick<Epistle, 'reply_to_id'>,
+  byId: Map<string, Epistle>,
+): Epistle | null {
+  if (!letter.reply_to_id) return null;
+  return byId.get(letter.reply_to_id) ?? null;
+}
+
+/**
+ * The correspondence behind a letter, oldest first: the answered letter, the letter
+ * it answered, and so on back to the one that started it all. A cycle (which the
+ * database's self-reply rule makes near-impossible) simply ends the walk instead of
+ * looping forever.
+ */
+export function replyAncestors(letter: Epistle, byId: Map<string, Epistle>): Epistle[] {
+  const chain: Epistle[] = [];
+  const seen = new Set<string>([letter.id]);
+  let current = replyParent(letter, byId);
+  while (current && !seen.has(current.id)) {
+    chain.unshift(current);
+    seen.add(current.id);
+    current = replyParent(current, byId);
+  }
+  return chain;
+}
+
+/**
+ * Every letter that answers this one, directly or further down the chain, newest
+ * first — so the first of them is always the latest word on the subject.
+ */
+export function replyDescendants(letterId: string, rows: Epistle[]): Epistle[] {
+  const children = new Map<string, Epistle[]>();
+  for (const row of rows) {
+    if (!row.reply_to_id) continue;
+    const list = children.get(row.reply_to_id) ?? [];
+    list.push(row);
+    children.set(row.reply_to_id, list);
+  }
+  const found: Epistle[] = [];
+  const queue = [...(children.get(letterId) ?? [])];
+  const seen = new Set<string>([letterId]);
+  while (queue.length > 0) {
+    const next = queue.shift() as Epistle;
+    if (seen.has(next.id)) continue;
+    seen.add(next.id);
+    found.push(next);
+    queue.push(...(children.get(next.id) ?? []));
+  }
+  return sortEpistlesNewestFirst(found);
+}
+
+/**
+ * How many letters the whole correspondence holds, this one included: the letters
+ * behind it plus every answer beneath the one that started it all.
+ */
+export function threadSize(letter: Epistle, rows: Epistle[], byId?: Map<string, Epistle>): number {
+  const map = byId ?? new Map(rows.map((row) => [row.id, row]));
+  const ancestors = replyAncestors(letter, map);
+  const root = ancestors.length > 0 ? ancestors[0] : letter;
+  return 1 + replyDescendants(root.id, rows).length;
+}
+
+/**
+ * The first line or two of a letter, flattened for reply banners and thread lists:
+ * newlines become spaces, overlong thoughts end in an ellipsis.
+ */
+export function letterExcerpt(body: string, maxLength = 90): string {
+  const first = letterParagraphs(body)[0] ?? '';
+  const flat = first.replace(/\s+/g, ' ').trim();
+  if (flat.length <= maxLength) return flat;
+  return `${flat.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 /** The envelope's accessible name, so a screen reader reads the letter, not the box. */
 export function epistleAriaLabel(epistle: Epistle, senderName: string, state: EpistleState): string {
   const who = (senderName || '').trim() || 'Your partner';

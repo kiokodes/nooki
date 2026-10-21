@@ -354,6 +354,14 @@ export interface Epistle {
   opens_at: string | null;
   /** When the partner broke the seal; NULL while it is still waiting. Once set, the letter is final. */
   opened_at: string | null;
+  /**
+   * The letter this one answers, or NULL while it starts its own correspondence. A
+   * chain of answers is simply letters pointing at each other, oldest first — the
+   * app walks the links. Set when the reply is drafted, kept through sealing, and
+   * only ever cleared while the reply is still a draft. See
+   * supabase/migrations/202610210001_epistle_replies.sql.
+   */
+  reply_to_id: string | null;
   created_at: string;
   updated_at: string;
 }
