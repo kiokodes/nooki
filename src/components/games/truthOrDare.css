@@ -1,0 +1,364 @@
+.tod-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding-bottom: 14px;
+  color: var(--text-primary, #372e29);
+}
+
+.tod-view button,
+.tod-launcher button {
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 750;
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 16px;
+  background: var(--primary-pink, #f9a8d4);
+  color: #402d38;
+  cursor: pointer;
+  transition: background-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.tod-view button:hover:not(:disabled),
+.tod-launcher button:hover:not(:disabled) {
+  box-shadow: 0 5px 14px #ed91ad38;
+  transform: translateY(-1px);
+}
+
+.tod-view button:focus-visible,
+.tod-launcher button:focus-visible {
+  outline: 3px solid var(--accent-lavender-deep, #7c3aed);
+  outline-offset: 3px;
+}
+
+.tod-view button:disabled,
+.tod-launcher button:disabled {
+  cursor: default;
+  opacity: .55;
+  transform: none;
+}
+
+.tod-intro h2,
+.tod-waiting-card h2,
+.tod-choice-card h2,
+.tod-dialog h2 {
+  margin: 4px 0 6px;
+  font-size: 1.22rem;
+  line-height: 1.3;
+  color: #443c42;
+}
+
+.tod-view p,
+.tod-launcher p {
+  font-size: .84rem;
+  line-height: 1.55;
+  color: #756a68;
+}
+
+.tod-step-label {
+  color: #8a6c93;
+  font-size: .66rem;
+  font-weight: 850;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.tod-intro {
+  padding: 4px 2px 2px;
+}
+
+.tod-intro p { max-width: 42ch; }
+
+.tod-theme-picker {
+  display: grid;
+  gap: 9px;
+}
+
+.tod-view .tod-theme-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding: 14px 15px;
+  text-align: left;
+  background: #fffdfb;
+  color: #51464b;
+  border: 1px solid #eee4e7;
+  border-radius: 18px;
+  box-shadow: 0 3px 12px #49344305;
+}
+
+.tod-view .tod-theme-option.is-selected {
+  border-color: #d39bb4;
+  box-shadow: inset 0 0 0 1px #d39bb4, 0 5px 16px #ed91ad1f;
+  background: #fff8fb;
+}
+
+.tod-theme-option-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tod-theme-option-heading strong { font-size: .95rem; }
+.tod-theme-option-heading > span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f4edf5;
+  color: #765e80;
+  font-size: .68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tod-theme-option > span:nth-child(2) { font-size: .77rem; font-weight: 500; line-height: 1.45; }
+.tod-theme-option small { color: #988c8a; font-size: .67rem; font-weight: 650; }
+
+.tod-gate-note,
+.tod-pool-note,
+.tod-consent-note,
+.tod-safety-note {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f4f7f2;
+  color: #5f7154 !important;
+  font-size: .76rem !important;
+  line-height: 1.5 !important;
+}
+
+.tod-gate-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.tod-pool-note { background: #fbf8f3; color: #756a68 !important; border: 1px solid #f0e8dc; }
+.tod-consent-note { background: #f5f3ff; color: #66517b !important; }
+.tod-safety-note { background: transparent; color: #867a74 !important; text-align: center; padding: 2px 6px; }
+
+.tod-view .tod-inline-link {
+  padding: 2px 4px;
+  border-radius: 0;
+  background: transparent;
+  color: #6b5480;
+  text-decoration: underline;
+  font-size: .76rem;
+}
+
+.tod-view .tod-primary-button { background: #ed91ad; color: #402d38; }
+.tod-view .tod-dare-button { background: #ddc6e4; color: #4b3d54; }
+.tod-view .tod-skip-button,
+.tod-view .tod-quiet-action { background: #f4edf5; color: #765e80; }
+.tod-view .tod-end-action { background: #fce7e9; color: #8c4451; }
+.tod-start-button { width: 100%; margin-top: 2px; }
+
+.tod-round-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin: -2px -2px 0;
+  padding: 9px 2px 10px;
+  background: var(--bg-canvas, #faf6ee);
+  border-bottom: 1px solid #f0e8dc;
+}
+
+.tod-round-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.tod-theme-chip,
+.tod-round-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 800;
+}
+.tod-theme-chip { background: #fce7f3; color: #9d4d74; }
+.tod-round-status { background: #f4f7f2; color: #5f7154; }
+.tod-view .tod-round-control {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  background: #f4edf5;
+  color: #765e80;
+  font-size: .75rem;
+}
+
+.tod-round-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px;
+  border-radius: 16px;
+  background: #fffdfb;
+  border: 1px solid #eee4e7;
+  box-shadow: 0 6px 20px #4934430b;
+}
+.tod-round-actions button { padding: 10px 12px; font-size: .75rem; }
+.tod-waiting-card,
+.tod-choice-card {
+  padding: 18px;
+  border-radius: 20px;
+  background: #fffdfb;
+  border: 1px solid #eee4e7;
+  box-shadow: 0 4px 16px #49344306;
+}
+.tod-waiting-card .tod-primary-button { margin-top: 12px; }
+.tod-status-line { margin-top: 12px !important; color: #66517b !important; font-weight: 750; }
+
+.tod-turn-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  color: #71666d;
+  font-size: .77rem;
+}
+.tod-turn-line strong { color: #443c42; font-size: .85rem; }
+.tod-turn-dot { width: 8px; height: 8px; border-radius: 50%; background: #cbb3d8; }
+.tod-turn-dot.is-mine { background: #ed91ad; box-shadow: 0 0 0 4px #ed91ad29; }
+
+.tod-prompt {
+  padding: 20px 18px 18px;
+  border-radius: 22px;
+  border: 1px solid #eee4e7;
+  background: #fffdfb;
+  box-shadow: 0 8px 24px #49344308;
+}
+.tod-prompt-labels { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tod-type-chip {
+  display: inline-flex;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 850;
+}
+.tod-type-chip--truth { background: #f4f7f2; color: #5f7154; }
+.tod-type-chip--dare { background: #fce7f3; color: #9d4d74; }
+.tod-intensity { color: #8a6c93; font-size: .7rem; font-weight: 750; }
+.tod-prompt-text {
+  margin: 17px 0 15px !important;
+  color: #3d3338 !important;
+  font-size: 1.06rem !important;
+  line-height: 1.55 !important;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.tod-mode {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #f7f2ea;
+  color: #85776d;
+  font-size: .67rem;
+  font-weight: 750;
+}
+
+.tod-prompt-actions,
+.tod-choice-actions,
+.tod-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.tod-prompt-actions button,
+.tod-choice-actions button { flex: 1 1 130px; }
+.tod-choice-card h2 { margin-top: 5px; }
+.tod-choice-card > p { margin: 0 0 14px; }
+
+.tod-error {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fff0f2;
+  color: #8c4451 !important;
+  font-size: .78rem !important;
+}
+.tod-exit {
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 7px 2px !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #806d78 !important;
+  font-size: .76rem !important;
+}
+
+.tod-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: #372e2980;
+  backdrop-filter: blur(2px);
+}
+.tod-dialog {
+  position: relative;
+  width: min(100%, 340px);
+  max-height: min(80vh, 620px);
+  overflow-y: auto;
+  padding: 24px 20px 20px;
+  border-radius: 24px;
+  background: #fffdfb;
+  box-shadow: 0 20px 50px #372e2930;
+  animation: nooki-modal-pop .18s ease both;
+}
+.tod-dialog > p { margin: 0 0 15px; }
+.tod-dialog-actions { flex-direction: column; }
+.tod-dialog-actions button { width: 100%; }
+.tod-view .tod-dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 11px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  background: #f4edf5;
+  color: #765e80;
+  font-size: 1.25rem;
+}
+
+.tod-launcher {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #fffdfb;
+}
+.tod-launcher-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+  background: #fce7f3;
+  color: #d26d95;
+  font-size: 1.35rem;
+}
+.tod-launcher-copy { flex: 1 1 auto; min-width: 0; }
+.tod-launcher .games-eyebrow { font-size: .59rem; }
+.tod-launcher h2 { margin: 4px 0; font-size: .98rem; }
+.tod-launcher p { margin: 0; font-size: .73rem; }
+.tod-launcher .tod-launcher-status { margin-top: 4px; color: #6b5480; font-weight: 750; }
+.tod-launcher button { flex: 0 0 auto; padding: 10px 12px; font-size: .75rem; white-space: nowrap; }
+
+@media (max-width: 350px) {
+  .tod-launcher { align-items: flex-start; flex-wrap: wrap; }
+  .tod-launcher-copy { flex-basis: calc(100% - 58px); }
+  .tod-launcher button { margin-left: 56px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tod-view button,
+  .tod-launcher button { transition: none; }
+  .tod-view button:hover:not(:disabled),
+  .tod-launcher button:hover:not(:disabled) { transform: none; }
+  .tod-dialog { animation: none; }
+}
