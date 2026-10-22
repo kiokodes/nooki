@@ -12,6 +12,8 @@ import { ChessDuel } from './ChessDuel';
 import { ConnectFour } from './ConnectFour';
 import { DashDuel, DashFreePlay } from './DashDuel';
 import { WordWheel } from './WordWheel';
+import { TruthOrDare, TruthOrDareLauncher } from './TruthOrDare';
+import type { TruthOrDareState } from '../../hooks/useTruthOrDare';
 import { OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
 import { DASH_LEVELS, dashLevelLabel, type DashLevel } from '../../lib/dash';
@@ -46,13 +48,14 @@ function runDuelConcluded(match: GameMatch): boolean {
   return mineIn && theirsIn;
 }
 
-export function GamesView({ games, userId, coupleId, partnerId, partnerName, partnerOnline = false }: {
+export function GamesView({ games, userId, coupleId, partnerId, partnerName, partnerOnline = false, truthOrDare }: {
   games: GamesState;
   userId: string;
   coupleId: string;
   partnerId: string;
   partnerName: string;
   partnerOnline?: boolean;
+  truthOrDare?: TruthOrDareState;
 }) {
   const [bestOf, setBestOf] = useState(3);
   const [mode, setMode] = useState<TetrisMode>('sprint');
@@ -68,6 +71,7 @@ export function GamesView({ games, userId, coupleId, partnerId, partnerName, par
   const [libraryIndex, setLibraryIndex] = useState(0);
   const [libraryDirection, setLibraryDirection] = useState<'next' | 'prev'>('next');
   const [dashFreePlay, setDashFreePlay] = useState(false);
+  const [truthOrDareOpen, setTruthOrDareOpen] = useState(false);
   const [dashFreeSeed, setDashFreeSeed] = useState(0);
   const startDashFreePlay = () => { setDashFreeSeed(Date.now()); setDashFreePlay(true); };
   const startWordPractice = async (level = wordLevel, seconds = wordSeconds) => {
@@ -264,10 +268,10 @@ export function GamesView({ games, userId, coupleId, partnerId, partnerName, par
   );
 
   return <section className="games-view" aria-label="Games">
-    <header><span className="games-eyebrow">A little lovers rivalry</span><h1>{m ? GAMES.find(g => g.id === m.game)?.name : wordPracticeSession ? 'Word Wheel · Practice' : dashFreePlay ? 'Dash Duel · Free run' : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
-    {games.error && !inlineErrorGame && <GameError games={games} card />}
-    {!games.data && !games.error && <p role="status">Loading your games…</p>}
-    {m ? <>
+    <header><span className="games-eyebrow">{truthOrDareOpen ? 'A shared game · separate phones' : 'A little lovers rivalry'}</span><h1>{truthOrDareOpen ? 'Truth or Dare' : m ? GAMES.find(g => g.id === m.game)?.name : wordPracticeSession ? 'Word Wheel · Practice' : dashFreePlay ? 'Dash Duel · Free run' : 'Play together'}</h1>{m && <p>Just for fun · unlimited rematches</p>}</header>
+    {!truthOrDareOpen && games.error && !inlineErrorGame && <GameError games={games} card />}
+    {!truthOrDareOpen && !games.data && !games.error && <p role="status">Loading your games…</p>}
+    {truthOrDareOpen && truthOrDare ? <TruthOrDare game={truthOrDare} userId={userId} partnerName={partnerName} onExit={() => setTruthOrDareOpen(false)} /> : m ? <>
       {!(m.game === 'dash-duel' && m.dash?.mine?.status === 'running') && <button className="game-back" onClick={() => openMatch(null)}>← All games</button>}
       {practice ?? (m.game === 'dash-duel' ? (
         <DashDuel match={m} userId={userId} partnerName={partnerName} partnerOnline={partnerOnline} games={games} onExit={() => openMatch(null)} />
@@ -340,6 +344,7 @@ export function GamesView({ games, userId, coupleId, partnerId, partnerName, par
       {/* Exactly two things on this tab: the couple's live matches (one swipeable card
           however many are open) and the game catalogue under it. A settled duel, or one
           whose two runs are both in, is history and is not listed here at all. */}
+      {truthOrDare && <TruthOrDareLauncher game={truthOrDare} onOpen={() => setTruthOrDareOpen(true)} />}
       <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
       <GameLibrary activeIndex={libraryIndex} onSelect={selectGame}>
         {renderGameCard(activeGame)}

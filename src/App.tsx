@@ -18,6 +18,7 @@ import { bootRaceElapsedMs } from './lib/bootRace';
 import { GamesView } from './components/games/GamesView';
 import { DuelLeaveDialog } from './components/games/DuelLeaveDialog';
 import { useGames } from './hooks/useGames';
+import { useTruthOrDare } from './hooks/useTruthOrDare';
 import { HomeView } from './components/home/HomeView';
 import { DailyDecisionModal } from './components/home/DailyDecisionModal';
 import { MissYouReveal } from './components/home/MissYouReveal';
@@ -212,6 +213,11 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   // The Discuss question engine sits at app level too, so a question the partner asks
   // still badges its tab while this phone is somewhere else.
   const games = useGames(couple?.id ?? null, currentUser?.id ?? null);
+  const truthOrDare = useTruthOrDare({
+    coupleId: couple?.id ?? null,
+    userId: currentUser?.id ?? null,
+    partnerId: partner?.id ?? null,
+  });
 
   /**
    * Every way out of the Games tab goes through here. A live duel run — Snake, Tetris or
@@ -628,6 +634,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             partnerId={partner.id}
             partnerName={partner.name}
             partnerOnline={partnerOnline}
+            truthOrDare={truthOrDare}
           />
         ) : isHome ? (
           <HomeView

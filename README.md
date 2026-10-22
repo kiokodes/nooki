@@ -95,6 +95,11 @@ apply and verify the database migrations separately.
    finally `202610200001_epistles.sql` (the couple's long sealed letters — the mailbox in
    the nook). Finally run
    `supabase/seed/word_puzzles.sql` once to install the pregenerated puzzle bank.
+   For Truth or Dare, also apply `supabase/migrations/202610220001_truth_or_dare.sql`, then
+   run `npm run seed:truth-or-dare` with `SUPABASE_URL` and the server-only
+   `SUPABASE_SERVICE_ROLE_KEY`. This adds only new tables and functions; it does not alter
+   existing tables. The 720 seeded prompts remain `active = false` until the owner reviews
+   and activates them in Supabase.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -1372,6 +1377,23 @@ Games are always available: there is no daily Games challenge. Apply
 `schema.sql`. Word Wheel also needs its puzzle rows: run **`supabase/seed/word_puzzles.sql`**
 once after the migrations (the seed is idempotent). The retirement migration deletes historical daily-game and Tic Tac Toe rows,
 removes their date/board columns, and replaces the daily-flag Games RPC.
+
+### Truth or Dare
+
+Truth or Dare lives in the Games tab and uses a couple-scoped room with server-refereed
+turns and Supabase Realtime updates. Both partners tap **I’m in** for each round; Flirty
+requires both to meet 18+, and Spicy requires both to meet 20+. The age gate uses a stored
+profile date of birth when available, otherwise a one-time minimum-age confirmation. It
+stores only the confirmed age tier and does not add columns to `profiles`.
+
+`supabase/seed/truth-or-dare/` holds six prompt buckets prepared for review: 120 prompts
+each for Random/Flirty/Spicy × Truth/Dare, with 24 at each intensity. Run
+`npm run seed:truth-or-dare -- --validate-only` to check counts, length limits and near
+matches. To seed, set `SUPABASE_URL` and the server-only `SUPABASE_SERVICE_ROLE_KEY`, then
+run `npm run seed:truth-or-dare`. The upsert is safe to rerun and does not overwrite an
+owner's active/review state. All rows start inactive; after content review, the owner must
+activate prompts in Supabase. Until both Truth and Dare have active prompts for a theme,
+the app keeps that theme unavailable.
 
 - **Rock Paper Scissors:** best of 3 (first to 2 wins) or 5 (first to 3). Ties replay
   without adding a point. Each pick stays secret until both partners lock in.

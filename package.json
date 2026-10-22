@@ -16,7 +16,8 @@
     "preview": "vite preview",
     "check:functions": "tsc -p tsconfig.functions.json",
     "build:word-puzzles": "node scripts/build-word-puzzles.mjs",
-    "upload:word-puzzles": "node scripts/upload-word-puzzles.mjs"
+    "upload:word-puzzles": "node scripts/upload-word-puzzles.mjs",
+    "seed:truth-or-dare": "node scripts/seed-truth-or-dare.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
