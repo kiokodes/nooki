@@ -889,52 +889,45 @@ platform.
    `PUSH_WEBHOOK_SECRET` you set below, or at minimum the Authorization header every
    Supabase webhook sends). The private half must never appear in a `VITE_` variable, in
    the repository, or in the app bundle.
-5. **Add the webhooks** (Dashboard → Database → Webhooks → Create) — one for chat, one
-   for "I miss you", and — after running `202610200001_epistles.sql` — the letters' knock:
-   - Table `messages`, event **Insert**.
-   - Table `miss_you_taps`, events **Insert** and **Update** (after running
-     `202610210002_miss_you_push.sql`, so the function may read the taps).
-   - All: type **Supabase Edge Function**, function `send-push`, method `POST`.
-   - HTTP header `Authorization: Bearer <the same PUSH_WEBHOOK_SECRET>`.
-   - The letters' knock is a plain SQL trigger rather than a dashboard webhook, because it
-     must fire **only at the moment of sealing** — a dashboard Insert/Update webhook would
-     also fire on every draft autosave. Run this once in the SQL Editor (it is what this
-     project runs; the endpoint and secret are the send-push webhook's own). The wrapper
-     matters: the function expects the webhook-shaped body (`type`, `table`, `record`,
-     `old_record`), and an empty body is silently skipped.
+5. **Add the webhooks** (Dashboard → Database → Webhooks → Create). Each one is type
+   **Supabase Edge Function** → `send-push`, method `POST`, with the header
+   `Authorization: Bearer <the same PUSH_WEBHOOK_SECRET>`:
 
-     ```sql
-     CREATE OR REPLACE FUNCTION public.notify_epistle_sealed()
-     RETURNS TRIGGER
-     LANGUAGE plpgsql
-     SECURITY DEFINER
-     SET search_path = public
-     AS $$
-     BEGIN
-       PERFORM supabase_functions.http_request(
-         'https://<project-ref>.supabase.co/functions/v1/send-push',
-         'POST',
-         '{"Content-type":"application/json","Authorization":"Bearer <PUSH_WEBHOOK_SECRET>"}',
-         json_build_object(
-           'type', 'UPDATE',
-           'table', 'epistles',
-           'schema', 'public',
-           'record', row_to_json(NEW),
-           'old_record', row_to_json(OLD)
-         )::text,
-         '5000'
-       );
-       RETURN NEW;
-     END;
-     $$;
+   | Table | Events | What it tells the partner |
+   | --- | --- | --- |
+   | `messages` | Insert | a message arrived |
+   | `answers` | Insert | it is their turn to answer |
+   | `game_matches` | Update | it is their move |
+   | `miss_you_taps` | Insert, Update | they are missed — only the first tap of a batch |
+   | `epistles` | — | the letters' knock, which no dashboard webhook can express |
 
-     DROP TRIGGER IF EXISTS epistles_sealed ON public.epistles;
-     CREATE TRIGGER epistles_sealed
-     AFTER UPDATE ON public.epistles
-     FOR EACH ROW
-     WHEN (NEW.sealed_at IS NOT NULL AND OLD.sealed_at IS NULL)
-     EXECUTE FUNCTION public.notify_epistle_sealed();
-     ```
+   `supabase/migrations/202610250002_fix_push_webhooks.sql` finishes the job. Run it once
+   the dashboard webhooks above exist: it copies the endpoint and the `Authorization`
+   header off a webhook that already works, and uses them to add the three triggers a
+   dashboard form cannot create —
+
+   - `epistles_sealed` (Update): fires only when `sealed_at` goes from NULL to set, so a
+     draft autosave never knocks and a recalled letter keeps its one knock;
+   - `epistles_sealed_on_insert` (Insert, `WHEN sealed_at IS NOT NULL`): a letter that is
+     created already sealed still knocks;
+   - `miss_you_taps_insert` / `miss_you_taps_update`: the first tap of a waiting batch. The
+     function compares `old_record` with `record` and stays silent for taps piling onto an
+     unopened heart, so tapping freely is not tapping your partner's phone to death.
+
+   Keeping the secret out of the file is the point of reading it back off a live webhook —
+   it is written once, in the dashboard, and never in the repository. `supabase_functions.http_request`
+   builds the body the function expects (`type`, `table`, `schema`, `record`, `old_record`),
+   and an empty body is silently skipped.
+
+   > The same migration unschedules a `pg_cron` sweep left behind by the removed
+   > Together-time tab, which had been POSTing `together_time_sessions` — a table `send-push`
+   > does not watch — once a minute, around the clock.
+
+   **Redeploy the function too.** Webhooks that exist on a function that predates the event
+   are worse than no webhook: they answer 200 and drop the notification on the floor. After
+   deploying, one row in each table's recent `net._http_response` history should read a
+   handler answer (`{"sent":…}` or a `skipped` that names that table), never
+   `not a watched table`.
 6. **Verify**, then switch it on per device: Couple Settings → **Notifications**. The
    switch is per browser, not per account — a phone and a laptop are two independent
    devices, and turning one off never touches the other.
@@ -985,7 +978,7 @@ a function secret. `send-push` needs the service key because the sender must rea
 | The card says notifications are off "for this Nooki yet" | `VITE_VAPID_PUBLIC_KEY` is missing or malformed in the environment the build used. Rebuild and redeploy; check the build log for the warning. |
 | The switch turns itself off again | The RPC failed: the push migration was not applied, or `PUSH_WEBHOOK_SECRET`/VAPID secrets are missing on the function. `verify.sql` and the function's logs will say which. |
 | Subscribed, nothing arrives | The webhook is not on `messages`/Insert, its Authorization header does not match `PUSH_WEBHOOK_SECRET`, or the message had a NULL `sender_id` (system notes are deliberately not announced). Supabase → Edge Functions → `send-push` logs show every call. |
-| Chats notify but letters or miss-yous stay silent | The letters need the `epistles_sealed` SQL trigger above (a dashboard webhook is not enough, and the trigger must send the webhook-shaped body — an empty body is skipped); miss-yous need the `miss_you_taps` webhook (Insert **and** Update) plus `202610210002_miss_you_push.sql`, without which the function cannot read the taps. |
+| Chats notify but letters or miss-yous stay silent | Either the triggers are missing or the deployed function is older than the event. Run `202610250002_fix_push_webhooks.sql` (it needs `202610210002_miss_you_push.sql` first, or the function cannot read the taps) **and** redeploy `send-push`. In Supabase → Edge Functions → `send-push` logs, a stale build answers `{"skipped":"not a watched table"}` for a table it should handle. |
 | Works on Android, silent on iPhone | The app is in a Safari tab rather than added to the Home Screen. Push cannot exist there. |
 | The function will not boot: `Cannot find module 'https'` (or a web-push error at import) | The pinned `npm:web-push@3.6.7` could not run on that runtime. Replace it with Deno's own implementation (`jsr:@negrel/webpush`), which changes only the import and the two calls (`setVapidDetails`/`sendNotification`) — the payload, the secrets and the webhook stay exactly as they are. |
 | It worked, then stopped after a few days | The browser rotated its subscription. Opening the app re-claims it automatically (the registration refresh runs on load); if it recurs weekly, check the function logs for 410s against a stale endpoint. |
@@ -1000,7 +993,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql`, `202610210001_epistle_replies.sql`, `202610210002_miss_you_push.sql`, `202610250001_lock_truth_or_dare_spicy.sql`, `202610250002_fix_push_webhooks.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the Games
 retirement migration deletes daily-game and Tic Tac Toe match history,
@@ -1042,9 +1035,12 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
 - **Edge Functions** (only for push notifications): deploy `send-push` from this
   repository (`supabase functions deploy send-push --no-verify-jwt`, or paste
   `supabase/functions/send-push/index.ts` into the dashboard), set its `VAPID_*` and
-  `PUSH_WEBHOOK_SECRET` secrets, and add the Database Webhooks on `messages` (Insert)
-  and `miss_you_taps` (Insert, Update) plus the letters' SQL trigger. The
-  step-by-step list, with the exact commands, is under **Push notifications** above.
+  `PUSH_WEBHOOK_SECRET` secrets, add the Database Webhooks on `messages` (Insert),
+  `answers` (Insert), `game_matches` (Update) and `miss_you_taps` (Insert, Update), and run
+  `202610250002_fix_push_webhooks.sql` for the letters' trigger. Redeploy the function
+  whenever a new event type is added: a webhook on a function that does not handle its
+  table answers 200 and drops the notification. The step-by-step list, with the exact
+  commands, is under **Push notifications** above.
 - **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
   chat messages ride Postgres Changes on `messages`, Discuss rides a second couple-scoped
   channel over `question_sessions`, `couple_settings`, `answers` and `answer_comments`,
