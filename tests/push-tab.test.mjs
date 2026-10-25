@@ -359,14 +359,34 @@ test('push sending: the Edge Function exists, is documented, and never leaks the
   assert(config.includes('verify_jwt = false'), 'the webhook calls it with a service key, so the function does its own auth check');
 });
 
-test('push runbook: the letters’ trigger sends a real payload, and miss-yous have their webhook', () => {
+test('push runbook: every event has its webhook, and the letters knock only when sealed', () => {
   const readme = readSource('../README.md');
-  // The function skips any body without `table`/`record`, so the runbook's trigger SQL
-  // must build the webhook-shaped body around the sealed row — an empty body would be
-  // silence, however correctly the function itself is written.
-  assert(readme.includes('notify_epistle_sealed'), 'the letters’ knock is built in a wrapper function');
-  assert(readme.includes('row_to_json(NEW)'), '…sending the sealed row itself, not an empty body');
-  assert(readme.includes('row_to_json(OLD)'), '…with the unsealed row beside it, so the moment of sealing is provable');
-  assert(readme.includes('Table `miss_you_taps`'), 'miss-yous have their own dashboard webhook step');
+  const migration = readSource('../supabase/migrations/202610250002_fix_push_webhooks.sql');
+
+  // The function skips any body without `table`/`record`. Send-push's webhooks are
+  // Supabase Database Webhooks, and `supabase_functions.http_request` is the trigger
+  // function they use: it builds `type`, `table`, `schema`, `record` and `old_record`
+  // itself. So the runbook wires that directly rather than hand-rolling the JSON in a
+  // wrapper — one less piece of SQL to get subtly wrong.
+  assert(migration.includes('supabase_functions.http_request'), 'the knock goes through the platform trigger function');
+  assert(migration.includes("WHEN (new.sealed_at IS NOT NULL AND old.sealed_at IS NULL)"),
+    'the Update knock fires only on the NULL -> sealed transition, not on every autosave');
+  assert(migration.includes('WHEN (new.sealed_at IS NOT NULL)'),
+    'a letter born sealed still knocks, and a draft insert never does');
+
+  // Every event send-push handles needs a webhook, or that notification can never fire.
+  assert(migration.includes('miss_you_taps_insert') && migration.includes('miss_you_taps_update'),
+    'miss-yous need both their Insert and their Update webhook');
+  assert(migration.includes('send-push'), '…pointed at the function that handles them');
+
+  // The secret is copied off a live webhook at run time. If it were pasted in, it would
+  // be in the repository forever.
+  assert(migration.includes('regexp_match') && migration.includes('Bearer'),
+    'the endpoint and the secret are read back off a working webhook');
+  assert(!/Bearer [0-9a-f]{32,}/i.test(migration), 'and the secret itself is never written down');
+
+  assert(readme.includes('202610250002_fix_push_webhooks.sql'), 'the runbook names the migration that wires them');
   assert(readme.includes('202610210002_miss_you_push.sql'), '…and the grant migration that lets the sender read the taps');
+  assert(readme.includes('| `miss_you_taps` | Insert, Update'), 'miss-yous have their own dashboard webhook step');
+  assert(readme.includes('| `epistles` | —'), 'and the letters are called out as the one a dashboard webhook cannot express');
 });
