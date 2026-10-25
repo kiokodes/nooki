@@ -9,6 +9,19 @@ export type TodAgeSource = 'date_of_birth' | 'confirmation' | 'missing';
 export const TOD_THEMES: TodTheme[] = ['random', 'flirty', 'spicy'];
 export const TOD_PROMPT_TYPES: TodPromptType[] = ['truth', 'dare'];
 
+/**
+ * Spicy is closed until marriage verification exists. Age is deliberately not enough to
+ * open it: there is no screen, round or prompt pool that can reach it for now. Content
+ * stays in the seed bank so the theme can return without rewriting the prompts.
+ */
+export const TOD_SPICY_LOCKED = true;
+export const TOD_LOCKED_THEME_MESSAGE =
+  'Spicy is locked until marriage verification is available.';
+
+export function isTodThemeLocked(theme: TodTheme): boolean {
+  return theme === 'spicy' && TOD_SPICY_LOCKED;
+}
+
 export interface TodPrompt {
   id: string;
   type: TodPromptType;
@@ -68,6 +81,7 @@ export function requiredAgeForTheme(theme: TodTheme): 0 | 18 | 20 {
 }
 
 export function bothPartnersMeetAgeRule(theme: TodTheme, mine: TodAgeStatus, partner: TodAgeStatus): boolean {
+  if (isTodThemeLocked(theme)) return false;
   const required = requiredAgeForTheme(theme);
   return required === 0 || (mine.tier >= required && partner.tier >= required);
 }

@@ -96,10 +96,12 @@ apply and verify the database migrations separately.
    the nook). Finally run
    `supabase/seed/word_puzzles.sql` once to install the pregenerated puzzle bank.
    For Truth or Dare, also apply `supabase/migrations/202610220001_truth_or_dare.sql`, then
-   run `npm run seed:truth-or-dare` with `SUPABASE_URL` and the server-only
-   `SUPABASE_SERVICE_ROLE_KEY`. This adds only new tables and functions; it does not alter
-   existing tables. The 720 seeded prompts remain `active = false` until the owner reviews
-   and activates them in Supabase.
+   `202610250001_lock_truth_or_dare_spicy.sql`, then run `npm run seed:truth-or-dare` with
+   `SUPABASE_URL` and the server-only `SUPABASE_SERVICE_ROLE_KEY`. This adds only new tables
+   and functions; it does not alter existing tables. The 720 seeded prompts remain
+   `active = false` until the owner reviews and activates them in Supabase. The lock
+   migration closes any open Spicy round and sets every Spicy prompt back to
+   `active = false`, so do not review or activate Spicy prompts yet.
    Apply pending migrations in this order; apart from the intentionally retired Games
    history, they preserve existing records.
    (`202610150013_lock_down_game_internals.sql` and
@@ -597,12 +599,18 @@ nothing about it is instant except the arrival.
   keeps every shelf honest: a letter sealed on the other side of the world appears without
   a refresh.
 - **Storage and rules** (`epistles`, `202610200001_epistles.sql`, additive and rerunnable).
-  Body up to 20,000 characters, title up to 80. RLS: the couple reads sealed and opened
+  Body up to 20,000 characters, title up to 80 — counted in code points, the way the
+  database's `char_length` counts them, so an emoji is one character and not two. A letter
+  is **never silently cut to size**: past the limit the desk keeps every word on the paper,
+  shows the count, refuses to save or seal, and says how far past it runs. The same limit
+  is enforced by the table's CHECK, and a save that still reaches it is refused with that
+  sentence rather than a constraint name. RLS: the couple reads sealed and opened
   letters; a draft is its author's alone; an author reworks their own letter only while it
   is unopened; drafts alone may be deleted. The table is in the Realtime publication, and
   a Database Webhook on seal tells the partner's phone (see **Push notifications**); a
   project without the migration names it in the error the mailbox shows, the way
-  miss-you does.
+  miss-you does. Replies need `202610210001_epistle_replies.sql` (the `reply_to_id` column
+  and its trigger); without it the desk answers "the database needs an update".
 
 ## The Chat tab
 
@@ -1381,13 +1389,25 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
 ### Truth or Dare
 
 Truth or Dare lives in the Games tab and uses a couple-scoped room with server-refereed
-turns and Supabase Realtime updates. Both partners tap **I’m in** for each round; Flirty
-requires both to meet 18+, and Spicy requires both to meet 20+. The age gate uses a stored
-profile date of birth when available, otherwise a one-time minimum-age confirmation. It
-stores only the confirmed age tier and does not add columns to `profiles`.
+turns and Supabase Realtime updates. Both partners tap **I’m in** for each round. Flirty
+requires both to meet 18+, using a stored profile date of birth when available and
+otherwise a one-time minimum-age confirmation; only the confirmed age tier is stored, and
+no columns are added to `profiles`. Random has no age gate.
+
+**Spicy is locked for everyone.** Age is not proof of marriage, so the theme cannot be
+opened by any couple right now — not by a 20+ confirmation, not from the theme picker, and
+not by calling the RPCs directly. It is visible in the picker as a dashed, disabled
+**Married couples only** card. `public.tod_theme_locked()` is the single switch that every
+Spicy-facing RPC consults, and `tod_start_round` also ends any Spicy room left open by an
+older build so a couple is never trapped in an unplayable round. The lock migration closes
+those rooms and withdraws approved Spicy prompts from the live pool. Spicy returns only
+when marriage-certificate verification ships: at that point, replace
+`public.tod_theme_locked()`, re-activate reviewed Spicy prompts and restore the Spicy bucket
+in `public.tod_state()`.
 
 `supabase/seed/truth-or-dare/` holds six prompt buckets prepared for review: 120 prompts
-each for Random/Flirty/Spicy × Truth/Dare, with 24 at each intensity. Run
+each for Random/Flirty/Spicy × Truth/Dare, with 24 at each intensity. The Spicy buckets stay
+in the repository for the future release but must remain inactive. Run
 `npm run seed:truth-or-dare -- --validate-only` to check counts, length limits and near
 matches. To seed, set `SUPABASE_URL` and the server-only `SUPABASE_SERVICE_ROLE_KEY`, then
 run `npm run seed:truth-or-dare`. The upsert is safe to rerun and does not overwrite an

@@ -8010,6 +8010,16 @@ BEGIN
 END;
 $$;
 
+-- Spicy is locked until marriage verification exists. Age and relationship status are not
+-- proof of marriage, so no client path may open the theme. Replace this function when
+-- marriage verification ships, then re-activate the reviewed Spicy prompts and restore
+-- the Spicy bucket in public.tod_state().
+CREATE OR REPLACE FUNCTION public.tod_theme_locked(p_theme TEXT)
+RETURNS BOOLEAN
+LANGUAGE SQL STABLE SET search_path = public, pg_temp AS $$
+  SELECT coalesce(p_theme = 'spicy', false);
+$$;
+
 ALTER TABLE public.tod_age_confirmations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tod_age_confirmations REPLICA IDENTITY FULL;
 DROP POLICY IF EXISTS tod_age_confirmations_read_couple ON public.tod_age_confirmations;
@@ -8082,7 +8092,9 @@ BEGIN
     'updated_at', r.updated_at
   ) INTO v_round
   FROM public.tod_rounds r
-  WHERE r.couple_id = v_couple AND r.status IN ('inviting', 'active', 'paused')
+  WHERE r.couple_id = v_couple
+    AND r.status IN ('inviting', 'active', 'paused')
+    AND NOT public.tod_theme_locked(r.theme)
   ORDER BY r.created_at DESC LIMIT 1;
 
   SELECT jsonb_object_agg(
@@ -8099,13 +8111,21 @@ BEGIN
     GROUP BY themes.theme
   ) AS bucket;
 
+  -- A locked theme reports an empty pool even if stale prompts are still active.
+  v_counts := jsonb_set(
+    coalesce(v_counts, '{}'::JSONB),
+    '{spicy}',
+    '{"truth": 0, "dare": 0}'::JSONB,
+    true
+  );
+
   RETURN jsonb_build_object(
     'round', v_round,
     'ages', jsonb_build_object(
       'mine', jsonb_build_object('tier', public.tod_age_tier(v_user), 'source', public.tod_age_source(v_user)),
       'partner', jsonb_build_object('tier', public.tod_age_tier(v_partner), 'source', public.tod_age_source(v_partner))
     ),
-    'active_counts', coalesce(v_counts, '{}'::JSONB)
+    'active_counts', v_counts
   );
 END;
 $$;
@@ -8122,6 +8142,9 @@ DECLARE
 BEGIN
   IF v_user IS NULL THEN RAISE EXCEPTION 'Sign in to play.'; END IF;
   IF p_theme NOT IN ('random', 'flirty', 'spicy') THEN RAISE EXCEPTION 'Choose a valid theme.'; END IF;
+  IF public.tod_theme_locked(p_theme) THEN
+    RAISE EXCEPTION 'Spicy is locked until marriage verification is available.';
+  END IF;
   v_couple := public.get_user_couple_id(v_user);
   IF v_couple IS NULL THEN RAISE EXCEPTION 'Pair with your partner to play.'; END IF;
   PERFORM 1 FROM public.couples WHERE id = v_couple FOR UPDATE;
@@ -8131,7 +8154,13 @@ BEGIN
     ORDER BY p.id LIMIT 1;
   IF v_partner IS NULL THEN RAISE EXCEPTION 'Both partners must be paired.'; END IF;
 
-  v_required_age := CASE p_theme WHEN 'flirty' THEN 18 WHEN 'spicy' THEN 20 ELSE 0 END;
+  -- Self-heal: a Spicy room left open by an older build must not block a new round.
+  UPDATE public.tod_rounds
+    SET status = 'ended', current_prompt = NULL, ended_at = coalesce(ended_at, now()), updated_at = now()
+    WHERE couple_id = v_couple AND status IN ('inviting', 'active', 'paused')
+      AND public.tod_theme_locked(theme);
+
+  v_required_age := CASE p_theme WHEN 'flirty' THEN 18 ELSE 0 END;
   IF v_required_age > 0 AND (
     public.tod_age_tier(v_user) < v_required_age
     OR public.tod_age_tier(v_partner) < v_required_age
@@ -8173,10 +8202,13 @@ BEGIN
     WHERE id = p_round_id AND couple_id = v_couple FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Round not found.'; END IF;
   IF auth.uid() NOT IN (v_round.player_one, v_round.player_two) THEN RAISE EXCEPTION 'This round is not yours.'; END IF;
+  IF public.tod_theme_locked(v_round.theme) THEN
+    RAISE EXCEPTION 'Spicy is locked until marriage verification is available.';
+  END IF;
   IF v_round.status = 'active' THEN RETURN; END IF;
   IF v_round.status <> 'inviting' THEN RAISE EXCEPTION 'This round is not waiting for partners.'; END IF;
 
-  v_required_age := CASE v_round.theme WHEN 'flirty' THEN 18 WHEN 'spicy' THEN 20 ELSE 0 END;
+  v_required_age := CASE v_round.theme WHEN 'flirty' THEN 18 ELSE 0 END;
   IF v_required_age > 0 AND (
     public.tod_age_tier(v_round.player_one) < v_required_age
     OR public.tod_age_tier(v_round.player_two) < v_required_age
@@ -8212,11 +8244,14 @@ BEGIN
   SELECT * INTO v_round FROM public.tod_rounds
     WHERE id = p_round_id AND couple_id = v_couple FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Round not found.'; END IF;
+  IF public.tod_theme_locked(v_round.theme) THEN
+    RAISE EXCEPTION 'Spicy is locked until marriage verification is available.';
+  END IF;
   IF v_round.status <> 'active' THEN RAISE EXCEPTION 'This round is not active.'; END IF;
   IF auth.uid() <> v_round.turn_id THEN RAISE EXCEPTION 'It is your partner’s turn.'; END IF;
   IF v_round.current_prompt IS NOT NULL THEN RAISE EXCEPTION 'Finish or skip the current prompt first.'; END IF;
 
-  v_required_age := CASE v_round.theme WHEN 'flirty' THEN 18 WHEN 'spicy' THEN 20 ELSE 0 END;
+  v_required_age := CASE v_round.theme WHEN 'flirty' THEN 18 ELSE 0 END;
   IF v_required_age > 0 AND (
     public.tod_age_tier(v_round.player_one) < v_required_age
     OR public.tod_age_tier(v_round.player_two) < v_required_age
@@ -8299,6 +8334,9 @@ BEGIN
   SELECT * INTO v_round FROM public.tod_rounds
     WHERE id = p_round_id AND couple_id = v_couple FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Round not found.'; END IF;
+  IF public.tod_theme_locked(v_round.theme) THEN
+    RAISE EXCEPTION 'Spicy is locked until marriage verification is available.';
+  END IF;
   IF v_round.status <> 'active' THEN RAISE EXCEPTION 'This round is not active.'; END IF;
   IF auth.uid() <> v_round.turn_id THEN RAISE EXCEPTION 'It is your partner’s turn.'; END IF;
   IF v_round.current_prompt IS NULL THEN RAISE EXCEPTION 'Choose a prompt first.'; END IF;
@@ -8321,6 +8359,9 @@ BEGIN
   SELECT * INTO v_round FROM public.tod_rounds
     WHERE id = p_round_id AND couple_id = v_couple FOR UPDATE;
   IF NOT FOUND OR auth.uid() NOT IN (v_round.player_one, v_round.player_two) THEN RAISE EXCEPTION 'Round not found.'; END IF;
+  IF public.tod_theme_locked(v_round.theme) THEN
+    RAISE EXCEPTION 'Spicy is locked until marriage verification is available.';
+  END IF;
   IF v_round.status NOT IN ('inviting', 'active', 'paused') THEN RAISE EXCEPTION 'This round has ended.'; END IF;
   UPDATE public.tod_rounds SET status = 'paused', updated_at = now() WHERE id = v_round.id;
 END;
@@ -8335,6 +8376,9 @@ BEGIN
   SELECT * INTO v_round FROM public.tod_rounds
     WHERE id = p_round_id AND couple_id = v_couple FOR UPDATE;
   IF NOT FOUND OR auth.uid() NOT IN (v_round.player_one, v_round.player_two) THEN RAISE EXCEPTION 'Round not found.'; END IF;
+  IF public.tod_theme_locked(v_round.theme) THEN
+    RAISE EXCEPTION 'Spicy is locked until marriage verification is available.';
+  END IF;
   IF v_round.status <> 'paused' THEN RAISE EXCEPTION 'This round is not paused.'; END IF;
   UPDATE public.tod_rounds
     SET status = CASE WHEN cardinality(accepted_by) = 2 THEN 'active' ELSE 'inviting' END,
@@ -8361,7 +8405,8 @@ $$;
 
 -- Only the server-side RPCs can alter round state or seen history. The content table
 -- remains service-role writable only; authenticated clients can read active prompts.
-REVOKE ALL ON FUNCTION public.tod_birth_date(UUID), public.tod_age_tier(UUID), public.tod_age_source(UUID)
+REVOKE ALL ON FUNCTION public.tod_birth_date(UUID), public.tod_age_tier(UUID), public.tod_age_source(UUID),
+  public.tod_theme_locked(TEXT)
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.tod_confirm_age(SMALLINT), public.tod_state(),
   public.tod_start_round(TEXT), public.tod_accept_round(UUID), public.tod_choose_prompt(UUID, TEXT),
