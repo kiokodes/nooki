@@ -4,9 +4,12 @@ import {
   EMPTY_TOD_COUNTS,
   hasAcceptedRound,
   intensityForCompletedCount,
+  isTodThemeLocked,
   isTodTurn,
   otherTodPlayer,
   requiredAgeForTheme,
+  TOD_LOCKED_THEME_MESSAGE,
+  TOD_THEMES,
   type TodAgeStatus,
   type TodPrompt,
   type TodPromptType,
@@ -28,8 +31,8 @@ const THEME_COPY: Record<TodTheme, { label: string; badge: string; description: 
   },
   spicy: {
     label: 'Spicy',
-    badge: '20+',
-    description: 'Sensual and sexual. Both partners must be 20 or older.',
+    badge: 'Locked',
+    description: 'Married couples only. Opens once marriage verification is available.',
   },
 };
 
@@ -102,6 +105,7 @@ export function TruthOrDare({
     && ages.mine.source !== 'date_of_birth';
 
   const selectTheme = (theme: TodTheme) => {
+    if (isTodThemeLocked(theme)) return;
     setSelectedTheme(theme);
     setShowAgeConfirm(false);
     const required = requiredAgeForTheme(theme);
@@ -110,8 +114,8 @@ export function TruthOrDare({
     }
   };
 
-  const confirmAge = async (minimumAge: 18 | 20) => {
-    await game.confirmAge(minimumAge);
+  const confirmAge = async () => {
+    await game.confirmAge(18);
     setShowAgeConfirm(false);
   };
 
@@ -129,6 +133,19 @@ export function TruthOrDare({
 
   if (!snapshot && game.loading) return <section className="tod-view" aria-label="Truth or Dare">
     <p role="status">Opening your shared room…</p>
+  </section>;
+
+  // A Spicy round left open before the lock existed must not be playable. The migration
+  // closes those rooms, so this card is only a safety net and a way out.
+  if (round && isTodThemeLocked(round.theme)) return <section className="tod-view" aria-label="Truth or Dare">
+    <div className="tod-waiting-card">
+      <span className="tod-step-label">Spicy · locked</span>
+      <h2>This round is closed</h2>
+      <p>{TOD_LOCKED_THEME_MESSAGE} End it to play Random or Flirty instead.</p>
+      <button type="button" className="tod-primary-button" disabled={game.busy} onClick={endRound}>End round</button>
+    </div>
+    {game.error && <p className="tod-error" role="alert">{game.error}</p>}
+    <button type="button" className="tod-exit" onClick={onExit}>← All games</button>
   </section>;
 
   return <section className="tod-view" aria-label="Truth or Dare">
@@ -156,8 +173,6 @@ export function TruthOrDare({
         <button type="button" className="tod-end-action" disabled={game.busy} onClick={() => setShowEndConfirm(true)}>End round</button>
         <button type="button" className="tod-quiet-action" onClick={() => setShowRoundMenu(false)}>Keep playing</button>
       </div>}
-
-      {round.theme === 'spicy' && <p className="tod-consent-note">Both partners tap “I’m in” before every Spicy round opens.</p>}
 
       {round.status === 'inviting' && <div className="tod-waiting-card">
         <span className="tod-step-label">{THEME_COPY[round.theme].badge} · shared round</span>
@@ -213,23 +228,32 @@ export function TruthOrDare({
         <p>Take turns choosing. Every prompt can be done apart by text, voice, video call or on your own phone.</p>
       </div>
       <div className="tod-theme-picker" role="group" aria-label="Choose a theme">
-        {(['random', 'flirty', 'spicy'] as TodTheme[]).map((theme) => {
+        {TOD_THEMES.map((theme) => {
           const copy = THEME_COPY[theme];
           const themeCounts = counts[theme];
+          const locked = isTodThemeLocked(theme);
           const isAvailable = themePoolReady(themeCounts);
           return <button
             key={theme}
             type="button"
-            className={`tod-theme-option${selectedTheme === theme ? ' is-selected' : ''}`}
-            aria-pressed={selectedTheme === theme}
+            className={`tod-theme-option${selectedTheme === theme ? ' is-selected' : ''}${locked ? ' is-locked' : ''}`}
+            aria-pressed={locked ? undefined : selectedTheme === theme}
+            disabled={locked}
             onClick={() => selectTheme(theme)}
           >
             <span className="tod-theme-option-heading"><strong>{copy.label}</strong><span>{copy.badge}</span></span>
             <span>{copy.description}</span>
-            <small>{themeCounts.truth} truths · {themeCounts.dare} dares · {isAvailable ? 'ready' : 'not ready'}</small>
+            <small>{locked
+              ? 'No one can open this theme yet'
+              : `${themeCounts.truth} truths · ${themeCounts.dare} dares · ${isAvailable ? 'ready' : 'not ready'}`}</small>
           </button>;
         })}
       </div>
+
+      <p className="tod-locked-note" role="note">
+        Spicy is locked for everyone right now. It opens for married couples only, once we can
+        verify marriage certificates.
+      </p>
 
       {requiredAgeForTheme(selectedTheme) > 0 && <div className="tod-gate-note" role="status">
         {ageMessage(selectedTheme, ages.mine, ages.partner, partnerName) || `Both partners meet the ${requiredAgeForTheme(selectedTheme)}+ age rule.`}
@@ -242,13 +266,11 @@ export function TruthOrDare({
         This prompt pool is awaiting review in Supabase. Seeded prompts start inactive and become available when the owner turns them on.
       </p>}
 
-      {selectedTheme === 'spicy' && <p className="tod-consent-note">Both partners will tap “I’m in” at the start of every Spicy round.</p>}
-
       {game.error && <p className="tod-error" role="alert">{game.error}</p>}
       <button
         type="button"
         className="tod-primary-button tod-start-button"
-        disabled={!snapshot || !ageReady || !poolReady || game.busy}
+        disabled={!snapshot || isTodThemeLocked(selectedTheme) || !ageReady || !poolReady || game.busy}
         aria-busy={game.busy}
         onClick={() => void game.startRound(selectedTheme)}
       >
@@ -264,10 +286,9 @@ export function TruthOrDare({
         <button type="button" className="tod-dialog-close" aria-label="Close age confirmation" onClick={() => setShowAgeConfirm(false)}>×</button>
         <span className="tod-step-label">One-time age check</span>
         <h2 id="tod-age-title">Confirm your age</h2>
-        <p>There is no date of birth on your profile. Save only the minimum age you confirm; your partner can see whether the theme is unlocked.</p>
+        <p>There is no date of birth on your profile. Confirm you are 18 or older to unlock Flirty. Your partner confirms on their own phone, and only the minimum age you confirm is saved.</p>
         <div className="tod-dialog-actions">
-          {ages.mine.tier < 18 && <button type="button" className="tod-primary-button" disabled={game.busy} onClick={() => void confirmAge(18)}>I’m 18 or older</button>}
-          {ages.mine.tier < 20 && <button type="button" className="tod-dare-button" disabled={game.busy} onClick={() => void confirmAge(20)}>I’m 20 or older</button>}
+          {ages.mine.tier < 18 && <button type="button" className="tod-primary-button" disabled={game.busy} onClick={() => void confirmAge()}>I’m 18 or older</button>}
           <button type="button" className="tod-quiet-action" onClick={() => setShowAgeConfirm(false)}>Not now</button>
         </div>
       </section>
