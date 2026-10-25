@@ -720,6 +720,31 @@
   color: var(--ep-ink-soft);
 }
 
+/* The character counter appears only near the edge, where the number starts to matter. */
+.epistle-char-count {
+  margin-left: 8px;
+  font-size: 0.68rem;
+  color: var(--ep-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.epistle-char-count.is-over {
+  color: #a4442f;
+  font-weight: 700;
+}
+
+/* Past the limit nothing is saved, and the desk says so plainly instead of cutting words. */
+.epistle-overflow-note {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e8c9bd;
+  background: #fdf3ef;
+  color: #8d3b28;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
 .epistle-seal-button {
   display: inline-flex;
   align-items: center;

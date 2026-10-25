@@ -599,12 +599,18 @@ nothing about it is instant except the arrival.
   keeps every shelf honest: a letter sealed on the other side of the world appears without
   a refresh.
 - **Storage and rules** (`epistles`, `202610200001_epistles.sql`, additive and rerunnable).
-  Body up to 20,000 characters, title up to 80. RLS: the couple reads sealed and opened
+  Body up to 20,000 characters, title up to 80 — counted in code points, the way the
+  database's `char_length` counts them, so an emoji is one character and not two. A letter
+  is **never silently cut to size**: past the limit the desk keeps every word on the paper,
+  shows the count, refuses to save or seal, and says how far past it runs. The same limit
+  is enforced by the table's CHECK, and a save that still reaches it is refused with that
+  sentence rather than a constraint name. RLS: the couple reads sealed and opened
   letters; a draft is its author's alone; an author reworks their own letter only while it
   is unopened; drafts alone may be deleted. The table is in the Realtime publication, and
   a Database Webhook on seal tells the partner's phone (see **Push notifications**); a
   project without the migration names it in the error the mailbox shows, the way
-  miss-you does.
+  miss-you does. Replies need `202610210001_epistle_replies.sql` (the `reply_to_id` column
+  and its trigger); without it the desk answers "the database needs an update".
 
 ## The Chat tab
 

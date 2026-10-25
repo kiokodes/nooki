@@ -147,6 +147,11 @@ export function describeDatabaseError(error: { message: string; code?: string })
   if (missingTable || missingFunction || missingColumn) {
     return 'The database needs an update. Please ask the app owner to apply the Supabase migrations.';
   }
+  // The one refusal a writer meets with their own words in hand: a letter past its limit.
+  // It says what happened, so nobody wonders whether the app ate half of it.
+  if (error.code === '23514' && /epistles_body_check/i.test(error.message)) {
+    return 'A letter holds up to 20,000 characters. Nothing was cut from what you wrote — shorten it and it will save.';
+  }
   return error.message;
 }
 

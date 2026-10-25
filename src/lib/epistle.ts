@@ -117,6 +117,30 @@ export function countWords(body: string): number {
 }
 
 /**
+ * How many characters a letter holds, counted the way the database counts them.
+ * `char_length` counts code points, so an emoji is one character; JavaScript's `.length`
+ * counts UTF-16 units and says two. The desk and the table's CHECK must agree, or a letter
+ * of emoji is cut short on the phone before the database ever sees it.
+ */
+export function epistleCharCount(text: string): number {
+  return [...text].length;
+}
+
+/** How many characters past the limit a letter runs: 0 while it still fits. */
+export function epistleOverflow(body: string): number {
+  return Math.max(0, epistleCharCount(body.trim()) - EPISTLE_BODY_LIMIT);
+}
+
+/**
+ * The sentence the desk shows when a letter is too long. It says what happened plainly:
+ * nothing was cut, nothing was sent, and shortening it is all it takes.
+ */
+export function epistleOverflowMessage(overflow: number): string {
+  return `A letter holds up to ${EPISTLE_BODY_LIMIT.toLocaleString('en-US')} characters, and this one is `
+    + `${overflow.toLocaleString('en-US')} past that. Nothing was cut from what you wrote — shorten it and it will save.`;
+}
+
+/**
  * A letter is cut for the reading on blank lines: one blank line starts a new
  * paragraph, a single line break is only the writer's wrap. Empty paragraphs
  * disappear; the reading never shows a hole.
@@ -318,8 +342,12 @@ export function epistleAriaLabel(epistle: Epistle, senderName: string, state: Ep
  * so the writing desk knows not to save.
  */
 export function cleanEpistleDraft(title: string, body: string): { title: string | null; body: string } | null {
-  const cleanTitle = title.trim().slice(0, EPISTLE_TITLE_LIMIT);
-  const cleanBody = body.trim().slice(0, EPISTLE_BODY_LIMIT);
+  // Titles are names, not prose: an over-long one is trimmed to the allowed length.
+  const cleanTitle = [...title.trim()].slice(0, EPISTLE_TITLE_LIMIT).join('');
+  // The letter itself is never cut down to size. A body past the limit is handed back
+  // whole so the desk can say how far past it is, and the callers refuse to save it; a
+  // quietly shortened letter would be words the writer never agreed to lose.
+  const cleanBody = body.trim();
   if (!cleanBody) return null;
   return { title: cleanTitle || null, body: cleanBody };
 }

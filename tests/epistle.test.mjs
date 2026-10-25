@@ -91,7 +91,22 @@ test('epistles: the states of an envelope, and the words that go with them', asy
     );
     assert.deepEqual(epistle.cleanEpistleDraft('   ', '  Words.  '), { title: null, body: 'Words.' });
     assert.equal(epistle.cleanEpistleDraft('Anything', '   '), null);
-    assert.equal(epistle.cleanEpistleDraft('T', 'x'.repeat(20_001)).body.length, 20_000, 'the body is clipped, not refused');
+
+    // A letter is never silently cut to size: past the limit the words come back whole so
+    // the desk can refuse the save and say why.
+    const tooLong = 'x'.repeat(20_001);
+    assert.equal(epistle.cleanEpistleDraft('T', tooLong).body.length, 20_001, 'the body is refused, never clipped');
+    assert.equal(epistle.epistleOverflow(tooLong), 1, 'one character past the limit');
+    assert.equal(epistle.epistleOverflow('x'.repeat(20_000)), 0, 'exactly at the limit still fits');
+    assert.match(epistle.epistleOverflowMessage(12), /this one is 12 past that\. Nothing was cut/i);
+
+    // Counted the database's way: `char_length` counts code points, so an emoji is one
+    // character here even though JavaScript's `.length` says two.
+    assert.equal(epistle.epistleCharCount('ok'), 2);
+    assert.equal('😀'.length, 2, 'the trap this guards against');
+    assert.equal(epistle.epistleCharCount('😀'), 1);
+    assert.equal(epistle.epistleCharCount('😀'.repeat(20_000)), 20_000);
+    assert.equal(epistle.epistleOverflow('😀'.repeat(20_000)), 0, 'a letter of emoji is not judged twice as long');
   } finally {
     await server.close();
   }

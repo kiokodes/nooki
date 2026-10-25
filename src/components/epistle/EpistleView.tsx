@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, Feather, Mailbox as MailboxIcon, PenLine, Reply, Trash2, Undo2, X } from 'lucide-react';
 import {
   EPISTLE_BODY_LIMIT,
+  epistleCharCount,
+  epistleOverflow,
   countWords,
   epistleAriaLabel,
   epistleState,
@@ -826,6 +828,9 @@ function WritingDesk({
   // Autosave: a letter is too heavy to lose to a closed app.
   useEffect(() => {
     if (!body.trim()) return;
+    // A letter past the limit is not saved: the row keeps the last version that fit, and
+    // the desk says so rather than letting a constraint error blink past.
+    if (epistleOverflow(body) > 0) return;
     dirtyRef.current = true;
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => { void persist(); }, AUTOSAVE_DEBOUNCE_MS);
@@ -836,11 +841,18 @@ function WritingDesk({
 
   // Leaving the desk mid-save: one last save, best effort.
   useEffect(() => () => {
-    if (dirtyRef.current && bodyRef.current.trim()) void persist();
+    if (!dirtyRef.current || !bodyRef.current.trim()) return;
+    if (epistleOverflow(bodyRef.current) > 0) return;
+    void persist();
   }, [persist]);
 
   const words = countWords(body);
-  const canSeal = body.trim().length > 0;
+  // Counted the database's way (code points), so pasting an emoji-heavy letter is judged
+  // on the same number the CHECK constraint will judge it on.
+  const bodyChars = epistleCharCount(body);
+  const overflow = epistleOverflow(body);
+  const nearLimit = overflow === 0 && bodyChars > EPISTLE_BODY_LIMIT - 500;
+  const canSeal = body.trim().length > 0 && overflow === 0;
 
   const pressSeal = async () => {
     if (!sealing) return;
@@ -915,17 +927,32 @@ function WritingDesk({
             className="epistle-body-input"
             data-epistle-body="true"
             value={body}
-            maxLength={EPISTLE_BODY_LIMIT}
             placeholder={`My dearest ${partnerName}…`}
             aria-label="The letter itself"
             onChange={(event) => setBody(event.target.value)}
           />
         </div>
 
+        {overflow > 0 && (
+          <p className="epistle-overflow-note" role="alert" data-epistle-overflow="true">
+            This letter is {overflow.toLocaleString('en-US')} character{overflow === 1 ? '' : 's'} past the{' '}
+            {EPISTLE_BODY_LIMIT.toLocaleString('en-US')} limit, so it is not being saved. Nothing was cut —
+            shorten it and it will save.
+          </p>
+        )}
+
         <div className="epistle-desk-bar">
           <span className="epistle-word-count" data-epistle-words="true">
             {words === 1 ? '1 word' : `${words} words`}
           </span>
+          {(nearLimit || overflow > 0) && (
+            <span
+              className={`epistle-char-count${overflow > 0 ? ' is-over' : ''}`}
+              data-epistle-chars="true"
+            >
+              {bodyChars.toLocaleString('en-US')} / {EPISTLE_BODY_LIMIT.toLocaleString('en-US')}
+            </span>
+          )}
           <button
             type="button"
             className="epistle-seal-button"

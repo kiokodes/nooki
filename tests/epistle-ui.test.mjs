@@ -332,3 +332,88 @@ test('epistle UI: the mailbox, the desk, the seal and the nook mailbox flag', as
     await server.close();
   }
 });
+
+test('epistle UI: a letter past the limit is refused and said so, never quietly cut', async () => {
+  const dom = setupDom();
+  const { default: React, act } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
+  const root = createRoot(document.getElementById('root'));
+  try {
+    const { EpistleView } = await server.ssrLoadModule('/src/components/epistle/EpistleView.tsx');
+    const waitFor = async (predicate, message) => {
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        if (predicate()) return;
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+      }
+      assert.fail(message);
+    };
+    const saved = [];
+    const errors = [];
+    const noop = async () => letter();
+    await act(async () => {
+      root.render(React.createElement(EpistleView, {
+        letters: [],
+        loading: false,
+        error: null,
+        userId: 'alice',
+        myName: 'Alice',
+        partnerName: 'Bob',
+        myPlace: 'Lagos, Nigeria',
+        todayKey: '2026-10-20',
+        onClose: () => {},
+        onCreateDraft: async (title, bodyText) => {
+          saved.push(bodyText.length);
+          return letter({ id: 'fresh', sender_id: 'alice', sealed_at: null, title, body: bodyText });
+        },
+        onSaveDraft: async (id, title, bodyText) => {
+          saved.push(bodyText.length);
+          return letter({ id, sender_id: 'alice', sealed_at: null, title, body: bodyText });
+        },
+        onSeal: noop,
+        onRecall: noop,
+        onOpen: noop,
+        onDiscard: noop,
+        onError: (message) => errors.push(message),
+        onClearError: () => {},
+      }));
+    });
+    await act(async () => {
+      document.querySelector('[data-epistle-write]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const bodyInput = document.querySelector('[data-epistle-body]');
+    assert.equal(bodyInput.hasAttribute('maxLength'), false, 'the paper never clips what is pasted into it');
+
+    const setNativeValue = (node, value) => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(node, value);
+      node.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    };
+    // 20,001 characters, written the way the database counts them (code points).
+    await act(async () => {
+      setNativeValue(bodyInput, 'x'.repeat(20_001));
+    });
+
+    await waitFor(
+      () => document.querySelector('[data-epistle-overflow]'),
+      'the desk says the letter is past the limit',
+    );
+    assert.match(document.querySelector('[data-epistle-overflow]').textContent, /Nothing was cut/i);
+    assert.equal(document.querySelector('[data-epistle-body]').value.length, 20_001, 'every word stays on the paper');
+    assert.equal(document.querySelector('[data-epistle-seal-start]').disabled, true, 'an oversize letter cannot be sealed');
+    assert.deepEqual(saved, [], 'nothing oversize is sent to the database');
+
+    // Emoji are counted the database's way: 20,000 of them still fit and still save.
+    await act(async () => {
+      setNativeValue(bodyInput, '😀'.repeat(20_000));
+    });
+    assert.equal(document.querySelector('[data-epistle-overflow]'), null, 'a letter of emoji is not judged twice as long');
+    assert.equal(document.querySelector('[data-epistle-seal-start]').disabled, false);
+    await waitFor(() => saved.length > 0, 'the emoji letter saves');
+    assert.deepEqual(errors, [], 'no error was ever raised at the writer');
+  } finally {
+    await act(async () => root.unmount());
+    await server.close();
+    dom.window.close();
+  }
+});

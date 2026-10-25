@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   cleanEpistleDraft,
+  epistleOverflow,
+  epistleOverflowMessage,
   sectionEpistles,
 } from '../lib/epistle';
 import {
@@ -142,6 +144,10 @@ export function useEpistles({ coupleId, userId, active }: UseEpistlesOptions): E
   const createDraft = useCallback((title: string, body: string, replyToId?: string | null): Promise<Epistle> => {
     const clean = cleanEpistleDraft(title, body);
     if (!coupleId || !userId || !clean) return Promise.reject(new Error('Write something before saving.'));
+    // Refused, never shortened: the database's CHECK would reject it anyway, and this
+    // sentence is kinder than a constraint name.
+    const overflow = epistleOverflow(clean.body);
+    if (overflow > 0) return Promise.reject(new Error(epistleOverflowMessage(overflow)));
     return wrap(async () => {
       const row = await createEpistleDraft(coupleId, userId, { ...clean, replyToId });
       setLetters((current) => [row, ...current.filter((letter) => letter.id !== row.id)]);
@@ -152,6 +158,8 @@ export function useEpistles({ coupleId, userId, active }: UseEpistlesOptions): E
   const saveDraft = useCallback((id: string, title: string, body: string, replyToId?: string | null): Promise<Epistle> => {
     const clean = cleanEpistleDraft(title, body);
     if (!clean) return Promise.reject(new Error('Write something before saving.'));
+    const overflow = epistleOverflow(clean.body);
+    if (overflow > 0) return Promise.reject(new Error(epistleOverflowMessage(overflow)));
     return wrap(async () => {
       const row = await saveEpistleDraft(id, { ...clean, replyToId });
       setLetters((current) => current.map((letter) => (letter.id === id ? row : letter)));
