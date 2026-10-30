@@ -97,6 +97,14 @@ function baseSnapshot(): RaiseChildSnapshot {
       partner_traits_ready: true,
       ready: true,
       content_ready: true,
+      proposal: {
+        mine: { name: 'Mia', look: { skin: '#E8C4A0', hair: 'curls', outfit: '#F9A8D4' } },
+        partner: { name: 'Mia', look: { skin: '#E8C4A0', hair: 'curls', outfit: '#F9A8D4' } },
+        name_same: true,
+        look_same: true,
+        agreed: true,
+        locked: true,
+      },
     },
     me: {
       user_id: 'preview-user',
@@ -272,7 +280,19 @@ export function usePreviewRaiseChild(): RaiseChildState {
       setSnapshot((current) => ({
         ...current,
         family: current.family && current.family.status !== 'setup' ? current.family : { id: 'preview-family', status: 'active', since: new Date().toISOString() },
-        setup: { ...current.setup, name: input.name ?? current.setup.name, mine: input.traits ?? current.setup.mine, ready: true },
+        setup: {
+      ...current.setup,
+      name: input.name ?? current.setup.name,
+      mine: input.traits ?? current.setup.mine,
+      ready: true,
+      proposal: {
+        ...current.setup.proposal,
+        mine: {
+          name: input.name ?? current.setup.proposal.mine?.name ?? 'Mia',
+          look: input.look ?? current.setup.proposal.mine?.look ?? current.setup.look,
+        },
+      },
+    },
         child: current.child ?? {
           name: input.name ?? 'Mia',
           look: input.look ?? current.setup.look,
@@ -280,6 +300,18 @@ export function usePreviewRaiseChild(): RaiseChildState {
           mood: 'content',
           traits: [],
           age_label: 'newborn',
+        },
+      }));
+    },
+    // The preview never has two parents to agree with; adopting is a no-op that settles.
+    adoptSetup: async (part) => {
+      setSnapshot((current) => ({
+        ...current,
+        setup: {
+          ...current.setup,
+          proposal: part === 'name' || part === 'all'
+            ? { ...current.setup.proposal, name_same: true, agreed: true, locked: true }
+            : { ...current.setup.proposal, look_same: true, agreed: true, locked: true },
         },
       }));
     },

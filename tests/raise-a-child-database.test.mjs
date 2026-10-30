@@ -149,7 +149,8 @@ async function setupFamily(couple) {
   await signIn(couple.alice);
   await rpc('raise_child_setup', { p_name: 'Mia', p_look: LOOK, p_traits: TRAITS_A });
   await signIn(couple.bob);
-  const done = await rpc('raise_child_setup', { p_traits: TRAITS_B });
+  // The name and the face are suggestions now: Bob makes the same one, and that settles it.
+  const done = await rpc('raise_child_setup', { p_name: 'Mia', p_look: LOOK, p_traits: TRAITS_B });
   couple.familyId = done.family.id;
   return done;
 }
@@ -221,7 +222,12 @@ test('a family is only ready when both parents have chosen three traits', async 
   assert.equal(bobView.setup.partner_traits_ready, true);
   assert.equal(bobView.setup.ready, false);
 
-  const ready = await rpc('raise_child_setup', { p_traits: TRAITS_B, p_look: LOOK });
+  // Three traits are not a name: with no suggestion of his own, nothing is settled.
+  const traitsOnly = await rpc('raise_child_setup', { p_traits: TRAITS_B });
+  assert.equal(traitsOnly.family.status, 'setup');
+  assert.equal(traitsOnly.child, null);
+
+  const ready = await rpc('raise_child_setup', { p_name: 'Mia', p_look: LOOK, p_traits: TRAITS_B });
   assert.equal(ready.family.status, 'active');
   assert.equal(ready.child.name, 'Mia');
   assert.equal(ready.child.age, 0);

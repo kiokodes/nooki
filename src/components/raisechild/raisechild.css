@@ -453,6 +453,23 @@
   font-size: 0.7rem;
 }
 
+/* --------------------------------------------------- the name, once you both agreed */
+
+.raise-child-settled {
+  margin: 2px 0 0;
+  color: #372e29;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.raise-child-partner-look {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 10px;
+}
+
 /* --------------------------------------------------------- when you chose differently */
 
 .raise-child-split {

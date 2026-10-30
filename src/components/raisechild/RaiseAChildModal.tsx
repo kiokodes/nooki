@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, Check, Gift, Heart, Hourglass, MessageCircle, Sparkles, X } from 'lucide-react';
 import { ChildAvatar } from './ChildAvatar';
 import { DEFAULT_LOOK, HAIR_STYLES, MOOD_FACES, OUTFIT_COLOURS, SKIN_TONES } from '../../lib/raiseChildLook';
+import { NO_SETUP_PROPOSALS } from '../../lib/raiseChildService';
 import type { RaiseChildAlbumEntry, RaiseChildChild, RaiseChildSnapshot } from '../../lib/raiseChildService';
 import type { RaiseChildState } from '../../hooks/useRaiseChild';
 import './raisechild.css';
@@ -64,13 +65,40 @@ interface SetupScreenProps {
   partnerName: string;
   busy: boolean;
   onSave: RaiseChildState['saveSetup'];
+  onAdopt: RaiseChildState['adoptSetup'];
 }
 
-const SetupScreen: React.FC<SetupScreenProps> = ({ snapshot, partnerName, busy, onSave }) => {
-  const [name, setName] = useState(snapshot.setup.name ?? '');
-  const [look, setLook] = useState({ ...DEFAULT_LOOK, ...snapshot.setup.look });
+/**
+ * Before the first chapter there is no child yet, only two suggestions. Each parent puts a
+ * name and a face forward, both are visible to both of them, and the pair only become the
+ * child once the two suggestions agree — either because you landed on the same thing, or
+ * because one of you deliberately moved to the other's. Nothing here can be settled alone.
+ */
+const SetupScreen: React.FC<SetupScreenProps> = ({ snapshot, partnerName, busy, onSave, onAdopt }) => {
+  const proposal = snapshot.setup.proposal ?? NO_SETUP_PROPOSALS;
+  const agreed = proposal.agreed || proposal.locked;
+  const theirName = proposal.partner?.name ?? null;
+  const theirLook = proposal.partner?.look ?? null;
+  const myName = proposal.mine?.name ?? '';
+  const settledName = snapshot.setup.name ?? proposal.mine?.name ?? '';
+
+  const [name, setName] = useState(myName || (agreed ? settledName : ''));
+  const [look, setLook] = useState({ ...DEFAULT_LOOK, ...(proposal.mine?.look ?? snapshot.setup.look) });
   const [traits, setTraits] = useState<string[]>(snapshot.setup.mine);
   const [saved, setSaved] = useState(false);
+
+  // The partner's suggestion arrives by realtime, and adopting theirs changes mine: both
+  // come from the snapshot, so the typed name follows it rather than drifting from it.
+  useEffect(() => { setName(myName); }, [myName]);
+  const myLookKey = proposal.mine
+    ? `${proposal.mine.look.skin ?? ''}|${proposal.mine.look.hair ?? ''}|${proposal.mine.look.outfit ?? ''}`
+    : '';
+  useEffect(() => {
+    if (!myLookKey) return;
+    setLook({ ...DEFAULT_LOOK, ...(proposal.mine?.look ?? {}) });
+    // Only when the stored suggestion actually changes, never on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myLookKey]);
 
   const toggleTrait = (slug: string) => {
     setSaved(false);
@@ -80,18 +108,22 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ snapshot, partnerName, busy, 
   };
 
   const ready = traits.length === 3;
+  const suggested = name.trim().length > 0;
+  const canSave = ready && (agreed || suggested);
 
   return (
     <>
       <Panel>
         <div className="raise-child-hero">
-          <ChildAvatar look={look} age={0} size={92} label="A first look at the child" />
+          <ChildAvatar look={agreed ? { ...DEFAULT_LOOK, ...snapshot.setup.look } : look} age={0} size={92} label="A first look at the child" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <p className="raise-child-label">Together, before the first chapter</p>
             <p className="raise-child-copy">
-              {snapshot.setup.partner_joined
-                ? `${partnerName} is here. Pick a name and a face you both like.`
-                : `Pick three things about yourself, and ${partnerName} will do the same.`}
+              {agreed
+                ? `You both landed on ${settledName}.`
+                : snapshot.setup.partner_joined
+                  ? `${partnerName} is here. Put a name and a face forward — the child is only named once you both agree.`
+                  : `Pick three things about yourself, and ${partnerName} will do the same.`}
             </p>
           </div>
         </div>
@@ -99,61 +131,135 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ snapshot, partnerName, busy, 
 
       <Panel>
         <p className="raise-child-label">Their name</p>
-        <div className="raise-child-field">
-          <input
-            className="raise-child-input"
-            value={name}
-            maxLength={40}
-            onChange={(event) => { setName(event.target.value); setSaved(false); }}
-            placeholder="Mia"
-            aria-label="The child's name"
-          />
-          <p className="raise-child-copy--soft" style={{ margin: 0 }}>
-            Either of you can change it until the first chapter opens.
+        {agreed ? (
+          <p className="raise-child-settled" data-settled-name={settledName}>{settledName}</p>
+        ) : (
+          <div className="raise-child-field">
+            <input
+              className="raise-child-input"
+              value={name}
+              maxLength={40}
+              onChange={(event) => { setName(event.target.value); setSaved(false); }}
+              placeholder="Mia"
+              aria-label="The child's name"
+            />
+            <p className="raise-child-copy--soft" style={{ margin: 0 }}>
+              A suggestion, until you both land on the same one. Neither of you can name them alone.
+            </p>
+          </div>
+        )}
+
+        {!agreed && theirName && (
+          <div className="raise-child-split">
+            {proposal.name_same ? (
+              <p className="raise-child-copy--soft" style={{ margin: 0 }}>
+                {partnerName} suggested the same name. {proposal.look_same ? 'The face matches too.' : 'The faces still differ.'}
+              </p>
+            ) : (
+              <>
+                <div className="raise-child-picks">
+                  <div className="raise-child-pick">
+                    <span className="raise-child-pick__who">You</span>
+                    <span className="raise-child-pick__what">{name.trim() || '—'}</span>
+                  </div>
+                  <div className="raise-child-pick">
+                    <span className="raise-child-pick__who">{partnerName}</span>
+                    <span className="raise-child-pick__what">{theirName}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="raise-child-button raise-child-button--quiet"
+                  data-action="use-partner-name"
+                  disabled={busy}
+                  onClick={() => { void onAdopt('name'); }}
+                >
+                  Use “{theirName}”
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {!agreed && !theirName && snapshot.setup.partner_joined && (
+          <p className="raise-child-copy--soft" style={{ margin: '10px 0 0' }}>
+            {partnerName} hasn’t suggested one yet.
           </p>
-        </div>
-        <p className="raise-child-label" style={{ marginTop: '14px' }}>Skin</p>
-        <div className="raise-child-swatches">
-          {SKIN_TONES.map((tone) => (
+        )}
+      </Panel>
+
+      <Panel>
+        <p className="raise-child-label">Their face</p>
+        {agreed ? (
+          <p className="raise-child-copy--soft" style={{ margin: 0 }}>
+            You both chose this face. It stays as it is now.
+          </p>
+        ) : (
+          <>
+            <p className="raise-child-label" style={{ marginTop: 0 }}>Skin</p>
+            <div className="raise-child-swatches">
+              {SKIN_TONES.map((tone) => (
+                <button
+                  key={tone.slug}
+                  type="button"
+                  className="raise-child-swatch"
+                  style={{ background: tone.color }}
+                  aria-label={tone.label}
+                  aria-pressed={look.skin === tone.color || look.skin === tone.slug}
+                  onClick={() => { setLook((current) => ({ ...current, skin: tone.color })); setSaved(false); }}
+                />
+              ))}
+            </div>
+            <p className="raise-child-label" style={{ marginTop: '14px' }}>Hair</p>
+            <div className="raise-child-chips">
+              {HAIR_STYLES.map((style) => (
+                <button
+                  key={style.slug}
+                  type="button"
+                  className="raise-child-chip"
+                  aria-pressed={look.hair === style.slug}
+                  onClick={() => { setLook((current) => ({ ...current, hair: style.slug })); setSaved(false); }}
+                >
+                  {style.label}
+                </button>
+              ))}
+            </div>
+            <p className="raise-child-label" style={{ marginTop: '14px' }}>Their colour</p>
+            <div className="raise-child-swatches">
+              {OUTFIT_COLOURS.map((colour) => (
+                <button
+                  key={colour.slug}
+                  type="button"
+                  className="raise-child-swatch"
+                  style={{ background: colour.color }}
+                  aria-label={colour.label}
+                  aria-pressed={look.outfit === colour.color}
+                  onClick={() => { setLook((current) => ({ ...current, outfit: colour.color })); setSaved(false); }}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {!agreed && theirLook && !proposal.look_same && (
+          <div className="raise-child-split">
+            <div className="raise-child-partner-look">
+              <ChildAvatar look={{ ...DEFAULT_LOOK, ...theirLook }} age={0} size={54} label={`${partnerName}’s suggestion`} />
+              <p className="raise-child-copy--soft" style={{ margin: 0 }}>
+                {partnerName} pictured them differently.
+              </p>
+            </div>
             <button
-              key={tone.slug}
               type="button"
-              className="raise-child-swatch"
-              style={{ background: tone.color }}
-              aria-label={tone.label}
-              aria-pressed={look.skin === tone.color || look.skin === tone.slug}
-              onClick={() => { setLook((current) => ({ ...current, skin: tone.color })); setSaved(false); }}
-            />
-          ))}
-        </div>
-        <p className="raise-child-label" style={{ marginTop: '14px' }}>Hair</p>
-        <div className="raise-child-chips">
-          {HAIR_STYLES.map((style) => (
-            <button
-              key={style.slug}
-              type="button"
-              className="raise-child-chip"
-              aria-pressed={look.hair === style.slug}
-              onClick={() => { setLook((current) => ({ ...current, hair: style.slug })); setSaved(false); }}
+              className="raise-child-button raise-child-button--quiet"
+              data-action="use-partner-look"
+              disabled={busy}
+              onClick={() => { void onAdopt('look'); }}
             >
-              {style.label}
+              Use {partnerName}’s face
             </button>
-          ))}
-        </div>
-        <p className="raise-child-label" style={{ marginTop: '14px' }}>Their colour</p>
-        <div className="raise-child-swatches">
-          {OUTFIT_COLOURS.map((colour) => (
-            <button
-              key={colour.slug}
-              type="button"
-              className="raise-child-swatch"
-              style={{ background: colour.color }}
-              aria-label={colour.label}
-              aria-pressed={look.outfit === colour.color}
-              onClick={() => { setLook((current) => ({ ...current, outfit: colour.color })); setSaved(false); }}
-            />
-          ))}
-        </div>
+          </div>
+        )}
       </Panel>
 
       <Panel>
@@ -184,20 +290,28 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ snapshot, partnerName, busy, 
       </Panel>
 
       {snapshot.setup.partner_traits_ready && (
-        <p className="raise-child-note">{partnerName} has chosen theirs. The first chapter opens as soon as you save.</p>
+        <p className="raise-child-note">{partnerName} has chosen theirs. The first chapter opens once you both agree on a name and a face, and you have saved yours.</p>
       )}
       {saved && <p className="raise-child-note">Saved. {snapshot.family?.status === 'setup' ? `Waiting for ${partnerName}.` : ''}</p>}
 
       <button
         type="button"
         className="raise-child-button raise-child-button--wide"
-        disabled={!ready || busy}
+        disabled={!canSave || busy}
         onClick={async () => {
           await onSave({ name: name.trim() || null, look, traits });
           setSaved(true);
         }}
       >
-        {busy ? 'Saving…' : ready ? 'Save my part' : 'Choose three things'}
+        {busy
+          ? 'Saving…'
+          : !ready
+            ? 'Choose three things'
+            : agreed
+              ? 'Save my part'
+              : !suggested
+                ? 'Suggest a name'
+                : 'Save my suggestion'}
       </button>
     </>
   );
@@ -724,7 +838,13 @@ export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({
           {!snapshot && !state.error && <p className="raise-child-copy--soft">{userName}, one small moment…</p>}
 
           {snapshot && effectiveView === 'setup' && (
-            <SetupScreen snapshot={snapshot} partnerName={partnerName} busy={state.busy} onSave={state.saveSetup} />
+            <SetupScreen
+              snapshot={snapshot}
+              partnerName={partnerName}
+              busy={state.busy}
+              onSave={state.saveSetup}
+              onAdopt={state.adoptSetup}
+            />
           )}
 
           {snapshot && effectiveView === 'home' && (
@@ -740,7 +860,13 @@ export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({
                   onTalkItOut={onTakeToChat ?? (async () => {})}
                 />
               ) : (
-                <SetupScreen snapshot={snapshot} partnerName={partnerName} busy={state.busy} onSave={state.saveSetup} />
+                <SetupScreen
+              snapshot={snapshot}
+              partnerName={partnerName}
+              busy={state.busy}
+              onSave={state.saveSetup}
+              onAdopt={state.adoptSetup}
+            />
               )}
             </>
           )}
