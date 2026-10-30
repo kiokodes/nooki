@@ -136,3 +136,101 @@ test('Raise a Child: one card in Together, a private pick, a shared reveal', asy
     dom.window.close();
   }
 });
+
+// "Talk it out" is a bridge with two ends: the split lands in the chat as a normal
+// message, and that message carries the way back to the moment it came from.
+test('the chat message links back to the moment it was about', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
+  for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']) globalThis[key] = dom.window[key];
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const { default: React, act, useState } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const root = createRoot(document.getElementById('root'));
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
+  try {
+    const { PreviewTogether } = await server.ssrLoadModule('/src/preview/PreviewTogether.tsx');
+    const { ChatView } = await server.ssrLoadModule('/src/components/chat/ChatView.tsx');
+
+    const shared = { momentId: null };
+    const captured = { set: (id) => { shared.momentId = id; } };
+    const share = () => ({
+      id: 'shared-1',
+      couple_id: 'preview-couple',
+      sender_id: 'preview-ana',
+      content: 'About Mia — “The broken vase”.\nAna picked “Clean it up together”; Ravi picked “Ask what happened first”.\nWhich way should this year go?',
+      type: 'text',
+      session_id: null,
+      reply_to_id: null,
+      created_at: new Date().toISOString(),
+      read_at: null,
+      edited_at: null,
+      delivery: 'sent',
+      author: 'ana',
+    });
+
+    const Harness = () => {
+      const [open, setOpen] = useState(false);
+      const [focus, setFocus] = useState(null);
+      const [momentId, setMomentId] = useState(null);
+      return React.createElement(React.Fragment, null,
+        React.createElement(PreviewTogether, {
+          partnerName: 'Ravi',
+          userName: 'Ana',
+          open,
+          onOpenChange: (next) => { setOpen(next); if (!next) setFocus(null); },
+          focusMomentId: focus,
+          onOpenChat: (id) => { captured.set(id); setMomentId(id); setOpen(false); },
+        }),
+        momentId ? React.createElement(ChatView, {
+          messages: [share()],
+          currentUserId: 'preview-ana',
+          partnerName: 'Ravi',
+          partnerOnline: true,
+          partnerLastSeenAt: null,
+          partnerTyping: false,
+          loading: false,
+          error: null,
+          onSend: () => {},
+          onTyping: () => {},
+          onStopTyping: () => {},
+          onRetry: () => {},
+          onDismissError: () => {},
+          raiseChildLinks: { 'shared-1': momentId },
+          onOpenRaiseChild: (id) => { setFocus(id); setOpen(true); },
+        }) : null,
+      );
+    };
+
+    await act(async () => root.render(React.createElement(Harness)));
+    const settle = async (ms) => { await act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); }); };
+    const buttonText = (text) => [...document.querySelectorAll('button')].find((item) => item.textContent.includes(text));
+
+    await act(async () => document.querySelector('[data-card="raise-a-child"]').click());
+    const body = document.querySelector('.raise-child-sheet__body');
+    await act(async () => body.querySelectorAll('.raise-child-choice')[0].click());
+    await settle(1600);
+    assert.equal(document.querySelector('.raise-child-sheet__body').textContent.includes('You chose differently.'), true);
+
+    await act(async () => buttonText('Talk it out').click());
+    assert.ok(shared.momentId, 'the chat is handed the moment it is about');
+    assert.equal(document.querySelector('[role="dialog"]'), null, 'the sheet steps aside');
+
+    // The chat's side of the bridge: one bubble, one way back.
+    const link = document.querySelector('[data-raise-child-link]');
+    assert.ok(link, 'the message carries a link to the moment');
+    assert.equal(link.getAttribute('data-raise-child-link'), shared.momentId);
+    assert.equal(link.textContent.includes('Open this moment'), true);
+
+    await act(async () => link.click());
+    const reopened = document.querySelector('[role="dialog"]');
+    assert.ok(reopened, 'the link opens the sheet again');
+    assert.ok(reopened.textContent.includes('You chose differently.'), 'on the split, still undecided');
+    const focused = document.querySelector('.raise-child-focus');
+    assert.ok(focused, 'and the moment it came from is the card the eye lands on');
+    assert.equal(focused.getAttribute('data-moment-id'), shared.momentId);
+  } finally {
+    await act(async () => root.unmount());
+    await server.close();
+    dom.window.close();
+  }
+});

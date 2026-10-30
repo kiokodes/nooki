@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CheckCheck, CircleAlert, Clock, MessageSquare, Pencil, Phone, Reply as ReplyIcon, Send, Video, X } from 'lucide-react';
+import { Check, CheckCheck, CircleAlert, Clock, MessageSquare, Pencil, Phone, Reply as ReplyIcon, Send, Sparkles, Video, X } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
 import { useNow } from '../../hooks/useNow';
 import { getInitial, formatLastSeen } from '../../lib/coupleTime';
@@ -41,6 +41,10 @@ interface ChatViewProps {
   onClearQuestionContext?: () => void;
   /** Tap the quoted question on a bubble: jump back to that question and its answers. */
   onOpenQuestion?: (sessionId: string) => void;
+  /** "Talk it out" messages, keyed by message id: the Raise a Child moment each one is about. */
+  raiseChildLinks?: Record<string, string>;
+  /** Tap the link on that bubble: back to the moment, opened on that card. */
+  onOpenRaiseChild?: (momentId: string) => void;
 }
 
 const TOAST_MS = 2_000;
@@ -118,6 +122,9 @@ const Bubble: React.FC<{
   onRetry: (entryId: string) => void;
   questionBySessionId?: Record<string, { text: string; category: string }>;
   onOpenQuestion?: (sessionId: string) => void;
+  /** A "Talk it out" bubble: the Raise a Child moment it came from, and the way back. */
+  raiseChildMomentId?: string;
+  onOpenRaiseChild?: (momentId: string) => void;
   /** What this bubble answers, looked up by the transcript; undefined when unknown. */
   replyOf?: ReplyQuote;
   onSwipeReply: (entry: ChatEntry) => void;
@@ -130,6 +137,8 @@ const Bubble: React.FC<{
   onRetry,
   questionBySessionId,
   onOpenQuestion,
+  raiseChildMomentId,
+  onOpenRaiseChild,
   replyOf,
   onSwipeReply,
   onOpenActions,
@@ -424,6 +433,39 @@ const Bubble: React.FC<{
             {formatMessageTime(entry.created_at)}
             {mine && entry.delivery !== 'failed' && <Receipt delivery={entry.delivery} />}
           </span>
+
+          {raiseChildMomentId && (
+            <button
+              type="button"
+              data-raise-child-link={raiseChildMomentId}
+              aria-label="Open this moment in Raise a Child"
+              title="Open this moment in Raise a Child"
+              onClick={() => onOpenRaiseChild?.(raiseChildMomentId)}
+              style={{
+                // Clears the floated timestamp so the link sits on its own line.
+                clear: 'both',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                margin: '8px 0 0 0',
+                padding: '6px 10px',
+                borderRadius: tokens.radii.pill,
+                border: 'none',
+                backgroundColor: mine ? 'rgba(255, 255, 255, 0.6)' : tokens.colors.accentSageSoft,
+                color: mine ? tokens.colors.textPrimary : tokens.colors.accentSageDeep,
+                cursor: 'pointer',
+                fontFamily: tokens.typography.fontFamily,
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                lineHeight: 1.35,
+                textAlign: 'left',
+              }}
+            >
+              <Sparkles size={12} style={{ flexShrink: 0 }} aria-hidden="true" />
+              Open this moment
+            </button>
+          )}
+
         </div>
 
         {mine && entry.delivery === 'failed' && (
@@ -490,6 +532,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   questionContext = null,
   onClearQuestionContext,
   onOpenQuestion,
+  raiseChildLinks,
+  onOpenRaiseChild,
 }) => {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -811,6 +855,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 onRetry={onRetry}
                 questionBySessionId={questionBySessionId}
                 onOpenQuestion={onOpenQuestion}
+                raiseChildMomentId={raiseChildLinks?.[entry.id]}
+                onOpenRaiseChild={onOpenRaiseChild}
                 replyOf={entry.reply_to_id ? {
                   senderName: messageById.has(entry.reply_to_id)
                     ? replySenderName(messageById.get(entry.reply_to_id) as ChatEntry)

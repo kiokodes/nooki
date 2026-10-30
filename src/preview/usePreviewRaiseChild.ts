@@ -285,6 +285,8 @@ export function usePreviewRaiseChild(): RaiseChildState {
     },
     vote,
     decide,
+    // The real thing posts a linked message; the preview only needs the hand-off to fire.
+    toChat: async () => true,
     openGift: async (giftId) => {
       setSnapshot((current) => ({
         ...current,

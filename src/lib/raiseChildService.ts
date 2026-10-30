@@ -3,8 +3,9 @@ import { describeDatabaseError } from './authService';
 
 /** Apply before deploying: the family tables, the private votes, the RPCs, and the split. */
 export const RAISE_CHILD_MIGRATION =
-  'supabase/migrations/202610300001_raise_a_child.sql and '
-  + 'supabase/migrations/202610300002_raise_a_child_talk_it_out.sql';
+  'supabase/migrations/202610300001_raise_a_child.sql, '
+  + 'supabase/migrations/202610300002_raise_a_child_talk_it_out.sql and '
+  + 'supabase/migrations/202610300003_raise_a_child_chat_links.sql';
 
 function isMissingMigration(error: { message: string; code?: string }): boolean {
   return error.code === '42P01'
@@ -362,6 +363,44 @@ export async function submitRaiseChildVote(momentId: string, choiceIndex: number
 export async function decideRaiseChildMoment(momentId: string): Promise<RaiseChildSnapshot> {
   if (!momentId) throw new Error('That moment is no longer open.');
   return toSnapshot(await call('raise_child_lead_decide', { p_moment_id: momentId }));
+}
+
+/**
+ * "Talk it out": the server posts the split into the couple's chat and links that message
+ * back to the moment. Tapping the link twice reuses the same message, never a new copy.
+ */
+export async function takeRaiseChildToChat(momentId: string): Promise<{ message_id: string; moment_id: string }> {
+  if (!momentId) throw new Error('That moment is no longer open.');
+  const row = asObject(await call<unknown>('raise_child_take_to_chat', { p_moment_id: momentId }));
+  return {
+    message_id: asString(row.message_id) ?? '',
+    moment_id: asString(row.moment_id) ?? momentId,
+  };
+}
+
+/**
+ * Which chat messages came from a moment, so a bubble can offer the way back. Reads the
+ * couple's own links only; anything else is filtered out by row level security.
+ */
+export async function fetchRaiseChildChatLinks(messageIds: string[]): Promise<Record<string, string>> {
+  const ids = messageIds.filter(Boolean).slice(0, 200);
+  if (!ids.length) return {};
+  const { data, error } = await requireSupabase()
+    .from('raise_child_chat_links')
+    .select('message_id, moment_id')
+    .in('message_id', ids);
+  if (error) {
+    // A missing table only means the link layer is not deployed yet: the chat still works.
+    if (isMissingMigration(error)) return {};
+    throw new Error(describeDatabaseError(error));
+  }
+  const links: Record<string, string> = {};
+  for (const entry of (data ?? []) as Array<{ message_id?: unknown; moment_id?: unknown }>) {
+    const messageId = asString(entry.message_id);
+    const momentId = asString(entry.moment_id);
+    if (messageId && momentId) links[messageId] = momentId;
+  }
+  return links;
 }
 
 export async function openRaiseChildGift(giftId: string): Promise<RaiseChildSnapshot> {

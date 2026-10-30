@@ -42,13 +42,25 @@ const SAMPLE_ITEMS: SomedayItem[] = [
 interface PreviewTogetherProps {
   partnerName: string;
   userName: string;
-  /** Where "talk it out" goes: the chat tab, exactly as it does in the app. */
-  onOpenChat?: () => void;
+  /** Where "talk it out" goes: the chat tab, with the moment it was about. */
+  onOpenChat?: (momentId: string) => void;
+  /** The preview's chat link reopens the sheet from above, so the state can live up there. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Which moment to open on, when the chat link sent you back. */
+  focusMomentId?: string | null;
 }
 
-export const PreviewTogether: React.FC<PreviewTogetherProps> = ({ partnerName, userName, onOpenChat }) => {
+export const PreviewTogether: React.FC<PreviewTogetherProps> = ({
+  partnerName, userName, onOpenChat, open: openProp, onOpenChange, focusMomentId = null,
+}) => {
   const family = usePreviewRaiseChild();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = (next: boolean) => {
+    setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [view, setView] = useState<'family' | 'letter'>('family');
   const state = view === 'letter' ? previewLetterState(family) : family;
 
@@ -97,7 +109,8 @@ export const PreviewTogether: React.FC<PreviewTogetherProps> = ({ partnerName, u
           state={state}
           userName={userName}
           partnerName={partnerName}
-          onTakeToChat={async () => { setOpen(false); onOpenChat?.(); }}
+          onTakeToChat={async (moment) => { setOpen(false); onOpenChat?.(moment.id); }}
+          focusMomentId={focusMomentId}
           onClose={() => setOpen(false)}
         />
       )}

@@ -9,6 +9,7 @@ import {
   saveRaiseChildSetup,
   startNewRaiseChild,
   submitRaiseChildVote,
+  takeRaiseChildToChat,
   subscribeToRaiseChild,
   type RaiseChildAlbumEntry,
   type RaiseChildSnapshot,
@@ -33,6 +34,8 @@ export interface RaiseChildState {
   vote: (momentId: string, choiceIndex: number) => Promise<void>;
   /** The lead parent settles a split with their own pick. */
   decide: (momentId: string) => Promise<void>;
+  /** "Talk it out": posts the split into the chat, linked back to this moment. */
+  toChat: (momentId: string) => Promise<boolean>;
   openGift: (giftId: string) => Promise<void>;
   ageUp: () => Promise<void>;
   loadAlbum: (options?: { before?: string | null }) => Promise<void>;
@@ -128,6 +131,25 @@ export function useRaiseChild({ coupleId, userId }: UseRaiseChildOptions): Raise
   const ageUp = useCallback(() => run(() => ageUpRaiseChild()), [run]);
   const startNewChild = useCallback(() => run(() => startNewRaiseChild()), [run]);
 
+  // Posting into the chat is not a change to the family, so it does not re-read the state:
+  // it either leaves a linked message behind (true) or a warm error the sheet can show.
+  const toChat = useCallback(async (momentId: string): Promise<boolean> => {
+    if (!scope) return false;
+    setBusyScope(scope);
+    setFailure((current) => (current?.scope === scope ? null : current));
+    try {
+      await takeRaiseChildToChat(momentId);
+      return scopeRef.current === scope;
+    } catch (error) {
+      if (scopeRef.current === scope) {
+        setFailure({ scope, message: error instanceof Error ? error.message : 'The chat could not be opened. Please try again.' });
+      }
+      return false;
+    } finally {
+      setBusyScope((current) => (current === scope ? null : current));
+    }
+  }, [scope]);
+
   const loadAlbum = useCallback(async (options: { before?: string | null } = {}): Promise<void> => {
     if (!scope) return;
     setAlbumLoading(true);
@@ -176,6 +198,7 @@ export function useRaiseChild({ coupleId, userId }: UseRaiseChildOptions): Raise
     saveSetup,
     vote,
     decide,
+    toChat,
     openGift,
     ageUp,
     loadAlbum,

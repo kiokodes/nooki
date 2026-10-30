@@ -1677,11 +1677,15 @@ with your pick.”
 
 ### Deploying
 
-1. **Database.** Apply `supabase/migrations/202610300001_raise_a_child.sql` in the SQL
-   Editor (or use `supabase/schema.sql` on a new project). It is additive and safe to
-   rerun; it creates twelve new tables and never touches an existing one. Then run
-   `supabase/verify-games.sql`: it checks the family tables, that the temperament and the
-   bonds are unreadable from the app, and that only the eight app RPCs are executable.
+1. **Database.** Apply, in order, `supabase/migrations/202610300001_raise_a_child.sql`,
+   `202610300002_raise_a_child_talk_it_out.sql` (the split, the two decisions each, the
+   lead parent's call) and `202610300003_raise_a_child_chat_links.sql` (the link from a
+   "Talk it out" message back to its moment) in the SQL Editor — or use
+   `supabase/schema.sql` on a new project. All three are additive and safe to rerun; they
+   create thirteen tables and never alter one that already existed. Then run
+   `supabase/verify-games.sql`: it checks the family tables and the chat links, that the
+   temperament and the bonds are unreadable from the app, and that only the nine app RPCs
+   are executable.
 2. **The hourly job.** The migration schedules `nooki-raise-a-child-hourly`
    (`7 * * * *`) on `pg_cron`, calling `public.raise_child_daily_tick()`. It opens the
    day's moments and gifts, resolves anything past its timeout, and queues at most one
@@ -1714,7 +1718,9 @@ with your pick.”
   settles at once, and the bond moves by its small value for both.
 - **Different picks** → nothing settles by itself. Both picks come into the open and the
   card offers two ways through: **Talk it out**, which posts the split into the chat and
-  opens it, and — for that year's **lead parent** only (alternating each chapter) —
+  opens it — the message says who picked what and carries an **Open this moment** link
+  that brings either parent back to the card, still undecided — and — for that year's
+  **lead parent** only (alternating each chapter) —
   **Use my decision**, which settles the year with their own pick, in the open. A split
   that settles this way says so plainly: “You wanted different things. Ana had this
   year's call, and used it.” The option's own bond value is ignored; each parent's bond
@@ -1824,6 +1830,9 @@ the next load without a deploy.
 | Piece | File |
 | --- | --- |
 | Tables, RPCs, RLS, cron | `supabase/migrations/202610300001_raise_a_child.sql` |
+| The split, two decisions each, the lead's call | `supabase/migrations/202610300002_raise_a_child_talk_it_out.sql` |
+| The link from a chat message back to its moment | `supabase/migrations/202610300003_raise_a_child_chat_links.sql` |
+| The way back from a chat bubble | `src/hooks/useRaiseChildChatLinks.ts`, `src/components/chat/ChatView.tsx` |
 | Content pipeline | `scripts/raise-a-child-events.mjs` |
 | The brief for writing moments | `docs/EVENT_CONTENT_SPEC.md` |
 | Service, realtime and error copy | `src/lib/raiseChildService.ts` |
@@ -1838,7 +1847,8 @@ the next load without a deploy.
 
 `node --test tests/raise-a-child-database.test.mjs tests/raise-a-child-events.test.mjs tests/raise-a-child-ui.test.mjs`
 
-- **Database (PGlite, real RLS and real column grants):** setup by one parent then both,
+- **Database (PGlite, real RLS and real column grants):** "Talk it out" posting one linked
+  message (and reusing it rather than copying), setup by one parent then both,
   trait validation, the temperament absent from every JSON field and unreadable as a column,
   private votes (the partner sees zero rows until both answer), a split going to the lead
   parent with a two-point bond difference, the lead alternating at the next chapter, the

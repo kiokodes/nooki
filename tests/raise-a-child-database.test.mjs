@@ -374,6 +374,64 @@ test('a split waits for the two of them, and only the lead parent can use the ye
   assert.match(await rpcError('raise_child_lead_decide', { p_moment_id: moment.id }), /already|decided/i);
 });
 
+test('talk it out posts the split into the chat, linked back to the moment', async () => {
+  const couple = await makeCouple();
+  await useOnly('db-broken-vase');
+  await setupFamily(couple);
+  const id = couple.familyId;
+  await openChapterAt(couple, 3);
+
+  const moment = await openMoment(couple.alice);
+  await vote(couple.alice, moment.id, 1);
+
+  // Half a split is not a conversation yet.
+  await signIn(couple.alice);
+  assert.match(await rpcError('raise_child_take_to_chat', { p_moment_id: moment.id }), /both/i);
+
+  await vote(couple.bob, moment.id, 2);
+  await signIn(couple.alice);
+  const posted = await rpc('raise_child_take_to_chat', { p_moment_id: moment.id });
+  assert.ok(posted.message_id);
+
+  // The bubble reads like a person wrote it: the child, the moment, both picks, the question.
+  const message = (await backend.query('SELECT * FROM public.messages WHERE id = $1', [posted.message_id])).rows[0];
+  assert.equal(message.couple_id, couple.couple.id);
+  assert.equal(message.sender_id, couple.alice.id);
+  assert.match(message.content, /About Mia — “The broken vase”\./);
+  assert.match(message.content, /Alice picked “Clean it up together”; Bob picked “Ask what happened first”\./);
+  assert.match(message.content, /Which way should this year go\?/);
+  assert.equal(/bond|score|points/i.test(message.content), false);
+
+  const link = (await backend.query('SELECT * FROM public.raise_child_chat_links WHERE moment_id = $1', [moment.id])).rows[0];
+  assert.equal(link.message_id, posted.message_id);
+  assert.equal(link.family_id, id);
+
+  // Tapping it again brings the same message back rather than filling the chat with copies.
+  await signIn(couple.bob);
+  const again = await rpc('raise_child_take_to_chat', { p_moment_id: moment.id });
+  assert.equal(again.message_id, posted.message_id);
+  assert.equal((await backend.query('SELECT count(*)::int AS count FROM public.messages WHERE couple_id = $1', [couple.couple.id])).rows[0].count, 1);
+
+  // Reading the link is the couple's alone; writing one by hand is not allowed at all.
+  const mine = await backend.asUser('SELECT count(*)::int AS count FROM public.raise_child_chat_links');
+  assert.equal(mine.rows[0].count, 1);
+  await assert.rejects(
+    backend.asUser(`INSERT INTO public.raise_child_chat_links (message_id, family_id, moment_id)
+      VALUES (gen_random_uuid(), gen_random_uuid(), gen_random_uuid())`),
+    /permission denied/i,
+  );
+
+  const strangers = await makeCouple();
+  await signIn(strangers.alice);
+  const theirs = await backend.asUser('SELECT count(*)::int AS count FROM public.raise_child_chat_links');
+  assert.equal(theirs.rows[0].count, 0, 'another couple cannot see the link');
+
+  // Once the year has been settled there is nothing left to talk out.
+  await signIn(couple.alice);
+  await rpc('raise_child_lead_decide', { p_moment_id: moment.id });
+  assert.match(await rpcError('raise_child_take_to_chat', { p_moment_id: moment.id }), /already/i);
+});
+
 test('two decisions each: one change of mind, then the pick is final', async () => {
   const couple = await makeCouple();
   await useOnly('db-broken-vase');

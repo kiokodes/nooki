@@ -195,6 +195,12 @@
   border: 1px solid #f0e8dc;
 }
 
+/* The card the chat link opened: a soft ring, so the eye lands on it and moves on. */
+.raise-child-focus {
+  border-radius: 26px;
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.35);
+}
+
 .raise-child-label {
   margin: 0 0 6px;
   color: #a89e96;

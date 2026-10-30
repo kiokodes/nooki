@@ -12,6 +12,8 @@ interface RaiseAChildModalProps {
   partnerName: string;
   /** Takes a disagreement to the chat, with both picks spelled out. */
   onTakeToChat?: (moment: RaiseChildSnapshot['today']['moments'][number]) => Promise<void>;
+  /** The moment to open on, when the sheet was reached from the link in the chat. */
+  focusMomentId?: string | null;
   onClose: () => void;
 }
 
@@ -207,16 +209,31 @@ interface MomentCardProps {
   moment: RaiseChildSnapshot['today']['moments'][number];
   partnerName: string;
   busy: boolean;
+  /** Reached from the chat link: this card is the one to show, so it is scrolled to. */
+  focused?: boolean;
   onVote: (momentId: string, choice: number) => Promise<void>;
   onDecide: (momentId: string) => Promise<void>;
   onTalkItOut: (moment: RaiseChildSnapshot['today']['moments'][number]) => Promise<void>;
 }
 
 const MomentCard: React.FC<MomentCardProps> = ({
-  moment, partnerName, busy, onVote, onDecide, onTalkItOut,
+  moment, partnerName, busy, focused = false, onVote, onDecide, onTalkItOut,
 }) => {
   const [changing, setChanging] = useState(false);
   const [talking, setTalking] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  // Coming back from the chat should land on the card, not at the top of a long list.
+  useEffect(() => {
+    if (!focused) return;
+    const node = cardRef.current;
+    if (!node || typeof node.scrollIntoView !== 'function') return;
+    try {
+      node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } catch {
+      // A browser without smooth scrolling still shows the card; nothing to do.
+    }
+  }, [focused]);
   const mine = moment.choices.find((choice) => choice.index === moment.my_choice) ?? null;
   const theirs = moment.choices.find((choice) => choice.index === moment.partner_choice) ?? null;
   const choosing = !moment.resolved && (moment.my_choice === null || changing);
@@ -229,6 +246,7 @@ const MomentCard: React.FC<MomentCardProps> = ({
   };
 
   return (
+    <div ref={cardRef} data-moment-id={moment.id} className={focused ? 'raise-child-focus' : undefined}>
     <Panel>
       <p className="raise-child-label">A moment with {moment.age === 0 ? 'your newborn' : 'your child'}</p>
       <p className="raise-child-moment__title">{moment.title}</p>
@@ -347,6 +365,7 @@ const MomentCard: React.FC<MomentCardProps> = ({
         </p>
       )}
     </Panel>
+    </div>
   );
 };
 
@@ -354,13 +373,14 @@ interface HomeScreenProps {
   snapshot: RaiseChildSnapshot;
   state: RaiseChildState;
   partnerName: string;
+  focusMomentId?: string | null;
   onOpenAlbum: () => void;
   onOpenLetter: () => void;
   onTalkItOut: (moment: RaiseChildSnapshot['today']['moments'][number]) => Promise<void>;
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({
-  snapshot, state, partnerName, onOpenAlbum, onOpenLetter, onTalkItOut,
+  snapshot, state, partnerName, focusMomentId = null, onOpenAlbum, onOpenLetter, onTalkItOut,
 }) => {
   const child = snapshot.child;
   if (!child) return null;
@@ -412,6 +432,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
           moment={moment}
           partnerName={partnerName}
           busy={state.busy}
+          focused={moment.id === focusMomentId}
           onVote={state.vote}
           onDecide={state.decide}
           onTalkItOut={onTalkItOut}
@@ -626,7 +647,7 @@ const LetterScreen: React.FC<{
 
 /** The whole game, in a sheet over Together. Home, setup, album and the letter. */
 export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({
-  state, userName, partnerName, onTakeToChat, onClose,
+  state, userName, partnerName, onTakeToChat, focusMomentId = null, onClose,
 }) => {
   const snapshot = state.snapshot;
   const status = snapshot?.family?.status ?? null;
@@ -704,6 +725,7 @@ export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({
                   snapshot={snapshot}
                   state={state}
                   partnerName={partnerName}
+                  focusMomentId={focusMomentId}
                   onOpenAlbum={() => setView('album')}
                   onOpenLetter={() => setView('letter')}
                   onTalkItOut={onTakeToChat ?? (async () => {})}
