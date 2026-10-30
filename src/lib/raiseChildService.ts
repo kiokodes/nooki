@@ -5,8 +5,9 @@ import { describeDatabaseError } from './authService';
 export const RAISE_CHILD_MIGRATION =
   'supabase/migrations/202610300001_raise_a_child.sql, '
   + 'supabase/migrations/202610300002_raise_a_child_talk_it_out.sql, '
-  + 'supabase/migrations/202610300003_raise_a_child_chat_links.sql and '
-  + 'supabase/migrations/202610300005_raise_a_child_mutual_setup.sql';
+  + 'supabase/migrations/202610300003_raise_a_child_chat_links.sql, '
+  + 'supabase/migrations/202610300005_raise_a_child_mutual_setup.sql and '
+  + 'supabase/migrations/202610300006_raise_child_inheritance.sql';
 
 function isMissingMigration(error: { message: string; code?: string }): boolean {
   return error.code === '42P01'
@@ -144,6 +145,27 @@ export interface SetupProposals {
   locked: boolean;
 }
 
+/** A trait the child was born with, and whether it came from you. */
+export interface InheritedTrait {
+  slug: string;
+  label: string;
+  from_me: boolean;
+}
+
+/**
+ * What the child came with. The three traits are drawn once, at birth — at least one from
+ * each parent — and stay for good; the ones the years add are kept separately, so a
+ * decision can never quietly erase who they were born as.
+ */
+export interface RaiseChildInheritance {
+  inherited: InheritedTrait[];
+  /** Who the child takes after, as this parent sees it. Never a number. */
+  more_like: 'me' | 'partner' | 'both' | null;
+  line: string | null;
+}
+
+export const NO_INHERITANCE: RaiseChildInheritance = { inherited: [], more_like: null, line: null };
+
 export const NO_SETUP_PROPOSALS: SetupProposals = {
   mine: null,
   partner: null,
@@ -183,6 +205,7 @@ export interface RaiseChildSnapshot {
   };
   album: { count: number };
   letter: RaiseChildLetter | null;
+  inheritance: RaiseChildInheritance;
 }
 
 // ---------------------------------------------------------------------------------
@@ -303,6 +326,23 @@ function toLetter(value: unknown): RaiseChildLetter | null {
   return { paragraphs, written_at: asString(row.written_at), child: asString(row.child) };
 }
 
+export function toInheritance(value: unknown): RaiseChildInheritance {
+  if (!value || typeof value !== 'object') return NO_INHERITANCE;
+  const row = asObject(value);
+  const inherited = asArray(row.inherited).flatMap((entry) => {
+    const trait = asObject(entry);
+    const slug = asString(trait.slug);
+    if (!slug) return [];
+    return [{ slug, label: asString(trait.label, slug), from_me: Boolean(trait.from_me) }];
+  });
+  const moreLike = (['me', 'partner', 'both'] as const).find((kind) => kind === row.more_like) ?? null;
+  return {
+    inherited,
+    more_like: inherited.length === 0 ? null : moreLike,
+    line: row.line == null ? null : asString(row.line),
+  };
+}
+
 function toProposal(value: unknown): SetupProposal | null {
   if (!value || typeof value !== 'object') return null;
   const row = asObject(value);
@@ -367,6 +407,7 @@ export function toSnapshot(value: unknown): RaiseChildSnapshot {
     },
     album: { count: asNumber(asObject(row.album).count) ?? 0 },
     letter: toLetter(row.letter),
+    inheritance: toInheritance(row.inheritance),
   };
 }
 
@@ -388,12 +429,17 @@ async function call<T>(name: string, args: Record<string, unknown> = {}): Promis
  * state so the setup screen always shows both parents' ideas, never just this one's.
  */
 export async function fetchRaiseChildState(): Promise<RaiseChildSnapshot> {
-  const [state, proposals] = await Promise.all([
+  const [state, proposals, inheritance] = await Promise.all([
     call('raise_child_state'),
     call('raise_child_setup_proposals'),
+    call('raise_child_inheritance'),
   ]);
   const snapshot = toSnapshot(state);
-  return { ...snapshot, setup: { ...snapshot.setup, proposal: toProposals(proposals) } };
+  return {
+    ...snapshot,
+    setup: { ...snapshot.setup, proposal: toProposals(proposals) },
+    inheritance: toInheritance(inheritance),
+  };
 }
 
 export interface SetupInput {
@@ -535,7 +581,7 @@ export interface RaiseChildChannel {
   close: () => void;
 }
 
-const REALTIME_TABLES = ['family_moments', 'album_entries', 'family_gifts', 'families', 'child_state', 'family_setup_proposals'] as const;
+const REALTIME_TABLES = ['family_moments', 'album_entries', 'family_gifts', 'families', 'child_state', 'family_setup_proposals', 'child_inherited_traits'] as const;
 
 /**
  * Live updates for one family. RLS still decides what arrives: a partner's sealed vote is

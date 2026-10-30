@@ -136,6 +136,16 @@ function baseSnapshot(): RaiseChildSnapshot {
       age_up_hint: 'A moment is still waiting on you both.',
     },
     album: { count: ALBUM.length },
+    // Born with a bit of both of them; the years add the rest.
+    inheritance: {
+      inherited: [
+        { slug: 'patient', label: 'Patient', from_me: true },
+        { slug: 'warm', label: 'Warm', from_me: true },
+        { slug: 'funny', label: 'Funny', from_me: false },
+      ],
+      more_like: 'me',
+      line: 'Mia has more of your traits.',
+    },
     letter: null,
   };
 }

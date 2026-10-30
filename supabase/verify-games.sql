@@ -237,7 +237,7 @@ BEGIN
  END LOOP;
 END $$;
 -- Raise a Child: the family tables exist, the hidden columns are actually hidden, the
--- app can only reach its eight functions, and the job's functions stay server-side.
+-- app can only reach its own functions, and the job's and the draws stay server-side.
 DO $$
 DECLARE fn text;
 BEGIN
@@ -300,6 +300,20 @@ BEGIN
     RAISE EXCEPTION 'family_setup_proposals must be read-only for signed-in phones.';
   END IF;
 
+  -- Inheritance: the three traits the child was born with, read by both, written by neither.
+  IF to_regclass('public.child_inherited_traits') IS NULL THEN
+    RAISE EXCEPTION 'child_inherited_traits is missing: apply 202610300006_raise_child_inheritance.sql.';
+  END IF;
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.child_inherited_traits'::regclass) THEN
+    RAISE EXCEPTION 'child_inherited_traits must have row level security on.';
+  END IF;
+  IF NOT has_table_privilege('authenticated','public.child_inherited_traits','SELECT')
+     OR has_table_privilege('authenticated','public.child_inherited_traits','INSERT')
+     OR has_table_privilege('authenticated','public.child_inherited_traits','UPDATE')
+     OR has_table_privilege('anon','public.child_inherited_traits','SELECT') THEN
+    RAISE EXCEPTION 'child_inherited_traits must be read-only for signed-in phones.';
+  END IF;
+
   -- Content is read (active rows only) and written by nobody but the owner's script.
   IF NOT has_table_privilege('authenticated','public.event_templates','SELECT')
      OR has_table_privilege('authenticated','public.event_templates','INSERT')
@@ -313,7 +327,8 @@ BEGIN
     'public.raise_child_age_up()','public.raise_child_album(integer,timestamptz)',
     'public.raise_child_reply(text)','public.raise_child_new_child()',
     'public.raise_child_lead_decide(uuid)','public.raise_child_take_to_chat(uuid)',
-    'public.raise_child_setup_proposals()','public.raise_child_adopt_setup(text)'] LOOP
+    'public.raise_child_setup_proposals()','public.raise_child_adopt_setup(text)',
+    'public.raise_child_inheritance()'] LOOP
     IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child RPC: %', fn; END IF;
     IF NOT has_function_privilege('authenticated',fn,'EXECUTE')
        OR has_function_privilege('anon',fn,'EXECUTE') THEN
@@ -326,7 +341,8 @@ BEGIN
     'public.raise_child_claim_notifications(integer)',
     'public.raise_child_resolve_as(uuid,boolean,text)',
     'public.raise_child_settle_setup(uuid)','public.raise_child_same_name(text,text)',
-    'public.raise_child_same_look(jsonb,jsonb)'] LOOP
+    'public.raise_child_same_look(jsonb,jsonb)','public.raise_child_seed_inherited_traits(uuid)',
+    'public.raise_child_pick_untaken(text[],text[])'] LOOP
     IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child job function: %', fn; END IF;
     IF has_function_privilege('authenticated',fn,'EXECUTE')
        OR has_function_privilege('anon',fn,'EXECUTE') THEN
@@ -335,5 +351,5 @@ BEGIN
   END LOOP;
 END $$;
 
-SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, Dash Duel and Word Wheel, the Snake and Tetris replays, the Chess referee, the Raise a Child family tables, hidden columns, chat links and mutual naming, and the secret-table permissions are configured. Test both devices before release.' AS result;
+SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, Dash Duel and Word Wheel, the Snake and Tetris replays, the Chess referee, the Raise a Child family tables, hidden columns, chat links, mutual naming and inherited traits, and the secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;

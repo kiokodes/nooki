@@ -999,7 +999,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql`, `202610210001_epistle_replies.sql`, `202610210002_miss_you_push.sql`, `202610250001_lock_truth_or_dare_spicy.sql`, `202610250002_fix_push_webhooks.sql`, `202610300001_raise_a_child.sql`, `202610300002_raise_a_child_talk_it_out.sql`, `202610300003_raise_a_child_chat_links.sql`, `202610300004_daily_decision_chat_links.sql`, `202610300005_raise_a_child_mutual_setup.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql`, `202610210001_epistle_replies.sql`, `202610210002_miss_you_push.sql`, `202610250001_lock_truth_or_dare_spicy.sql`, `202610250002_fix_push_webhooks.sql`, `202610300001_raise_a_child.sql`, `202610300002_raise_a_child_talk_it_out.sql`, `202610300003_raise_a_child_chat_links.sql`, `202610300004_daily_decision_chat_links.sql`, `202610300005_raise_a_child_mutual_setup.sql`, `202610300006_raise_child_inheritance.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the Games
 retirement migration deletes daily-game and Tic Tac Toe match history,
@@ -1679,6 +1679,13 @@ Nothing here shames anyone. There are no bars, scores, streaks or bond numbers; 
 described in a sentence and felt as a gentle nudge, and a missed day is met with “We went
 with your pick.”
 
+The child is born as somebody. The three traits each parent chose during setup are drawn
+into the child once — at least one from each of you, the third from either — and they are
+shown on the child's card as **What they came with**, with a soft line underneath
+("Mia has more of your traits"). Those three never fade: the traits the years add sit
+under their own **Becoming** heading, so a decision can shape the child without ever erasing
+who they were born as.
+
 The child's name is mutual before anything else happens. Each parent suggests a name and a
 face; both suggestions are visible to both of them, and the child is only named — and only
 then can the childhood open — when the two suggestions agree, either because the two of you
@@ -1693,12 +1700,13 @@ the face are settled.
    lead parent's call), `202610300003_raise_a_child_chat_links.sql` (the link from a
    "Talk it out" message back to its moment) and
    `202610300005_raise_a_child_mutual_setup.sql` (the child's name and face are suggested
-   by both parents and only settled when the two suggestions agree) in the SQL Editor — or
-   use `supabase/schema.sql` on a new project. All of them are additive and safe to rerun;
-   they create fourteen tables and never alter one that already existed. Then run
-   `supabase/verify-games.sql`: it checks the family tables, the chat links and the naming
-   suggestions, that the temperament and the bonds are unreadable from the app, and that
-   only the eleven app RPCs are executable.
+   by both parents and only settled when the two suggestions agree) and
+   `202610300006_raise_child_inheritance.sql` (the three traits the child is born with, one
+   from each parent) in the SQL Editor — or use `supabase/schema.sql` on a new project. All
+   of them are additive and safe to rerun; they create fifteen tables and never alter one
+   that already existed. Then run `supabase/verify-games.sql`: it checks the family tables,
+   the chat links, the naming suggestions and the inherited traits, that the temperament and
+   the bonds are unreadable from the app, and that only the app RPCs are executable.
 2. **The hourly job.** The migration schedules `nooki-raise-a-child-hourly`
    (`7 * * * *`) on `pg_cron`, calling `public.raise_child_daily_tick()`. It opens the
    day's moments and gifts, resolves anything past its timeout, and queues at most one
@@ -1846,6 +1854,7 @@ the next load without a deploy.
 | The split, two decisions each, the lead's call | `supabase/migrations/202610300002_raise_a_child_talk_it_out.sql` |
 | The link from a chat message back to its moment | `supabase/migrations/202610300003_raise_a_child_chat_links.sql` |
 | The child's name and face, agreed by both parents | `supabase/migrations/202610300005_raise_a_child_mutual_setup.sql` |
+| The three traits the child is born with | `supabase/migrations/202610300006_raise_child_inheritance.sql` |
 | The way back from a chat bubble | `src/hooks/useRaiseChildChatLinks.ts`, `src/components/chat/ChatView.tsx` |
 | Content pipeline | `scripts/raise-a-child-events.mjs` |
 | The brief for writing moments | `docs/EVENT_CONTENT_SPEC.md` |

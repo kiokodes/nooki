@@ -38,7 +38,7 @@ export async function installTestBackend(client) {
       public.temperament_bias, public.families, public.event_templates,
       public.family_moments, public.family_votes, public.album_entries,
       public.family_gifts, public.raise_child_notifications,
-      public.family_setup_proposals TO authenticated;
+      public.family_setup_proposals, public.child_inherited_traits TO authenticated;
     GRANT SELECT (family_id, user_id, traits, joined_at) ON public.family_parents TO authenticated;
     GRANT SELECT (family_id, name, look, visible_traits, mood, age, lead_user_id, letter,
       letter_written_at, created_at, updated_at) ON public.child_state TO authenticated;

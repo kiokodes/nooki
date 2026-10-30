@@ -277,6 +277,43 @@
   font-weight: 800;
 }
 
+.raise-child-inherited {
+  margin-top: 12px;
+}
+
+.raise-child-inherited__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Sand, not green: what they came with is a starting point, not a score. */
+.raise-child-inherited__chip {
+  padding: 4px 10px;
+  border: 1px dashed #e6dccf;
+  border-radius: 9999px;
+  background: #fbf8f3;
+  color: #7a6e65;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+/* The ones that came from you, gently emphasised — never compared, never counted. */
+.raise-child-inherited__chip--mine {
+  border-style: solid;
+  border-color: #f9a8d4;
+  background: #fff7fb;
+  color: #b4517e;
+}
+
+.raise-child-inherited__line {
+  margin: 7px 0 0;
+  color: #a2958a;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .raise-child-actions {
   display: flex;
   flex-wrap: wrap;

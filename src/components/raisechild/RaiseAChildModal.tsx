@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, Check, Gift, Heart, Hourglass, MessageCircle, Sparkles, X } from 'lucide-react';
 import { ChildAvatar } from './ChildAvatar';
 import { DEFAULT_LOOK, HAIR_STYLES, MOOD_FACES, OUTFIT_COLOURS, SKIN_TONES } from '../../lib/raiseChildLook';
-import { NO_SETUP_PROPOSALS } from '../../lib/raiseChildService';
+import { NO_INHERITANCE, NO_SETUP_PROPOSALS } from '../../lib/raiseChildService';
 import type { RaiseChildAlbumEntry, RaiseChildChild, RaiseChildSnapshot } from '../../lib/raiseChildService';
 import type { RaiseChildState } from '../../hooks/useRaiseChild';
 import './raisechild.css';
@@ -504,6 +504,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
   });
   const gift = snapshot.today.gift;
   const bondLine = snapshot.me.bond.line;
+  const inheritance = snapshot.inheritance ?? NO_INHERITANCE;
 
   return (
     <>
@@ -516,12 +517,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
             <p className="raise-child-hero__mood">{moodLine(child)}</p>
           </div>
         </div>
-        {child.traits.length > 0 && (
-          <div className="raise-child-traits">
-            {child.traits.map((trait) => (
-              <span key={trait.slug} className="raise-child-trait">{trait.label}</span>
-            ))}
+        {/* Who they were born as: drawn once from the two of you, and never taken away. */}
+        {inheritance.inherited.length > 0 && (
+          <div className="raise-child-inherited">
+            <p className="raise-child-label">What they came with</p>
+            <div className="raise-child-inherited__chips">
+              {inheritance.inherited.map((trait) => (
+                <span
+                  key={trait.slug}
+                  className={`raise-child-inherited__chip${trait.from_me ? ' raise-child-inherited__chip--mine' : ''}`}
+                  data-from-me={trait.from_me ? 'true' : 'false'}
+                >
+                  {trait.label}
+                </span>
+              ))}
+            </div>
+            {inheritance.line && <p className="raise-child-inherited__line">{inheritance.line}</p>}
           </div>
+        )}
+        {/* And who they are becoming, one year at a time. */}
+        {child.traits.length > 0 && (
+          <>
+            {inheritance.inherited.length > 0 && <p className="raise-child-label">Becoming</p>}
+            <div className="raise-child-traits">
+              {child.traits.map((trait) => (
+                <span key={trait.slug} className="raise-child-trait">{trait.label}</span>
+              ))}
+            </div>
+          </>
         )}
         {bondLine && <p className="raise-child-quote" style={{ marginTop: '11px' }}>{bondLine}</p>}
         <div className="raise-child-actions">
