@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 
-// The Games tab has one rail and one panel; nothing sits outside the carousel. Truth or
-// Dare used to be its own card above the rail (a section of the page that was neither a
-// game chip nor an ongoing match), and Raise a Child is a placeholder for the next game.
-// These checks pin both of them inside the rail, and pin the placeholder honest: it can
-// be read, but it cannot be started.
-test('games library: Truth or Dare and Raise a Child are chips in the rail, never cards above it', async () => {
+// The Games tab has one rail and one panel; no game gets a card of its own above the
+// carousel. Truth or Dare used to be that card, so these checks pin it inside the rail:
+// its chip's panel is the way into the shared round. Raise a Child is the opposite case —
+// it is not a chip but its own reserved card, and it sits above the ongoing matches,
+// readable but not startable until its rules exist.
+test('games tab: Truth or Dare is a chip in the rail and Raise a Child its own card above the matches', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
   for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'PointerEvent', 'KeyboardEvent']) {
     if (dom.window[key]) globalThis[key] = dom.window[key];
@@ -20,8 +20,14 @@ test('games library: Truth or Dare and Raise a Child are chips in the rail, neve
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
   try {
     const { GamesView } = await server.ssrLoadModule('/src/components/games/GamesView.tsx');
+    // One live match, so the Ongoing games card is on the tab to place the placeholder against.
+    const liveMatch = {
+      id: 'm1', game: 'rock-paper-scissors', player_x: 'a', player_o: 'b', turn_id: 'a',
+      best_of: 3, round: 1, score_x: 0, score_o: 0, my_pick: null, partner_locked: false,
+      finished: false, winner_id: null, rounds: [],
+    };
     const games = {
-      data: { matches: [], wins: {} }, error: null, busy: false, match: undefined, pendingGame: null,
+      data: { matches: [liveMatch], wins: {} }, error: null, busy: false, match: undefined, pendingGame: null,
       select: () => {}, start: () => {}, play: () => {}, refresh: () => {},
     };
     const truthOrDare = {
@@ -48,26 +54,38 @@ test('games library: Truth or Dare and Raise a Child are chips in the rail, neve
 
     await render(truthOrDare);
 
-    // Nothing outside the carousel: the tab is the swipeable card, the library is the rail.
+    // Nothing outside the carousel except the placeholder's own card.
     assert.equal(document.querySelector('.tod-launcher'), null, 'Truth or Dare is not a card of its own any more');
-    const rail = document.querySelector('[data-game-rail]');
-    assert.ok(chip('truth-or-dare'), 'Truth or Dare has a chip in the rail');
-    assert.ok(chip('raise-a-child'), 'and Raise a Child has the next one');
-    assert.equal(document.querySelectorAll('[role="tabpanel"]').length, 1, 'the tab still shows one panel at a time');
     const library = document.querySelector('.game-library');
     assert.deepEqual(
-      [...document.querySelectorAll('.game-card')].filter((card) => !library.contains(card)),
-      [],
-      'every card on the tab lives inside the carousel, none sits above it',
+      [...document.querySelectorAll('.game-card')]
+        .filter((card) => !library.contains(card) && !card.classList.contains('ongoing-games'))
+        .map((card) => card.dataset.card),
+      ['raise-a-child'],
+      'the only card outside the carousel is the reserved seat for the next game',
+    );
+    assert.equal(chip('raise-a-child'), null, 'and it is not a chip in the rail');
+    assert.ok(chip('truth-or-dare'), 'Truth or Dare is a chip in the rail');
+    assert.equal(document.querySelectorAll('[role="tabpanel"]').length, 1, 'the tab still shows one panel at a time');
+
+    // The placeholder sits above the ongoing matches, dashed and unstartable.
+    const placeholder = document.querySelector('[data-card="raise-a-child"]');
+    assert.ok(placeholder.querySelector('h2').textContent.includes('Raise a Child'));
+    assert.ok(placeholder.textContent.includes('still being written'), 'it says the rules are still being written');
+    assert.equal(placeholder.getAttribute('role'), null, 'it is a card, not a tab panel');
+    const comingSoon = placeholder.querySelector('.game-actions button');
+    assert.equal(comingSoon.textContent.trim(), 'Coming soon');
+    assert.equal(comingSoon.disabled, true, 'there is no way to start a game that has no rules yet');
+    assert.ok(
+      placeholder.compareDocumentPosition(document.querySelector('[data-ongoing-games]')) & 4,
+      'the placeholder sits above the ongoing games',
     );
 
     // Truth or Dare's panel is the way in to its shared round.
-    assert.equal(panel().querySelector('h2')?.textContent.includes('Raise a Child'), false);
     await act(async () => chip('truth-or-dare').click());
     assert.equal(chip('truth-or-dare').getAttribute('aria-selected'), 'true');
     assert.equal(panel().dataset.game, 'truth-or-dare', 'choosing the chip brings its own panel in');
     assert.ok(panel().textContent.includes('Take turns with playful questions'), 'the panel says what the game is');
-    assert.equal(panel().querySelector('.game-rail-badge'), null);
     const open = button('Choose a theme →');
     assert.ok(open, 'with the call to action on it');
     assert.equal(open.disabled, false);
@@ -90,21 +108,8 @@ test('games library: Truth or Dare and Raise a Child are chips in the rail, neve
     assert.equal(panel().querySelector('.tod-panel-status')?.textContent, 'Round in progress');
     assert.ok(button('Resume round →'), 'the round in progress is resumed from the panel');
 
-    // Raise a Child is a reserved seat: readable, clearly unfinished, not playable.
-    await act(async () => chip('raise-a-child').click());
-    assert.equal(chip('raise-a-child').getAttribute('aria-selected'), 'true');
-    assert.equal(panel().dataset.game, 'raise-a-child');
-    assert.ok(panel().querySelector('h2').textContent.includes('Raise a Child'));
-    assert.ok(panel().textContent.includes('placeholder'), 'the panel says it is a placeholder');
-    assert.equal(chip('raise-a-child').querySelector('.game-rail-badge')?.textContent, 'Soon', 'the chip marks it as not ready');
-    const comingSoon = panel().querySelector('.game-actions button');
-    assert.equal(comingSoon.textContent.trim(), 'Coming soon');
-    assert.equal(comingSoon.disabled, true, 'there is no way to start a game that has no rules yet');
-    assert.equal(panel().querySelectorAll('.game-actions button').length, 1, 'and nothing else to tap');
-    const sameRail = document.querySelector('[data-game-rail]');
-    assert.equal(sameRail.getAttribute('role'), 'tablist', 'both guests ride the same rail');
-    assert.ok(sameRail.contains(chip('raise-a-child')), 'the placeholder is a chip like any other');
-    assert.ok(sameRail.contains(chip('truth-or-dare')));
+    // The placeholder card is still there, and still unstartable, while the rail is used.
+    assert.equal(document.querySelector('[data-card="raise-a-child"] .game-actions button').disabled, true);
   } finally {
     await act(async () => root.unmount());
     await server.close();

@@ -1436,21 +1436,25 @@ the app keeps that theme unavailable.
   is local and never affects multiplayer scores.
 - **The library is a carousel, not a scroll.** The game titles sit in a rail at the top
   (Rock Paper Scissors → Snake → Chess → Sudoku → Tetris → Connect Four → Dash → Word
-  Wheel → Truth or Dare → Raise a Child) and only the chosen game's rules, settings and
-  start button sit under it. Tap a title, use the arrow keys, or swipe the card sideways
-  to walk the rail; a swipe that ends on a button is never mistaken for a tap on it.
-  Adding a game means adding one entry to `GAMES` and one panel — the rail, the focus
-  order and the swipe come for free.
+  Wheel → Truth or Dare) and only the chosen game's rules, settings and start button sit
+  under it. Tap a title, use the arrow keys, or swipe the card sideways to walk the rail;
+  a swipe that ends on a button is never mistaken for a tap on it. Adding a game means
+  adding one entry to `GAMES` and one panel — the rail, the focus order and the swipe come
+  for free.
 - **Truth or Dare is a chip, not a card above the rail.** Its panel names any open round
   and opens the shared round (or the theme picker) from there; it is the same entry point
   as Sudoku's. `src/lib/gameLibrary.ts` holds the rail order: the duels from `GAMES`
-  followed by the two games that are not duel rows.
-- **Raise a Child is a reserved seat.** Its chip and panel exist so the game has a home in
-  the rail, but the panel says it is still being written and offers no way to start it —
-  the rules, milestones and shared decisions still have to be designed.
-- **The Games tab is two things.** An **Ongoing games** card, always showing how many
-  games are open, holding one swipe per live match at a single card's height; and the
-  game catalogue carousel beneath it. Nothing else sits on the tab. A match waiting on
+  followed by Truth or Dare, the one entry there that is not a duel row.
+- **Raise a Child is a reserved seat, and its own card.** It sits above the Ongoing games
+  card — the place a game of its own takes on this tab — with a dashed edge, a note that
+  the milestones and shared decisions are still being written, and no way to start it. It
+  is deliberately kept out of the rail: it is the one thing on the tab that is not a game
+  yet, and `RaiseAChildCard` in `components/games/LibraryPanels.tsx` is where it will
+  start when its rules exist.
+- **The Games tab is three things.** The **Raise a Child** seat described above; an
+  **Ongoing games** card, always showing how many games are open, holding one swipe per
+  live match at a single card's height; and the game catalogue carousel beneath it.
+  Nothing else sits on the tab. A match waiting on
   you wears a 🔔 bell and says **Your move**; a match waiting on your partner says
   **Waiting for {partner}** and wears no bell, so you can see at a glance which game to
   open. A duel whose two runs are in — and every settled match — leaves the card

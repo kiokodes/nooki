@@ -62,7 +62,7 @@ test('games library: the rail shows one game at a time and swipes between them',
     await act(async () => rail.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
     assert.equal(panels()[0].dataset.game, 'rock-paper-scissors', 'Home returns to the first game');
     await act(async () => rail.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true })));
-    assert.equal(panels()[0].dataset.game, 'raise-a-child', 'End jumps to the last chip');
+    assert.equal(panels()[0].dataset.game, 'truth-or-dare', 'End jumps to the last chip');
 
     // A thumb swipe across the panel is the other way through the carousel.
     const swipe = async (from, to) => {

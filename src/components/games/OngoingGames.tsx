@@ -21,7 +21,7 @@ export interface OngoingSlide {
  * the thumb swipes (or the trackpad drags, or the arrows are pressed) from one to the
  * next, so ten ongoing games take the same room as one. Only matches that are still to
  * be played live here; a finished duel is history and is not listed at all — the Games
- * tab holds exactly two things, this card and the game catalogue under it.
+ * tab holds this card, the game catalogue under it, and the reserved seat above it.
  *
  * A slide waiting on this phone wears a bell, so a thumb walking the card can see at a
  * glance which one wants them, and which is waiting on the partner instead.
