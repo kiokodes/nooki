@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, BookOpen, Check, Gift, Heart, Hourglass, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, Check, Gift, Heart, Hourglass, MessageCircle, Sparkles, X } from 'lucide-react';
 import { ChildAvatar } from './ChildAvatar';
 import { DEFAULT_LOOK, HAIR_STYLES, MOOD_FACES, OUTFIT_COLOURS, SKIN_TONES } from '../../lib/raiseChildLook';
 import type { RaiseChildAlbumEntry, RaiseChildChild, RaiseChildSnapshot } from '../../lib/raiseChildService';
@@ -10,6 +10,8 @@ interface RaiseAChildModalProps {
   state: RaiseChildState;
   userName: string;
   partnerName: string;
+  /** Takes a disagreement to the chat, with both picks spelled out. */
+  onTakeToChat?: (moment: RaiseChildSnapshot['today']['moments'][number]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -206,10 +208,26 @@ interface MomentCardProps {
   partnerName: string;
   busy: boolean;
   onVote: (momentId: string, choice: number) => Promise<void>;
+  onDecide: (momentId: string) => Promise<void>;
+  onTalkItOut: (moment: RaiseChildSnapshot['today']['moments'][number]) => Promise<void>;
 }
 
-const MomentCard: React.FC<MomentCardProps> = ({ moment, partnerName, busy, onVote }) => {
-  const chosen = moment.choices.find((choice) => choice.index === moment.my_choice) ?? null;
+const MomentCard: React.FC<MomentCardProps> = ({
+  moment, partnerName, busy, onVote, onDecide, onTalkItOut,
+}) => {
+  const [changing, setChanging] = useState(false);
+  const [talking, setTalking] = useState(false);
+  const mine = moment.choices.find((choice) => choice.index === moment.my_choice) ?? null;
+  const theirs = moment.choices.find((choice) => choice.index === moment.partner_choice) ?? null;
+  const choosing = !moment.resolved && (moment.my_choice === null || changing);
+
+  // A second answer is only offered when the split is real and the change is still unused;
+  // picking the same option again is not a change, so nothing is used up.
+  const choose = (index: number) => {
+    setChanging(false);
+    void onVote(moment.id, index);
+  };
+
   return (
     <Panel>
       <p className="raise-child-label">A moment with {moment.age === 0 ? 'your newborn' : 'your child'}</p>
@@ -222,30 +240,107 @@ const MomentCard: React.FC<MomentCardProps> = ({ moment, partnerName, busy, onVo
           <p className="raise-child-outcome__body">{moment.outcome.outcome_text}</p>
           <p className="raise-child-outcome__saved">Kept in the album.</p>
         </div>
-      ) : moment.my_choice !== null ? (
-        <div className="raise-child-waiting">
-          <span className="raise-child-waiting__dot" aria-hidden="true" />
-          <span>
-            You picked “{chosen?.label ?? 'one of them'}”.
-            {moment.partner_voted ? ' Both of you have answered — the year is settling.' : ` Waiting for ${partnerName}.`}
-          </span>
+      ) : null}
+
+      {!moment.resolved && moment.disagreement && (
+        <div className="raise-child-split">
+          <p className="raise-child-split__title">You chose differently.</p>
+          <div className="raise-child-picks">
+            <div className="raise-child-pick">
+              <span className="raise-child-pick__who">You</span>
+              <span className="raise-child-pick__what">{mine?.label ?? '—'}</span>
+            </div>
+            <div className="raise-child-pick">
+              <span className="raise-child-pick__who">{partnerName}</span>
+              <span className="raise-child-pick__what">{theirs?.label ?? '—'}</span>
+            </div>
+          </div>
+          {!changing && (
+            <>
+              <p className="raise-child-copy--soft" style={{ margin: '0 0 10px' }}>
+                {moment.is_lead
+                  ? 'This year’s call is yours. Talk it through — or use it.'
+                  : `${partnerName} has this year’s call. Talk it through, and you can still change your mind once.`}
+              </p>
+              <div className="raise-child-actions">
+                <button
+                  type="button"
+                  className="raise-child-button raise-child-button--quiet"
+                  disabled={busy || talking}
+                  onClick={() => {
+                    setTalking(true);
+                    void onTalkItOut(moment).finally(() => setTalking(false));
+                  }}
+                >
+                  <MessageCircle size={15} /> {talking ? 'Opening the chat…' : 'Talk it out'}
+                </button>
+                {moment.can_decide && (
+                  <button
+                    type="button"
+                    className="raise-child-button"
+                    disabled={busy}
+                    onClick={() => { void onDecide(moment.id); }}
+                  >
+                    <Check size={15} /> Use my decision
+                  </button>
+                )}
+                {moment.can_change && (
+                  <button
+                    type="button"
+                    className="raise-child-button raise-child-button--text"
+                    disabled={busy}
+                    onClick={() => setChanging(true)}
+                  >
+                    Change my pick
+                  </button>
+                )}
+              </div>
+              {!moment.can_change && (
+                <p className="raise-child-copy--soft" style={{ margin: '9px 0 0' }}>
+                  You have had your second say. Nothing else is expected of you.
+                </p>
+              )}
+            </>
+          )}
         </div>
-      ) : (
+      )}
+
+      {choosing && (
         <div className="raise-child-choices">
           {moment.choices.map((choice) => (
             <button
               key={choice.index}
               type="button"
               className="raise-child-choice"
+              data-current={choice.index === moment.my_choice ? 'true' : undefined}
               disabled={busy}
-              onClick={() => { void onVote(moment.id, choice.index); }}
+              onClick={() => choose(choice.index)}
             >
               <span className="raise-child-choice__mark" aria-hidden="true">{choice.index}</span>
               <span>{choice.label}</span>
             </button>
           ))}
+          {changing && (
+            <button
+              type="button"
+              className="raise-child-button raise-child-button--text"
+              onClick={() => setChanging(false)}
+            >
+              Keep my first answer
+            </button>
+          )}
         </div>
       )}
+
+      {!moment.resolved && moment.my_choice !== null && !moment.disagreement && !changing && (
+        <div className="raise-child-waiting">
+          <span className="raise-child-waiting__dot" aria-hidden="true" />
+          <span>
+            You picked “{mine?.label ?? 'one of them'}”. Waiting for {partnerName}.
+          </span>
+        </div>
+      )}
+
       {!moment.resolved && moment.my_choice === null && (
         <p className="raise-child-copy--soft" style={{ margin: '10px 0 0' }}>
           Only you can see this answer until {partnerName} has chosen too.
@@ -261,9 +356,12 @@ interface HomeScreenProps {
   partnerName: string;
   onOpenAlbum: () => void;
   onOpenLetter: () => void;
+  onTalkItOut: (moment: RaiseChildSnapshot['today']['moments'][number]) => Promise<void>;
 }
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ snapshot, state, partnerName, onOpenAlbum, onOpenLetter }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({
+  snapshot, state, partnerName, onOpenAlbum, onOpenLetter, onTalkItOut,
+}) => {
   const child = snapshot.child;
   if (!child) return null;
   const moments = [...snapshot.today.moments].sort((a, b) => {
@@ -315,6 +413,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ snapshot, state, partnerName, o
           partnerName={partnerName}
           busy={state.busy}
           onVote={state.vote}
+          onDecide={state.decide}
+          onTalkItOut={onTalkItOut}
         />
       ))}
 
@@ -525,7 +625,9 @@ const LetterScreen: React.FC<{
 // ----------------------------------------------------------------------------- sheet
 
 /** The whole game, in a sheet over Together. Home, setup, album and the letter. */
-export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({ state, userName, partnerName, onClose }) => {
+export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({
+  state, userName, partnerName, onTakeToChat, onClose,
+}) => {
   const snapshot = state.snapshot;
   const status = snapshot?.family?.status ?? null;
   const [view, setView] = useState<View>(status === 'letter' ? 'letter' : 'home');
@@ -604,6 +706,7 @@ export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({ state, userN
                   partnerName={partnerName}
                   onOpenAlbum={() => setView('album')}
                   onOpenLetter={() => setView('letter')}
+                  onTalkItOut={onTakeToChat ?? (async () => {})}
                 />
               ) : (
                 <SetupScreen snapshot={snapshot} partnerName={partnerName} busy={state.busy} onSave={state.saveSetup} />

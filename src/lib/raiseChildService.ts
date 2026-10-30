@@ -1,8 +1,10 @@
 import { requireSupabase } from './supabaseClient';
 import { describeDatabaseError } from './authService';
 
-/** Apply before deploying: the family tables, the private-vote policies and the RPCs. */
-export const RAISE_CHILD_MIGRATION = 'supabase/migrations/202610300001_raise_a_child.sql';
+/** Apply before deploying: the family tables, the private votes, the RPCs, and the split. */
+export const RAISE_CHILD_MIGRATION =
+  'supabase/migrations/202610300001_raise_a_child.sql and '
+  + 'supabase/migrations/202610300002_raise_a_child_talk_it_out.sql';
 
 function isMissingMigration(error: { message: string; code?: string }): boolean {
   return error.code === '42P01'
@@ -40,10 +42,17 @@ export interface RaiseChildChoice {
   label: string;
 }
 
+/**
+ * How the year settled: both agreed, the lead parent used this year's call, the clock ran
+ * out on a split, or only one parent ever answered.
+ */
+export type MomentDecision = 'agreement' | 'lead' | 'timeout' | 'lone';
+
 export interface MomentOutcome {
   agreement: boolean;
   split: boolean;
   timed_out: boolean;
+  decision: MomentDecision | null;
   chosen_index: number;
   chosen_label: string;
   outcome_text: string;
@@ -60,7 +69,19 @@ export interface RaiseChildMoment {
   setup_text: string;
   choices: RaiseChildChoice[];
   my_choice: number | null;
+  /** How many times this parent has changed their pick. Never more than one. */
+  my_revisions: number;
   partner_voted: boolean;
+  /** The other parent's pick, and only ever once both of you have answered. */
+  partner_choice: number | null;
+  /** Both answered, differently, and the year is still open. */
+  disagreement: boolean;
+  /** True when this year's call is yours. */
+  is_lead: boolean;
+  /** The lead parent may settle this split with their own pick, deliberately. */
+  can_decide: boolean;
+  /** One change of mind left on this card. */
+  can_change: boolean;
   resolved: boolean;
   outcome: MomentOutcome | null;
   due_at: string | null;
@@ -114,7 +135,11 @@ export interface RaiseChildSnapshot {
     ready: boolean;
     content_ready: boolean;
   };
-  me: { user_id: string | null; bond: { band: string | null; line: string | null } };
+  me: {
+    user_id: string | null;
+    bond: { band: string | null; line: string | null };
+    is_lead: boolean;
+  };
   child: RaiseChildChild | null;
   today: {
     moments: RaiseChildMoment[];
@@ -168,6 +193,8 @@ function toOutcome(value: unknown): MomentOutcome | null {
     agreement: Boolean(row.agreement),
     split: Boolean(row.split),
     timed_out: Boolean(row.timed_out),
+    decision: (['agreement', 'lead', 'timeout', 'lone'] as const)
+      .find((kind) => kind === row.decision) ?? null,
     chosen_index: chosen,
     chosen_label: asString(row.chosen_label),
     outcome_text: asString(row.outcome_text),
@@ -191,7 +218,13 @@ function toMoment(value: unknown): RaiseChildMoment | null {
     setup_text: asString(row.setup_text),
     choices: toChoices(row.choices),
     my_choice: choice !== null && choice >= 1 ? choice : null,
+    my_revisions: asNumber(row.my_revisions) ?? 0,
     partner_voted: Boolean(row.partner_voted),
+    partner_choice: asNumber(row.partner_choice),
+    disagreement: Boolean(row.disagreement),
+    is_lead: Boolean(row.is_lead),
+    can_decide: Boolean(row.can_decide),
+    can_change: Boolean(row.can_change),
     resolved: Boolean(row.resolved),
     outcome: toOutcome(row.outcome),
     due_at: row.due_at == null ? null : asString(row.due_at),
@@ -261,6 +294,7 @@ export function toSnapshot(value: unknown): RaiseChildSnapshot {
     },
     me: {
       user_id: row.me ? (asObject(row.me).user_id == null ? null : asString(asObject(row.me).user_id)) : null,
+      is_lead: Boolean(row.me && asObject(row.me).is_lead),
       bond: (() => {
         const bond = row.me ? asObject(asObject(row.me).bond) : {};
         return {
@@ -322,6 +356,12 @@ export async function submitRaiseChildVote(momentId: string, choiceIndex: number
   }
   await call('raise_child_vote', { p_moment_id: momentId, p_choice: choiceIndex });
   return fetchRaiseChildState();
+}
+
+/** The lead parent's call, used in the open. Only this year's lead may do it. */
+export async function decideRaiseChildMoment(momentId: string): Promise<RaiseChildSnapshot> {
+  if (!momentId) throw new Error('That moment is no longer open.');
+  return toSnapshot(await call('raise_child_lead_decide', { p_moment_id: momentId }));
 }
 
 export async function openRaiseChildGift(giftId: string): Promise<RaiseChildSnapshot> {

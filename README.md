@@ -1707,17 +1707,27 @@ with your pick.”
   two while they are tiny. They arrive one a day, and Age up appears once every moment in
   the chapter has been answered, once per day by default. A chapter with fewer cards than
   that has run out of content: it can end rather than stall.
-- **A moment is one card.** Both parents see the same title, scene and 2–4 options. Each
-  answer is sealed: the other phone is told only that a pick exists. The second pick
-  resolves the year on the server.
-- **Same pick** → “You both wanted the same thing.” The option's effects land, and the
-  bond moves by its small value for both.
-- **Different picks** → the year's **lead parent** (alternating each chapter) decides. The
-  outcome card says whose call it was, in a sentence. The option's own bond value is
-  ignored; each parent's bond moves by one point, in opposite directions, and the child
-  keeps their own small mood change. Nothing is scored, and nothing compares the parents.
+- **A moment is one card.** Both parents see the same title, scene and 2–4 options — three
+  where the batch allows it, because two reads as yes or no. Each answer is sealed: the
+  other phone is told only that a pick exists.
+- **Same pick** → “You both wanted the same thing.” The option's effects land, the year
+  settles at once, and the bond moves by its small value for both.
+- **Different picks** → nothing settles by itself. Both picks come into the open and the
+  card offers two ways through: **Talk it out**, which posts the split into the chat and
+  opens it, and — for that year's **lead parent** only (alternating each chapter) —
+  **Use my decision**, which settles the year with their own pick, in the open. A split
+  that settles this way says so plainly: “You wanted different things. Ana had this
+  year's call, and used it.” The option's own bond value is ignored; each parent's bond
+  moves by one point, in opposite directions, and the child keeps their own small mood
+  change. Nothing is scored, and nothing compares the parents.
+- **Two decisions each.** Every parent can change their mind once while the card is open
+  (`family_votes.revisions`, 0 → 1). A change that lands on the other parent's pick
+  settles the year as an agreement. A change that still disagrees leaves the card open
+  with the second say spent — the pick is final from there.
 - **No answer inside 24 hours** → the pick that was made counts, the note reads “We went
-  with Ana's pick.”, and neither bond moves. No penalty, no mention of the wait.
+  with Ana's pick.”, and neither bond moves. No penalty, no mention of the wait. A split
+  nobody settled or used is kept by the lead parent when the clock runs out, said plainly:
+  “You wanted different things. This year went with Ana's call.”
 - **Gifts** arrive daily for both parents, drawn from the child's age and traits. Each is
   a small card in the album.
 - **Milestones** write themselves at 1, 5, 7, 14 and 18.

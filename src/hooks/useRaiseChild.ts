@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ageUpRaiseChild,
+  decideRaiseChildMoment,
   fetchRaiseChildAlbum,
   fetchRaiseChildState,
   openRaiseChildGift,
@@ -30,6 +31,8 @@ export interface RaiseChildState {
   refresh: () => Promise<void>;
   saveSetup: (input: SetupInput) => Promise<void>;
   vote: (momentId: string, choiceIndex: number) => Promise<void>;
+  /** The lead parent settles a split with their own pick. */
+  decide: (momentId: string) => Promise<void>;
   openGift: (giftId: string) => Promise<void>;
   ageUp: () => Promise<void>;
   loadAlbum: (options?: { before?: string | null }) => Promise<void>;
@@ -120,6 +123,7 @@ export function useRaiseChild({ coupleId, userId }: UseRaiseChildOptions): Raise
 
   const saveSetup = useCallback((input: SetupInput) => run(() => saveRaiseChildSetup(input)), [run]);
   const vote = useCallback((momentId: string, choiceIndex: number) => run(() => submitRaiseChildVote(momentId, choiceIndex)), [run]);
+  const decide = useCallback((momentId: string) => run(() => decideRaiseChildMoment(momentId)), [run]);
   const openGift = useCallback((giftId: string) => run(() => openRaiseChildGift(giftId)), [run]);
   const ageUp = useCallback(() => run(() => ageUpRaiseChild()), [run]);
   const startNewChild = useCallback(() => run(() => startNewRaiseChild()), [run]);
@@ -171,6 +175,7 @@ export function useRaiseChild({ coupleId, userId }: UseRaiseChildOptions): Raise
     refresh,
     saveSetup,
     vote,
+    decide,
     openGift,
     ageUp,
     loadAlbum,

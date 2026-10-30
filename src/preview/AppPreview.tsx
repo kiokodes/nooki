@@ -613,7 +613,7 @@ export const AppPreview = () => {
               <PreviewEpistles inboxNudge={epistleNudge} />
             ) : tab === 'together' ? (
               /* The Together tab, with the real family card and the real sheet over it. */
-              <PreviewTogether partnerName={partner.name} userName={profile.name} />
+              <PreviewTogether partnerName={partner.name} userName={profile.name} onOpenChat={() => setTab('chat')} />
             ) : tab === 'games' ? (
               /* The Games tab head — the real eyebrow, the real swipeable Ongoing games
                  card and the real Last duel row, fed sample matches — and below it the

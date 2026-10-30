@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import {
   coverageReport,
+  guidanceWarnings,
   parseEventsFile,
   summarise,
   toRows,
@@ -214,4 +215,18 @@ test('every example in the content spec passes the same rules a real batch must'
   });
   assert.deepEqual(validateEvents(events), []);
   assert.equal(summarise(events).byCategory.values > 0, true);
+});
+
+test('two-option cards earn a suggestion, and never block an import', () => {
+  const two = good();
+  two.slug = 'only-two-ways';
+  two.choices = two.choices.slice(0, 2);
+
+  const warnings = guidanceWarnings([two]);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].slug, 'only-two-ways');
+  assert.match(warnings[0].message, /third/i);
+
+  assert.deepEqual(guidanceWarnings([good()]), [], 'three options are the shape the game wants');
+  assert.deepEqual(validateEvents([two]), [], 'a suggestion is not an error: it still imports');
 });

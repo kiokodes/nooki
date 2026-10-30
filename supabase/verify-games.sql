@@ -268,6 +268,13 @@ BEGIN
     RAISE EXCEPTION 'Bond values must never be readable by the app.';
   END IF;
 
+  -- Two decisions each: the second say is a column, and it can only ever be used once.
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'family_votes'
+                    AND column_name = 'revisions') THEN
+    RAISE EXCEPTION 'family_votes.revisions is missing: apply 202610300002_raise_a_child_talk_it_out.sql.';
+  END IF;
+
   -- Content is read (active rows only) and written by nobody but the owner's script.
   IF NOT has_table_privilege('authenticated','public.event_templates','SELECT')
      OR has_table_privilege('authenticated','public.event_templates','INSERT')
@@ -279,7 +286,8 @@ BEGIN
   FOREACH fn IN ARRAY ARRAY['public.raise_child_state()','public.raise_child_setup(text,jsonb,text[])',
     'public.raise_child_vote(uuid,integer)','public.raise_child_open_gift(uuid)',
     'public.raise_child_age_up()','public.raise_child_album(integer,timestamptz)',
-    'public.raise_child_reply(text)','public.raise_child_new_child()'] LOOP
+    'public.raise_child_reply(text)','public.raise_child_new_child()',
+    'public.raise_child_lead_decide(uuid)'] LOOP
     IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child RPC: %', fn; END IF;
     IF NOT has_function_privilege('authenticated',fn,'EXECUTE')
        OR has_function_privilege('anon',fn,'EXECUTE') THEN
@@ -289,7 +297,8 @@ BEGIN
 
   FOREACH fn IN ARRAY ARRAY['public.raise_child_daily_tick(date)','public.raise_child_resolve(uuid,boolean)',
     'public.raise_child_resolve_due(uuid)','public.raise_child_write_letter(uuid)',
-    'public.raise_child_claim_notifications(integer)'] LOOP
+    'public.raise_child_claim_notifications(integer)',
+    'public.raise_child_resolve_as(uuid,boolean,text)'] LOOP
     IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child job function: %', fn; END IF;
     IF has_function_privilege('authenticated',fn,'EXECUTE')
        OR has_function_privilege('anon',fn,'EXECUTE') THEN

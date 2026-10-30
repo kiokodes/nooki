@@ -42,9 +42,11 @@ const SAMPLE_ITEMS: SomedayItem[] = [
 interface PreviewTogetherProps {
   partnerName: string;
   userName: string;
+  /** Where "talk it out" goes: the chat tab, exactly as it does in the app. */
+  onOpenChat?: () => void;
 }
 
-export const PreviewTogether: React.FC<PreviewTogetherProps> = ({ partnerName, userName }) => {
+export const PreviewTogether: React.FC<PreviewTogetherProps> = ({ partnerName, userName, onOpenChat }) => {
   const family = usePreviewRaiseChild();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'family' | 'letter'>('family');
@@ -95,6 +97,7 @@ export const PreviewTogether: React.FC<PreviewTogetherProps> = ({ partnerName, u
           state={state}
           userName={userName}
           partnerName={partnerName}
+          onTakeToChat={async () => { setOpen(false); onOpenChat?.(); }}
           onClose={() => setOpen(false)}
         />
       )}

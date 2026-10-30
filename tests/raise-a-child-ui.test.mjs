@@ -16,7 +16,10 @@ test('Raise a Child: one card in Together, a private pick, a shared reveal', asy
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
   try {
     const { PreviewTogether } = await server.ssrLoadModule('/src/preview/PreviewTogether.tsx');
-    await act(async () => root.render(React.createElement(PreviewTogether, { partnerName: 'Ravi', userName: 'Ana' })));
+    let chatOpened = 0;
+    await act(async () => root.render(React.createElement(PreviewTogether, {
+      partnerName: 'Ravi', userName: 'Ana', onOpenChat: () => { chatOpened += 1; },
+    })));
     const settle = async (ms) => { await act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); }); };
     const buttonText = (text) => [...document.querySelectorAll('button')].find((item) => item.textContent.includes(text));
 
@@ -46,7 +49,11 @@ test('Raise a Child: one card in Together, a private pick, a shared reveal', asy
     assert.equal(body.textContent.includes('The broken vase'), true);
     assert.equal(body.textContent.includes('A favourite vase is in three pieces'), true);
     const choices = [...body.querySelectorAll('.raise-child-choice')];
-    assert.deepEqual(choices.map((choice) => choice.textContent.replace(/^\d/, '').trim()), ['Clean it up together', 'Ask what happened first']);
+    assert.deepEqual(
+      choices.map((choice) => choice.textContent.replace(/^\d/, '').trim()),
+      ['Clean it up together', 'Ask what happened first', 'Sit down with her before anything else'],
+      'a card offers a trade-off, not a yes or no',
+    );
     assert.equal(body.textContent.includes('Only you can see this answer until Ravi has chosen too.'), true);
 
     await act(async () => choices[0].click());
@@ -54,17 +61,40 @@ test('Raise a Child: one card in Together, a private pick, a shared reveal', asy
     assert.equal(body.textContent.includes('Waiting for Ravi.'), true, 'and the partner is named, not blamed');
     assert.equal(body.textContent.includes('Kept in the album.'), false, 'the outcome is not there yet');
 
+    // The partner answers differently. Nothing settles itself: the split is shown, both
+    // picks in the open, with the two ways to settle it.
     await settle(1600);
-    assert.equal(body.textContent.includes('You wanted different things. This year went with Ravi’s call.'), true, 'the reveal names the year’s lead parent');
-    assert.equal(body.textContent.includes('You swept it up side by side.'), true, 'and the outcome text is read out');
-    assert.equal(body.textContent.includes('Kept in the album.'), true);
-    assert.equal(body.textContent.includes('missed'), false, 'nothing scolds anyone');
-    assert.equal(body.textContent.includes('Coming soon'), false);
+    assert.equal(body.textContent.includes('You chose differently.'), true);
+    const picks = [...body.querySelectorAll('.raise-child-pick')].map((pick) => pick.textContent);
+    assert.equal(picks.some((pick) => pick.startsWith('You') && pick.includes('Clean it up together')), true);
+    assert.equal(picks.some((pick) => pick.startsWith('Ravi') && pick.includes('Ask what happened first')), true);
+    assert.equal(body.textContent.includes('Kept in the album.'), false, 'a split is not an outcome');
+    assert.ok(buttonText('Talk it out'), 'the two of them can take it to chat');
+    assert.ok(buttonText('Use my decision'), 'and this year’s lead parent can use their call');
+    assert.ok(buttonText('Change my pick'), 'with one change of mind still in hand');
+
+    // Talking it out opens the chat, and the year is still open when you come back.
+    await act(async () => buttonText('Talk it out').click());
+    assert.equal(chatOpened, 1, 'the chat opens with the split');
+    assert.equal(document.querySelector('[role="dialog"]'), null, 'and the sheet steps out of the way');
+    await act(async () => document.querySelector('[data-card="raise-a-child"]').click());
+    const reopened = document.querySelector('.raise-child-sheet__body');
+    assert.equal(reopened.textContent.includes('You chose differently.'), true, 'nothing was decided behind your back');
+
+    // Now the lead parent settles it, in the open.
+    const decide = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Use my decision'));
+    await act(async () => decide.click());
+    assert.equal(reopened.textContent.includes('You wanted different things. You had this year’s call, and used it.'), true, 'the reveal says plainly what happened');
+    assert.equal(reopened.textContent.includes('You swept it up side by side.'), true, 'and the outcome text is read out');
+    assert.equal(reopened.textContent.includes('Kept in the album.'), true);
+    assert.equal(reopened.textContent.includes('missed'), false, 'nothing scolds anyone');
+    assert.equal(reopened.textContent.includes('Coming soon'), false);
+    const bodyAfter = reopened;
 
     // The small surprise, and the album it lands in.
-    assert.equal(body.textContent.includes('Something arrived'), true);
+    assert.equal(bodyAfter.textContent.includes('Something arrived'), true);
     await act(async () => buttonText('Open it').click());
-    assert.equal(body.textContent.includes('All afternoon, to the fridge, the window, and the cat next door.'), true);
+    assert.equal(reopened.textContent.includes('All afternoon, to the fridge, the window, and the cat next door.'), true);
 
     await act(async () => buttonText('The album').click());
     const years = [...document.querySelectorAll('.raise-child-album__year')].map((item) => item.textContent);

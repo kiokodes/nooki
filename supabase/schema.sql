@@ -8666,6 +8666,8 @@ CREATE TABLE IF NOT EXISTS public.family_votes (
   moment_id UUID NOT NULL REFERENCES public.family_moments(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   choice_index SMALLINT NOT NULL CHECK (choice_index BETWEEN 1 AND 4),
+  -- One change of mind per parent: two decisions, and then it is settled.
+  revisions SMALLINT NOT NULL DEFAULT 0 CHECK (revisions BETWEEN 0 AND 1),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (moment_id, user_id)
@@ -9202,7 +9204,11 @@ $$;
 -- 6. Resolving a moment: the lead parent rule, the effects and the album
 -- ---------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION public.raise_child_resolve(p_moment_id UUID, p_force BOOLEAN DEFAULT false)
+CREATE OR REPLACE FUNCTION public.raise_child_resolve_as(
+  p_moment_id UUID,
+  p_force BOOLEAN DEFAULT false,
+  p_decision TEXT DEFAULT 'auto'
+)
 RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
@@ -9218,11 +9224,12 @@ DECLARE
   a_choice SMALLINT;
   b_choice SMALLINT;
   both_voted BOOLEAN;
-  agreed BOOLEAN;
+  agreed BOOLEAN := false;
   chosen SMALLINT;
   deciding UUID;
   other UUID;
   lead UUID;
+  lagger UUID;
   choice JSONB;
   outcome_line TEXT;
   outcome_json JSONB;
@@ -9230,7 +9237,12 @@ DECLARE
   decider_name TEXT;
   child_name TEXT;
   due BOOLEAN;
+  kind TEXT;
 BEGIN
+  IF p_decision NOT IN ('auto', 'lead') THEN
+    RAISE EXCEPTION 'Unknown kind of decision.';
+  END IF;
+
   SELECT * INTO m FROM public.family_moments WHERE id = p_moment_id FOR UPDATE;
   IF m.id IS NULL THEN RAISE EXCEPTION 'That moment is not here any more.'; END IF;
   IF m.status = 'resolved' THEN RETURN m.outcome; END IF;
@@ -9251,16 +9263,32 @@ BEGIN
   due := now() >= m.created_at + make_interval(hours => cfg.timeout_hours);
 
   IF NOT both_voted THEN
+    -- One answer, or none. Nothing happens until the clock runs out.
     IF a_choice IS NULL AND b_choice IS NULL THEN RETURN NULL; END IF;
-    IF NOT (p_force AND due) THEN RETURN NULL; END IF;
+    IF p_decision = 'lead' OR NOT (p_force AND due) THEN RETURN NULL; END IF;
+    kind := 'lone';
+  ELSE
+    agreed := a_choice = b_choice;
+    IF NOT agreed AND p_decision <> 'lead' AND NOT (p_force AND due) THEN
+      -- A split is not a decision. The two of them can take it to chat, change a pick,
+      -- or let the year's lead parent use their call; the clock is only the backstop.
+      RETURN NULL;
+    END IF;
+    IF agreed THEN
+      kind := 'agreement';
+    ELSIF p_decision = 'lead' THEN
+      kind := 'lead';
+    ELSE
+      kind := 'timeout';
+    END IF;
   END IF;
 
   SELECT * INTO cs FROM public.child_state WHERE family_id = m.family_id;
   SELECT * INTO tpl FROM public.event_templates WHERE slug = m.event_slug;
   lead := coalesce(cs.lead_user_id, parent_a);
+  lagger := CASE WHEN lead = parent_a THEN parent_b ELSE parent_a END;
 
   IF both_voted THEN
-    agreed := a_choice = b_choice;
     IF agreed THEN
       chosen := a_choice;
       deciding := NULL;
@@ -9268,11 +9296,10 @@ BEGIN
     ELSE
       chosen := CASE WHEN lead = parent_a THEN a_choice ELSE b_choice END;
       deciding := lead;
-      other := CASE WHEN lead = parent_a THEN parent_b ELSE parent_a END;
+      other := lagger;
     END IF;
   ELSE
     -- Nobody answered in time: the pick that was made counts, quietly.
-    agreed := false;
     chosen := coalesce(a_choice, b_choice);
     deciding := CASE WHEN a_choice IS NOT NULL THEN parent_a ELSE parent_b END;
     other := CASE WHEN a_choice IS NOT NULL THEN parent_b ELSE parent_a END;
@@ -9287,9 +9314,12 @@ BEGIN
   SELECT name INTO decider_name FROM public.profiles WHERE id = coalesce(deciding, lead);
   SELECT name INTO child_name FROM public.child_state WHERE family_id = m.family_id;
 
-  IF agreed THEN
+  IF kind = 'agreement' THEN
     notes := 'You both wanted the same thing. ' || child_name || ' felt that.';
-  ELSIF both_voted THEN
+  ELSIF kind = 'lead' THEN
+    notes := 'You wanted different things. ' || coalesce(decider_name, 'Your other half')
+      || ' had this year’s call, and used it.';
+  ELSIF kind = 'timeout' THEN
     notes := 'You wanted different things. This year went with ' || coalesce(decider_name, 'your other half') || '’s call.';
   ELSE
     notes := 'We went with ' || coalesce(decider_name, 'the pick that was made') || '’s pick.';
@@ -9300,16 +9330,17 @@ BEGIN
   PERFORM public.raise_child_apply_effects(
     m.family_id,
     coalesce(choice -> 'effects', '{}'::JSONB),
-    CASE WHEN agreed OR NOT both_voted THEN NULL ELSE deciding END,
-    CASE WHEN agreed OR NOT both_voted THEN NULL ELSE other END,
+    CASE WHEN both_voted AND NOT agreed THEN deciding ELSE NULL END,
+    CASE WHEN both_voted AND NOT agreed THEN other ELSE NULL END,
     agreed,
-    (CASE WHEN agreed OR NOT both_voted THEN 0 ELSE 1 END)::SMALLINT
+    (CASE WHEN both_voted AND NOT agreed THEN 1 ELSE 0 END)::SMALLINT
   );
 
   outcome_json := jsonb_build_object(
     'agreement', agreed,
     'split', both_voted AND NOT agreed,
     'timed_out', NOT both_voted,
+    'decision', kind,
     'chosen_index', chosen,
     'chosen_label', choice ->> 'label',
     'outcome_text', outcome_line,
@@ -9332,6 +9363,15 @@ BEGIN
   VALUES (m.family_id, 'moment', m.age, tpl.title, outcome_line, m.id);
 
   RETURN outcome_json;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.raise_child_resolve(p_moment_id UUID, p_force BOOLEAN DEFAULT false)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  RETURN public.raise_child_resolve_as(COALESCE(p_moment_id, NULL), p_force, 'auto');
 END;
 $$;
 
@@ -9752,7 +9792,7 @@ BEGIN
         'mine', '[]'::JSONB, 'partner_joined', false, 'ready', false,
         'content_ready', configured
       ),
-      'me', jsonb_build_object('bond', jsonb_build_object('band', NULL, 'line', NULL)),
+      'me', jsonb_build_object('bond', jsonb_build_object('band', NULL, 'line', NULL), 'is_lead', false),
       'child', NULL,
       'today', jsonb_build_object('moments', '[]'::JSONB, 'gift', NULL, 'can_age_up', false, 'age_up_hint', NULL),
       'album', jsonb_build_object('count', 0),
@@ -9807,8 +9847,23 @@ BEGIN
               SELECT jsonb_agg(jsonb_build_object('index', ord, 'label', c ->> 'label') ORDER BY ord)
                 FROM jsonb_array_elements(t.choices) WITH ORDINALITY AS x(c, ord)
             ),
-            'my_choice', (SELECT v.choice_index FROM public.family_votes v WHERE v.moment_id = m.id AND v.user_id = caller),
-            'partner_voted', EXISTS (SELECT 1 FROM public.family_votes v WHERE v.moment_id = m.id AND v.user_id = partner),
+            'my_choice', mine.choice_index,
+            'my_revisions', coalesce(mine.revisions, 0),
+            -- The other parent's pick only ever appears once both have answered.
+            'partner_voted', theirs.user_id IS NOT NULL,
+            'partner_choice', CASE WHEN mine.user_id IS NOT NULL AND theirs.user_id IS NOT NULL
+                                   THEN theirs.choice_index ELSE NULL END,
+            'disagreement', (m.status = 'open'
+                             AND mine.user_id IS NOT NULL AND theirs.user_id IS NOT NULL
+                             AND mine.choice_index <> theirs.choice_index),
+            'is_lead', coalesce(cs.lead_user_id = caller, false),
+            'can_decide', (m.status = 'open'
+                           AND cs.lead_user_id = caller
+                           AND mine.user_id IS NOT NULL AND theirs.user_id IS NOT NULL
+                           AND mine.choice_index <> theirs.choice_index),
+            'can_change', (m.status = 'open'
+                           AND mine.user_id IS NOT NULL
+                           AND coalesce(mine.revisions, 0) < 1),
             'resolved', m.status = 'resolved',
             'outcome', CASE WHEN m.status = 'resolved' THEN m.outcome ELSE NULL END,
             'due_at', m.created_at + make_interval(hours => cfg.timeout_hours),
@@ -9816,6 +9871,8 @@ BEGIN
           ) AS moment
         FROM public.family_moments m
         JOIN public.event_templates t ON t.slug = m.event_slug
+        LEFT JOIN public.family_votes mine ON mine.moment_id = m.id AND mine.user_id = caller
+        LEFT JOIN public.family_votes theirs ON theirs.moment_id = m.id AND theirs.user_id = partner
         WHERE m.family_id = fam.id
           AND m.age = cs.age
           AND (m.status = 'open' OR m.resolved_at > now() - interval '2 days')
@@ -9866,7 +9923,8 @@ BEGIN
     ),
     'me', jsonb_build_object(
       'user_id', caller,
-      'bond', jsonb_build_object('band', bond_band, 'line', bond_line)
+      'bond', jsonb_build_object('band', bond_band, 'line', bond_line),
+      'is_lead', coalesce(cs.lead_user_id = caller, false)
     ),
     'child', child_json,
     'today', jsonb_build_object(
@@ -9894,7 +9952,10 @@ DECLARE
   m public.family_moments%ROWTYPE;
   tpl public.event_templates%ROWTYPE;
   fam public.families%ROWTYPE;
+  mine public.family_votes%ROWTYPE;
 BEGIN
+  IF caller IS NULL THEN RAISE EXCEPTION 'Sign in to raise a child.'; END IF;
+
   SELECT * INTO m FROM public.family_moments WHERE id = p_moment_id;
   IF m.id IS NULL THEN RAISE EXCEPTION 'That moment is not here any more.'; END IF;
   fam := public.raise_child_guard_family(m.family_id);
@@ -9905,12 +9966,60 @@ BEGIN
     RAISE EXCEPTION 'Choose one of the options on the card.';
   END IF;
 
-  INSERT INTO public.family_votes (moment_id, user_id, choice_index)
-  VALUES (m.id, caller, p_choice::SMALLINT)
-  ON CONFLICT (moment_id, user_id) DO UPDATE
-    SET choice_index = EXCLUDED.choice_index, updated_at = now();
+  SELECT * INTO mine FROM public.family_votes WHERE moment_id = m.id AND user_id = caller;
+  IF mine.moment_id IS NULL THEN
+    INSERT INTO public.family_votes (moment_id, user_id, choice_index)
+    VALUES (m.id, caller, p_choice::SMALLINT);
+  ELSIF mine.choice_index = p_choice THEN
+    -- Asking for the answer already given changes nothing, and uses nothing up.
+    NULL;
+  ELSIF mine.revisions >= 1 THEN
+    RAISE EXCEPTION 'You have already had your second say on this one.';
+  ELSE
+    UPDATE public.family_votes
+       SET choice_index = p_choice::SMALLINT,
+           revisions = revisions + 1,
+           updated_at = now()
+     WHERE moment_id = m.id AND user_id = caller;
+  END IF;
 
-  RETURN public.raise_child_resolve(m.id, false);
+  -- This settles an agreement, and only an agreement.
+  PERFORM public.raise_child_resolve_as(m.id, false, 'auto');
+  RETURN public.raise_child_state();
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.raise_child_lead_decide(p_moment_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  caller UUID := auth.uid();
+  m public.family_moments%ROWTYPE;
+  fam public.families%ROWTYPE;
+  cs public.child_state%ROWTYPE;
+BEGIN
+  IF caller IS NULL THEN RAISE EXCEPTION 'Sign in to raise a child.'; END IF;
+
+  SELECT * INTO m FROM public.family_moments WHERE id = p_moment_id;
+  IF m.id IS NULL THEN RAISE EXCEPTION 'That moment is not here any more.'; END IF;
+  fam := public.raise_child_guard_family(m.family_id);
+  IF fam.status <> 'active' THEN RAISE EXCEPTION 'This chapter is closed.'; END IF;
+  IF m.status = 'resolved' THEN RAISE EXCEPTION 'That moment has already been decided.'; END IF;
+
+  SELECT * INTO cs FROM public.child_state WHERE family_id = m.family_id;
+  IF cs.lead_user_id IS DISTINCT FROM caller THEN
+    RAISE EXCEPTION 'This year''s call belongs to your partner. Talk it through instead.';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.family_votes WHERE moment_id = m.id AND user_id = caller)
+     OR NOT EXISTS (SELECT 1 FROM public.family_votes WHERE moment_id = m.id AND user_id <> caller) THEN
+    RAISE EXCEPTION 'Wait until you have both answered.';
+  END IF;
+
+  IF public.raise_child_resolve_as(m.id, true, 'lead') IS NULL THEN
+    RAISE EXCEPTION 'There is nothing to decide here yet.';
+  END IF;
+  RETURN public.raise_child_state();
 END;
 $$;
 
@@ -10152,11 +10261,13 @@ GRANT EXECUTE ON FUNCTION public.can_read_family_vote(UUID, UUID) TO authenticat
 
 REVOKE ALL ON FUNCTION public.raise_child_state(), public.raise_child_setup(TEXT, JSONB, TEXT[]),
   public.raise_child_vote(UUID, INTEGER), public.raise_child_open_gift(UUID), public.raise_child_age_up(),
-  public.raise_child_album(INTEGER, TIMESTAMPTZ), public.raise_child_reply(TEXT), public.raise_child_new_child()
+  public.raise_child_album(INTEGER, TIMESTAMPTZ), public.raise_child_reply(TEXT), public.raise_child_new_child(),
+  public.raise_child_lead_decide(UUID)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.raise_child_state(), public.raise_child_setup(TEXT, JSONB, TEXT[]),
   public.raise_child_vote(UUID, INTEGER), public.raise_child_open_gift(UUID), public.raise_child_age_up(),
-  public.raise_child_album(INTEGER, TIMESTAMPTZ), public.raise_child_reply(TEXT), public.raise_child_new_child()
+  public.raise_child_album(INTEGER, TIMESTAMPTZ), public.raise_child_reply(TEXT), public.raise_child_new_child(),
+  public.raise_child_lead_decide(UUID)
   TO authenticated;
 
 REVOKE ALL ON FUNCTION public.raise_child_config(), public.raise_child_require_couple(),
@@ -10174,6 +10285,12 @@ REVOKE ALL ON FUNCTION public.raise_child_config(), public.raise_child_require_c
   public.raise_child_mark_notification_sent(UUID), public.raise_child_invoke_push(),
   public.raise_child_write_letter(UUID)
   FROM PUBLIC, anon, authenticated;
+
+-- The new resolver is the job's alone; the lead parent's call is a signed-in RPC.
+REVOKE ALL ON FUNCTION public.raise_child_resolve_as(UUID, BOOLEAN, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.raise_child_resolve_as(UUID, BOOLEAN, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.raise_child_lead_decide(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.raise_child_lead_decide(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.raise_child_daily_tick(DATE), public.raise_child_tick_family(UUID, DATE),
   public.raise_child_resolve(UUID, BOOLEAN), public.raise_child_resolve_due(UUID),
   public.raise_child_write_letter(UUID), public.raise_child_claim_notifications(INTEGER),

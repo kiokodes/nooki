@@ -59,7 +59,7 @@ rows and touches nothing else, so a corrected batch is safe to import again.
 | `category` | yes | One of `home`, `school`, `friends`, `health`, `money`, `values`, `fun`. |
 | `title` | yes | At most 80 characters. A place or a thing, not a lesson. |
 | `setup_text` | yes | At most 220 characters. The scene, in one or two sentences. |
-| `choices` | yes | 2 to 4 options. Four is the ceiling; three is usually best. |
+| `choices` | yes | 2 to 4 options. Four is the ceiling; **three is what the game is written for** — two reads as yes or no, and the validator will suggest a third. |
 | `choices[].label` | yes | At most 60 characters. What the parent does, in the parent's voice ("Clean it up together"). |
 | `choices[].outcome_text` | yes | At most 260 characters. Two or three sentences about what the year did. This is the card saved to the album. |
 | `choices[].effects` | no | See §3. Leave it out and nothing moves. |
@@ -123,6 +123,16 @@ is humiliated. Difficulty is not the same as harm.
 **Every option is a trade-off.** There is no right answer, no option that reads as the
 responsible one, and no option that punishes a parent for choosing it. If one option is
 obviously correct, the card has one option too many.
+
+**Three options, not two.** A two-option card collapses into yes or no, and the parents
+stop discussing it. Three lets each of them want something slightly different. Four is the
+ceiling and should be rare; `validate` will suggest a third option for every card that
+offers only two, without blocking the import.
+
+**Write the outcome for either ending.** A card can settle three ways: both parents pick
+the same thing, the year's lead parent uses their call after a split, or the clock runs
+out. `outcome_text` should read true in all three — describe what the year was like, not
+who won. Never write "as you both agreed" or "since you disagreed".
 
 **No comparison between parents.** Never imply one parent is more involved, more
 patient, or better at this. A timeout is never mentioned. A disagreement is never

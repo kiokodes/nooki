@@ -22,6 +22,12 @@ function lineFor(state: RaiseChildState, partnerName: string): string {
   }
   if (family.status === 'letter') return `${child?.name ?? 'Your child'} is eighteen. The letter is waiting.`;
   if (!child) return 'A small life, raised together.';
+  const split = today.moments.find((moment) => !moment.resolved && moment.disagreement);
+  if (split) {
+    return split.is_lead
+      ? 'You chose differently — this year’s call is yours.'
+      : `You chose differently. Talk it out with ${partnerName}.`;
+  }
   const waiting = today.moments.filter((moment) => !moment.resolved && moment.my_choice === null).length;
   if (waiting > 0) return `A moment is waiting for you — ${child.name} is ${child.age_label}.`;
   if (today.moments.some((moment) => !moment.resolved && moment.my_choice !== null)) {

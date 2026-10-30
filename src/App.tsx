@@ -39,6 +39,7 @@ import { useMissYou } from './hooks/useMissYou';
 import { useCouplePhoto } from './hooks/useCouplePhoto';
 import { useDailyDecision } from './hooks/useDailyDecision';
 import { useRaiseChild } from './hooks/useRaiseChild';
+import type { RaiseChildMoment } from './lib/raiseChildService';
 import { RaiseAChildModal } from './components/raisechild/RaiseAChildModal';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { VisitPlanningModal } from './components/together/VisitPlanningModal';
@@ -316,6 +317,26 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     setShowDailyDecision(false);
     setActiveTab('chat');
   }, [sendChatMessage]);
+
+  // "Talk it out" puts the split in the chat, both picks spelled out, so the two of them
+  // can settle it themselves instead of the year deciding for them.
+  const handleRaiseChildToChat = useCallback(async (moment: RaiseChildMoment) => {
+    const mine = moment.choices.find((choice) => choice.index === moment.my_choice) ?? null;
+    const theirs = moment.choices.find((choice) => choice.index === moment.partner_choice) ?? null;
+    const childName = raiseChild.snapshot?.child?.name ?? 'our child';
+    const content = [
+      `About ${childName} — “${moment.title}”.`,
+      moment.setup_text,
+      '',
+      mine ? `I picked: ${mine.label}` : null,
+      theirs ? `You picked: ${theirs.label}` : null,
+      '',
+      'Which way should this year go?',
+    ].filter((line): line is string => line !== null).join('\n');
+    await sendChatMessage(content);
+    setShowRaiseChild(false);
+    setActiveTab('chat');
+  }, [raiseChild.snapshot, sendChatMessage]);
 
   // The quote on a linked bubble: jump back to that question and its answers.
   const handleOpenQuestion = useCallback((sessionId: string) => {
@@ -915,6 +936,7 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             state={raiseChild}
             userName={profile.name}
             partnerName={partner.name}
+            onTakeToChat={handleRaiseChildToChat}
             onClose={() => setShowRaiseChild(false)}
           />
         )}

@@ -314,6 +314,23 @@
   width: 100%;
 }
 
+/* A link that happens to be a decision: quiet, underlined, never a second primary. */
+.raise-child-button--text {
+  min-height: 34px;
+  padding: 4px 2px;
+  background: none;
+  color: #a8577a;
+  font-weight: 800;
+  font-size: 0.79rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  box-shadow: none;
+}
+
+.raise-child-button--text:hover:not(:disabled) {
+  color: #8d3f60;
+}
+
 .raise-child-button:focus-visible,
 .raise-child-choice:focus-visible {
   outline: 2px solid #ec4899;
@@ -364,6 +381,12 @@
 .raise-child-choice:hover:not(:disabled) {
   border-color: #f9a8d4;
   background: #fff7fb;
+}
+
+.raise-child-choice[data-current='true'] {
+  border-color: #f9a8d4;
+  background: #fff7fb;
+  box-shadow: inset 0 0 0 1px #f9a8d4;
 }
 
 .raise-child-choice:disabled {
@@ -422,6 +445,51 @@
   margin: 9px 0 0;
   color: #a89e96;
   font-size: 0.7rem;
+}
+
+/* --------------------------------------------------------- when you chose differently */
+
+.raise-child-split {
+  margin-top: 13px;
+  padding: 13px 14px 12px;
+  border: 1px solid #f3e2d3;
+  border-radius: 20px;
+  background: #fffdf9;
+}
+
+.raise-child-split__title {
+  margin: 0 0 9px;
+  color: #372e29;
+  font-size: 0.87rem;
+  font-weight: 900;
+}
+
+.raise-child-picks {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.raise-child-pick {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 9px;
+  align-items: baseline;
+}
+
+.raise-child-pick__who {
+  color: #a2958a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.raise-child-pick__what {
+  color: #372e29;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .raise-child-waiting {

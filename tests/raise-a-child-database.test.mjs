@@ -15,6 +15,7 @@ const EVENTS = [
     choices: [
       { label: 'Clean it up together', outcome_text: 'You swept it up side by side. The vase is gone; the afternoon is not.', effects: { traits: { kind: 2 }, mood: 'safe', bond: 1 } },
       { label: 'Ask what happened first', outcome_text: 'She told you the whole story twice. Nobody was cross by the end of it.', effects: { traits: { honest: 1, thoughtful: 1 }, mood: 'safe' } },
+      { label: 'Sit down with her before anything else', outcome_text: 'You sat on the floor among the pieces until she was ready. The vase was never the point.', effects: { traits: { gentle: 1 }, mood: 'safe', bond: 1 } },
     ],
   },
   {
@@ -273,7 +274,7 @@ test('a vote is private until both parents have picked', async () => {
   assert.ok(moment, 'a moment opens for the chapter');
   assert.equal(moment.my_choice, null);
   assert.equal(moment.partner_voted, false);
-  assert.equal(moment.choices.length, 2);
+  assert.equal(moment.choices.length, 3);
   assert.ok(moment.choices.every((choice) => choice.label && typeof choice.index === 'number'));
 
   await vote(couple.alice, moment.id, 1);
@@ -301,7 +302,7 @@ test('a vote is private until both parents have picked', async () => {
   assert.equal(bothRows.rows[0].count, 2, 'after the reveal both picks are readable');
 });
 
-test('a split goes with the year’s lead parent, and nudges both bonds without a scoreboard', async () => {
+test('a split waits for the two of them, and only the lead parent can use the year’s call', async () => {
   const couple = await makeCouple();
   await useOnly('db-broken-vase');
   await setupFamily(couple);
@@ -310,18 +311,44 @@ test('a split goes with the year’s lead parent, and nudges both bonds without 
 
   const moment = await openMoment(couple.alice);
   await vote(couple.alice, moment.id, 1);
-  const resolved = await vote(couple.bob, moment.id, 2);
+  const afterBob = await vote(couple.bob, moment.id, 2);
 
-  assert.equal(resolved.agreement, false);
-  assert.equal(resolved.split, true);
-  assert.equal(resolved.timed_out, false);
-  assert.equal(resolved.decided_by_name, 'Alice', 'the first chapter belongs to the parent who started the family');
-  assert.equal(resolved.chosen_index, 1, 'the lead parent’s pick is the one the year keeps');
-  assert.equal(resolved.note, 'You wanted different things. This year went with Alice’s call.');
+  // Nothing settles on a disagreement any more: both picks are on the table, in the open.
+  const open = afterBob.today.moments[0];
+  assert.equal(open.resolved, false, 'a split is not a decision');
+  assert.equal(open.disagreement, true);
+  assert.equal(open.partner_choice, 1);
+  assert.equal(open.my_choice, 2);
+  assert.equal(open.can_change, true, 'the second say is still there');
+  assert.equal(open.can_decide, false, 'Bob does not hold this year’s call');
+  assert.equal(open.is_lead, false);
+
+  await signIn(couple.alice);
+  const aliceView = (await state()).today.moments[0];
+  assert.equal(aliceView.can_decide, true, 'the first chapter belongs to the parent who started the family');
+  assert.equal(aliceView.partner_voted, true);
+  assert.equal(aliceView.partner_choice, 2, 'the other pick is readable once both have answered');
+
+  // A call that is not yours cannot be used.
+  await signIn(couple.bob);
+  assert.match(await rpcError('raise_child_lead_decide', { p_moment_id: moment.id }), /partner|call/i);
+
+  // Alice settles it herself, in the open.
+  await signIn(couple.alice);
+  const decided = (await rpc('raise_child_lead_decide', { p_moment_id: moment.id })).today.moments[0];
+  const outcome = decided.outcome;
+  assert.equal(decided.resolved, true);
+  assert.equal(outcome.decision, 'lead');
+  assert.equal(outcome.agreement, false);
+  assert.equal(outcome.split, true);
+  assert.equal(outcome.timed_out, false);
+  assert.equal(outcome.decided_by_name, 'Alice');
+  assert.equal(outcome.chosen_index, 1, 'the lead parent’s pick is the one the year keeps');
+  assert.equal(outcome.note, 'You wanted different things. Alice had this year’s call, and used it.');
 
   // The child feels the split, gently: no reward, no punishment for either parent,
   // and nothing that reads as a score.
-  await signIn(couple.alice);
+  assert.equal(decided.age, 3);
   const after = await state();
   assert.equal(after.child.mood, 'safe');
   assert.ok(after.child.traits.some((trait) => trait.slug === 'kind'));
@@ -337,13 +364,60 @@ test('a split goes with the year’s lead parent, and nudges both bonds without 
   const page = album.find((entry) => entry.kind === 'moment');
   assert.ok(page);
   assert.equal(page.title, 'The broken vase');
-  assert.equal(page.body, resolved.outcome_text);
-  assert.equal(page.age, 3);
+  assert.equal(page.body, outcome.outcome_text);
   assert.equal(album.some((entry) => /bond|score|points/i.test(entry.body)), false);
 
-  // A resolved moment cannot be voted on again.
+  // A resolved moment cannot be voted on, or decided, again.
   await signIn(couple.bob);
   assert.match(await rpcError('raise_child_vote', { p_moment_id: moment.id, p_choice: 1 }), /already|resolved/i);
+  await signIn(couple.alice);
+  assert.match(await rpcError('raise_child_lead_decide', { p_moment_id: moment.id }), /already|decided/i);
+});
+
+test('two decisions each: one change of mind, then the pick is final', async () => {
+  const couple = await makeCouple();
+  await useOnly('db-broken-vase');
+  await setupFamily(couple);
+  await openChapterAt(couple, 3);
+
+  const moment = await openMoment(couple.alice);
+  await vote(couple.alice, moment.id, 1);
+  await vote(couple.bob, moment.id, 2);
+
+  // Alice uses her second say to move onto Bob's pick: the year settles as an agreement.
+  const agreed = await vote(couple.alice, moment.id, 2);
+  const settled = agreed.today.moments[0];
+  assert.equal(settled.resolved, true);
+  assert.equal(settled.outcome.agreement, true);
+  assert.equal(settled.outcome.decision, 'agreement');
+  assert.equal(settled.outcome.chosen_index, 2);
+  assert.equal(settled.outcome.note, 'You both wanted the same thing. Mia felt that.');
+});
+
+test('a change of mind that still disagrees leaves the card open, and the change spent', async () => {
+  const couple = await makeCouple();
+  await useOnly('db-broken-vase');
+  await setupFamily(couple);
+  await openChapterAt(couple, 3);
+
+  const moment = await openMoment(couple.alice);
+  await vote(couple.alice, moment.id, 1);
+  await vote(couple.bob, moment.id, 2);
+
+  const afterChange = await vote(couple.alice, moment.id, 3);
+  const open = afterChange.today.moments[0];
+  assert.equal(open.resolved, false);
+  assert.equal(open.disagreement, true);
+  assert.equal(open.my_choice, 3);
+  assert.equal(open.can_change, false, 'the second say has been used');
+  assert.equal(open.my_revisions, 1);
+  assert.equal(open.can_decide, true, 'the call is still hers to use');
+  assert.match(await rpcError('raise_child_vote', { p_moment_id: moment.id, p_choice: 1 }), /second say|final/i);
+
+  // Bob's one change lands on her new pick, and the year settles as an agreement.
+  const agreed = await vote(couple.bob, moment.id, 3);
+  assert.equal(agreed.today.moments[0].outcome.agreement, true);
+  assert.equal(agreed.today.moments[0].outcome.decision, 'agreement');
 });
 
 test('the lead parent alternates when the chapter turns', async () => {
@@ -371,8 +445,13 @@ test('the lead parent alternates when the chapter turns', async () => {
   const second = await openMoment(couple.bob);
   await vote(couple.bob, second.id, 2);
   const split = await vote(couple.alice, second.id, 1);
-  assert.equal(split.decided_by_name, 'Bob');
-  assert.equal(split.chosen_index, 2);
+  assert.equal(split.today.moments[0].resolved, false, 'a split waits, whoever holds the call');
+
+  await signIn(couple.bob);
+  const decided = (await rpc('raise_child_lead_decide', { p_moment_id: second.id })).today.moments[0].outcome;
+  assert.equal(decided.decided_by_name, 'Bob');
+  assert.equal(decided.chosen_index, 2);
+  assert.equal(decided.decision, 'lead');
 });
 
 test('an unanswered moment resolves after the timeout with the pick that was made', async () => {
@@ -418,6 +497,33 @@ test('an unanswered moment resolves after the timeout with the pick that was mad
   for (const harsh of ['missed', 'late', 'didn’t answer', "didn't answer", 'waiting for you', 'expired', 'failed']) {
     assert.equal(everywhere.toLowerCase().includes(harsh), false, `no shaming copy: ${harsh}`);
   }
+});
+
+test('a split nobody settles goes with the year’s lead parent when the clock runs out', async () => {
+  const couple = await makeCouple();
+  await useOnly('db-broken-vase');
+  await setupFamily(couple);
+  const id = couple.familyId;
+  await openChapterAt(couple, 3);
+
+  const moment = await openMoment(couple.alice);
+  await vote(couple.alice, moment.id, 1);
+  await vote(couple.bob, moment.id, 2);
+  await backend.query(
+    `UPDATE public.family_moments SET created_at = now() - interval '25 hours' WHERE id = $1`,
+    [moment.id],
+  );
+
+  // The clock is the backstop, not the first answer: the year keeps the call's pick,
+  // says so plainly, and neither parent is scolded for it.
+  const result = (await backend.query('SELECT public.raise_child_resolve_due($1) AS r', [id])).rows[0].r;
+  assert.equal(result, 1);
+  const outcome = (await backend.query('SELECT outcome FROM public.family_moments WHERE id = $1', [moment.id])).rows[0].outcome;
+  assert.equal(outcome.decision, 'timeout');
+  assert.equal(outcome.split, true);
+  assert.equal(outcome.chosen_index, 1);
+  assert.equal(outcome.note, 'You wanted different things. This year went with Alice’s call.');
+  assert.equal(outcome.decided_by_name, 'Alice');
 });
 
 test('age up waits for every moment, once a day, and follows the configured pacing', async () => {
@@ -540,6 +646,7 @@ test('another couple cannot see the family, and nobody signed in can write conte
     `SELECT id FROM public.family_moments WHERE family_id = $1 AND status = 'open' LIMIT 1`, [id],
   )).rows[0].id;
   assert.ok(await rpcError('raise_child_vote', { p_moment_id: momentId, p_choice: 1 }));
+  assert.ok(await rpcError('raise_child_lead_decide', { p_moment_id: momentId }), 'a stranger cannot use another family’s call');
   assert.equal((await backend.query(
     `SELECT count(*)::int AS count FROM public.family_votes WHERE moment_id = $1`, [momentId],
   )).rows[0].count, 0, 'the refused vote wrote nothing');

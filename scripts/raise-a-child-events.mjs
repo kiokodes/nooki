@@ -114,6 +114,38 @@ export function parseEventsFile(raw, source = 'events') {
 }
 
 /**
+ * Advice rather than rules: things that still import, but make for a flatter game. A card
+ * with two options reads as yes or no; the third is what turns it into a trade-off. A
+ * warning never stops an import — the batch's author knows the moment better than a regex.
+ */
+export function guidanceWarnings(events) {
+  const warnings = [];
+  let cards = 0;
+  let twoChoice = 0;
+  for (const event of events) {
+    if (!isPlainObject(event)) continue;
+    const choices = Array.isArray(event.choices) ? event.choices : [];
+    cards += 1;
+    if (choices.length === 2) {
+      twoChoice += 1;
+      warnings.push({
+        slug: text(event.slug) || '—',
+        field: 'choices',
+        message: 'Two options can read as yes or no. A third gives the moment a trade-off.',
+      });
+    }
+  }
+  if (cards >= 4 && twoChoice * 2 > cards) {
+    warnings.push({
+      slug: '—',
+      field: 'batch',
+      message: `${twoChoice} of ${cards} cards offer only two options. Aim for three, so a year feels like a choice rather than a verdict.`,
+    });
+  }
+  return warnings;
+}
+
+/**
  * Every rule that can be checked mechanically. `knownChildTraits` can be widened by the
  * owner (a new row in trait_catalog) by passing extra names in.
  */
@@ -403,6 +435,12 @@ for (const arg of args.slice(1)) {
   }
 }
 
+function printWarnings(warnings) {
+  for (const warning of warnings) {
+    console.log(`  • ${warning.slug} — ${warning.field}: ${warning.message}`);
+  }
+}
+
 function printProblems(problems) {
   for (const problem of problems) {
     console.error(`  • ${problem.slug} — ${problem.field}: ${problem.message}`);
@@ -431,8 +469,9 @@ async function main() {
 
   if (command === 'validate') {
     const { events, problems } = await loadFile(positional[0]);
+    const warnings = guidanceWarnings(events);
     if (flags.get('json')) {
-      console.log(JSON.stringify({ problems, summary: summarise(events) }, null, 2));
+      console.log(JSON.stringify({ problems, warnings, summary: summarise(events) }, null, 2));
     } else {
       console.log(`Validating ${positional[0]}:`);
       printSummary(summarise(events));
@@ -442,6 +481,10 @@ async function main() {
       } else {
         console.log('\nNo problems. Nothing has been written to the database.');
       }
+      if (warnings.length) {
+        console.log(`\n${warnings.length} suggestion(s) — these will not block an import:`);
+        printWarnings(warnings);
+      }
     }
     process.exitCode = problems.length ? 1 : 0;
     return;
@@ -449,6 +492,7 @@ async function main() {
 
   if (command === 'import') {
     const { events, problems } = await loadFile(positional[0]);
+    const warnings = guidanceWarnings(events);
     const activate = Boolean(flags.get('activate'));
     const dryRun = Boolean(flags.get('dry-run'));
     printSummary(summarise(events));
@@ -457,6 +501,10 @@ async function main() {
       printProblems(problems);
       process.exitCode = 1;
       return;
+    }
+    if (warnings.length) {
+      console.log(`\n${warnings.length} suggestion(s) — importing anyway:`);
+      printWarnings(warnings);
     }
     if (!activate) console.log('\nImporting with active = false. Pass --activate when the batch has been read.');
     if (dryRun) {

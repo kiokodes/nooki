@@ -47,6 +47,18 @@ const ALBUM: RaiseChildAlbumEntry[] = [
   },
 ];
 
+const MOMENT_CHOICES = [
+  { index: 1, label: 'Clean it up together' },
+  { index: 2, label: 'Ask what happened first' },
+  { index: 3, label: 'Sit down with her before anything else' },
+];
+
+const OUTCOME_TEXT: Record<number, string> = {
+  1: 'You swept it up side by side. The vase is gone; the afternoon is not.',
+  2: 'She told you the whole story twice. Nobody was cross by the end of it.',
+  3: 'You sat on the floor among the pieces until she was ready. The vase was never the point.',
+};
+
 function baseSnapshot(): RaiseChildSnapshot {
   const moment: RaiseChildMoment = {
     id: 'm1',
@@ -57,9 +69,16 @@ function baseSnapshot(): RaiseChildSnapshot {
     choices: [
       { index: 1, label: 'Clean it up together' },
       { index: 2, label: 'Ask what happened first' },
+      { index: 3, label: 'Sit down with her before anything else' },
     ],
     my_choice: null,
+    my_revisions: 0,
     partner_voted: false,
+    partner_choice: null,
+    disagreement: false,
+    is_lead: true,
+    can_decide: false,
+    can_change: false,
     resolved: false,
     outcome: null,
     due_at: new Date(Date.now() + 3_600_000 * 20).toISOString(),
@@ -82,6 +101,7 @@ function baseSnapshot(): RaiseChildSnapshot {
     me: {
       user_id: 'preview-user',
       bond: { band: 'close', line: 'Mia looks for you first when the door opens.' },
+      is_lead: true,
     },
     child: {
       name: 'Mia',
@@ -118,29 +138,37 @@ export function usePreviewRaiseChild(): RaiseChildState {
   const [album, setAlbum] = useState<RaiseChildAlbumEntry[]>([]);
   const timer = useRef<number | null>(null);
 
-  const settle = useCallback((moment: RaiseChildMoment) => {
-    const chosen = moment.my_choice === 2 ? 2 : 1;
-    const outcome = chosen === 1
-      ? 'You swept it up side by side. The vase is gone; the afternoon is not.'
-      : 'She told you the whole story twice. Nobody was cross by the end of it.';
+  /** The card settles, both picks on the record, and the year moves on. */
+  const settle = useCallback((
+    momentId: string,
+    chosen: number,
+    kind: 'agreement' | 'lead',
+  ) => {
+    const label = (index: number) => MOMENT_CHOICES.find((choice) => choice.index === index)?.label ?? '';
     setSnapshot((current) => ({
       ...current,
       today: {
         ...current.today,
-        moments: current.today.moments.map((entry) => (entry.id === moment.id ? {
+        moments: current.today.moments.map((entry) => (entry.id === momentId ? {
           ...entry,
           resolved: true,
           partner_voted: true,
+          disagreement: false,
+          can_decide: false,
+          can_change: false,
           outcome: {
-            agreement: false,
-            split: true,
+            agreement: kind === 'agreement',
+            split: kind !== 'agreement',
             timed_out: false,
-            chosen_index: 1,
-            chosen_label: 'Clean it up together',
-            outcome_text: outcome,
-            note: 'You wanted different things. This year went with Ravi’s call.',
-            decided_by: 'preview-partner',
-            decided_by_name: 'Ravi',
+            decision: kind,
+            chosen_index: chosen,
+            chosen_label: label(chosen),
+            outcome_text: OUTCOME_TEXT[chosen] ?? OUTCOME_TEXT[1],
+            note: kind === 'agreement'
+              ? 'You both wanted the same thing. Mia felt that.'
+              : 'You wanted different things. You had this year’s call, and used it.',
+            decided_by: kind === 'agreement' ? null : 'preview-user',
+            decided_by_name: kind === 'agreement' ? null : 'you',
           },
         } : entry)),
         can_age_up: true,
@@ -151,22 +179,68 @@ export function usePreviewRaiseChild(): RaiseChildState {
     }));
   }, []);
 
+  /**
+   * The first answer, then the partner's (deliberately different) answer, then a possible
+   * second answer from you. Two decisions each, exactly as the database allows.
+   */
   const vote = useCallback(async (momentId: string, choiceIndex: number) => {
     setBusy(true);
     setSnapshot((current) => {
       const moment = current.today.moments.find((entry) => entry.id === momentId);
       if (!moment) return current;
-      const chosen: RaiseChildMoment = { ...moment, my_choice: choiceIndex };
-      if (timer.current !== null) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => { settle(chosen); setBusy(false); }, 1400);
-      return {
+      const update = (patch: Partial<RaiseChildMoment>) => ({
         ...current,
         today: {
           ...current.today,
-          moments: current.today.moments.map((entry) => (entry.id === momentId ? chosen : entry)),
+          moments: current.today.moments.map((entry) => (entry.id === momentId ? { ...entry, ...patch } : entry)),
         },
-      };
+      });
+
+      // Already answered, and the partner has too: this is the second say.
+      if (moment.my_choice !== null && moment.partner_voted) {
+        if (moment.my_revisions >= 1) return current;
+        if (moment.partner_choice === choiceIndex) {
+          setBusy(false);
+          settle(momentId, choiceIndex, 'agreement');
+          return update({ my_choice: choiceIndex, my_revisions: 1, disagreement: false, can_change: false, can_decide: false });
+        }
+        setBusy(false);
+        return update({ my_choice: choiceIndex, my_revisions: 1, can_change: false, disagreement: true });
+      }
+
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => {
+        // The partner answers differently, so the split can be looked at in full.
+        const theirs = MOMENT_CHOICES.find((choice) => choice.index !== choiceIndex)?.index ?? 1;
+        setSnapshot((latest) => ({
+          ...latest,
+          today: {
+            ...latest.today,
+            moments: latest.today.moments.map((entry) => (entry.id === momentId ? {
+              ...entry,
+              partner_voted: true,
+              partner_choice: theirs,
+              disagreement: true,
+              can_decide: entry.is_lead,
+              can_change: entry.my_revisions < 1,
+            } : entry)),
+          },
+        }));
+        setBusy(false);
+      }, 1400);
+      return update({ my_choice: choiceIndex });
     });
+  }, [settle]);
+
+  const decide = useCallback(async (momentId: string) => {
+    setBusy(true);
+    setSnapshot((current) => {
+      const moment = current.today.moments.find((entry) => entry.id === momentId);
+      if (!moment || moment.my_choice === null || !moment.can_decide) return current;
+      settle(momentId, moment.my_choice, 'lead');
+      return current;
+    });
+    setBusy(false);
   }, [settle]);
 
   const ageUp = useCallback(async () => {
@@ -210,6 +284,7 @@ export function usePreviewRaiseChild(): RaiseChildState {
       }));
     },
     vote,
+    decide,
     openGift: async (giftId) => {
       setSnapshot((current) => ({
         ...current,
