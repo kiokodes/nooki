@@ -1,0 +1,602 @@
+[
+  {
+    "slug": "nigeria-preteen-group-project-credit",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "school",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The names on the project",
+    "setup_text": "Your child comes home upset: a group project was presented without their name. They say they did the drawings, but missed the final meeting. The teacher says the group submitted the list together and has offered to hear everyone out tomorrow. Your child wants you to call tonight.",
+    "choices": [
+      {
+        "label": "Help your child prepare for the meeting",
+        "outcome_text": "Your child brought the drawings and a few questions to school. The conversation took time, and the group had another chance to explain the list.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Call the teacher before the meeting",
+        "outcome_text": "The teacher heard your concerns before speaking with the group. Your child still had a chance to share what happened at the meeting.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child who should join the conversation",
+        "outcome_text": "The family discussed who would speak and what support might help. The school meeting was arranged with those wishes in mind.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-family-group-photo",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "values",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "The photograph in the family group",
+    "setup_text": "At a family gathering, an auntie takes a picture of the children and posts it to the family group. Your child asks her to remove it. She says she was proud of the day and did not realise there was a problem. Other relatives have already replied with compliments.",
+    "choices": [
+      {
+        "label": "Ask the auntie to remove the picture",
+        "outcome_text": "The auntie took the picture down after a conversation. The family found another way to share the day with relatives.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Help your child speak with the auntie",
+        "outcome_text": "Your child and the auntie talked about the photograph together. The conversation was a little awkward, but both had room to explain.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Discuss a family photo rule for next time",
+        "outcome_text": "The gathering became the start of a wider conversation about pictures. The family also asked your child what they needed about this one.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-missing-money-class",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "money",
+    "required_trait_tags": [
+      "calm"
+    ],
+    "title": "The money in the envelope",
+    "setup_text": "Money collected for a class activity is short. Your child says they passed the envelope to a classmate before lunch; the classmate says it was left on the teacher’s desk. Neither saw what happened after that. The teacher has asked both families to come in before anyone pays the difference.",
+    "choices": [
+      {
+        "label": "Go to the meeting and hear both accounts",
+        "outcome_text": "The families and teacher compared what each person remembered. They agreed on a way to review the collection without deciding what nobody had seen.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child to retrace the day first",
+        "outcome_text": "Your child went over the day at home before the meeting. Some details became clearer, while other parts remained uncertain.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the teacher how the records are kept",
+        "outcome_text": "The meeting began with the collection record and the handover. The missing amount still needed an answer, but the conversation had a starting point.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-friend-no-longer-visits",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "friends",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The invitation that stopped",
+    "setup_text": "A friend who used to visit has not been around for weeks. Your child says they are fine and does not want you to call. The friend’s parent mentions that their child felt left out at a recent gathering, but you did not see what happened between them.",
+    "choices": [
+      {
+        "label": "Give your child time and check in later",
+        "outcome_text": "The family did not press for a full account that evening. A later conversation left room for your child to say more, or not.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask what kind of support they want",
+        "outcome_text": "Your child was offered help without having to settle the friendship immediately. The two children still had their own conversation to navigate.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest a low-pressure invitation",
+        "outcome_text": "An invitation went out without asking anyone to explain the whole disagreement. Whether to meet remained a choice for both children.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-exam-lessons-saturday",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "school",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "The extra lesson",
+    "setup_text": "A teacher suggests Saturday lessons before the next school year. Your child already spends Saturdays at a football group and says they do not want to stop. The lessons cost money and are across town. The teacher says they may help build confidence, but they are not compulsory.",
+    "choices": [
+      {
+        "label": "Try the lessons for a few weeks",
+        "outcome_text": "The family rearranged a few Saturdays and paid for a short trial. Your child had less time at football while everyone saw how the lessons felt.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Keep football and review schoolwork at home",
+        "outcome_text": "Football stayed on the calendar. The family set aside some home time and planned to ask the teacher how things were going.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the teacher about other ways to help",
+        "outcome_text": "The family asked about options that might fit the week. The decision took longer, but the costs and timing became clearer.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-church-youth-group",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "values",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "A different Sunday group",
+    "setup_text": "Your family attends one church, but your child wants to visit a friend’s youth group at another. A relative worries that changing routines sends a confusing message; your child says it is about feeling comfortable with people their age. The groups meet at the same time.",
+    "choices": [
+      {
+        "label": "Let your child visit for a few weeks",
+        "outcome_text": "The family tried a different Sunday arrangement for a few weeks. They planned to talk about what the visit meant afterwards.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Keep the usual group and invite the friend",
+        "outcome_text": "The family kept its Sunday routine and invited the friend to visit. The friend could decide whether that felt right too.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Meet both youth leaders before deciding",
+        "outcome_text": "Conversations with both leaders gave the family more to consider. Your child waited a little longer for an answer.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-chores-visiting-cousin",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "home",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "The chores list",
+    "setup_text": "Your child notices that a cousin staying for the school break is not on the household chores list. The cousin’s parent had asked that the visit feel like a rest. Your child says the extra washing up is landing on them, especially on days they have schoolwork.",
+    "choices": [
+      {
+        "label": "Make a temporary list with both children",
+        "outcome_text": "Both children had a say in a short holiday list. The family also checked with the cousin’s parent about the arrangement.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Reduce your child’s chores during the visit",
+        "outcome_text": "The usual list got lighter while the cousin was there. The grown-ups made room for the work that still needed doing.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the cousin what they can help with",
+        "outcome_text": "The cousin was invited to choose a way to help. It took a conversation to balance a holiday with the household’s needs.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-shared-phone-message",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "friends",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "A message on the shared phone",
+    "setup_text": "Your child borrows the family phone and leaves a message thread open. A friend has written, “You promised you wouldn’t tell.” Your child notices you saw it and asks you not to read the rest. You do not know what the promise was, or whether either child wants help.",
+    "choices": [
+      {
+        "label": "Close the thread and ask how to support them",
+        "outcome_text": "The thread stayed private. Your child knew they could ask for help, without having to explain the whole conversation on the spot.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask to discuss the message together",
+        "outcome_text": "You asked about the message without reading further. Your child shared what they were ready to share, and some questions remained.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Agree on privacy rules for the shared phone",
+        "outcome_text": "The family talked about what happens when messages are left open. They also made space to return to the friend’s message if needed.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-relative-wants-travel",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "home",
+    "required_trait_tags": [
+      "adventurous"
+    ],
+    "title": "A holiday away",
+    "setup_text": "A grandparent invites your child to spend part of the school holiday with cousins in another city. Your child is excited; the journey is long, and the dates overlap with a family plan. The grandparent offers to meet them at the other end, but travel details are still being worked out.",
+    "choices": [
+      {
+        "label": "Plan the visit with the grandparent",
+        "outcome_text": "The families worked through the journey and made room for the visit. The original family plan needed a new date.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Ask for a shorter visit",
+        "outcome_text": "A shorter stay left time for both the cousins and the family plan. The journey still needed careful arranging.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Invite the cousins closer to home",
+        "outcome_text": "The invitation changed direction. The families looked for a date and a place that could hold everyone.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-child-language-embarrassment",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "values",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "The language at the table",
+    "setup_text": "A grandparent greets your child in the family language. Your child answers in English and later says they are afraid of getting the words wrong. The grandparent is disappointed and thinks the language is being forgotten; neither wants the other to feel rejected.",
+    "choices": [
+      {
+        "label": "Ask the grandparent to share a few words",
+        "outcome_text": "A few words returned through stories and patient practice. There was no need to master a whole conversation at once.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Let your child choose when to practise",
+        "outcome_text": "Your child found some room to try without an audience. The family talked with the grandparent about why it felt difficult.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Start a family language activity together",
+        "outcome_text": "Everyone learned around the same table, including the grown-ups. Finding time for it became part of the plan.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-family-business-help",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "money",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "An afternoon at the shop",
+    "setup_text": "A relative asks your child to help at the family shop after school for a small payment. Your child likes the idea of earning money. The hours would replace some time for homework and rest, and the relative says they can adjust the arrangement if the family needs.",
+    "choices": [
+      {
+        "label": "Agree on a short trial with clear hours",
+        "outcome_text": "The family set a short trial and a time to check in. Your child earned a little money while the week needed more planning.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest helping during the holiday instead",
+        "outcome_text": "The school-week routine stayed in place. The shop visit moved to a holiday, when there was more room in the day.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child and relative to plan a schedule",
+        "outcome_text": "Your child and relative discussed what the work would involve. The family considered the schedule before giving an answer.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-school-club-rumour",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "school",
+    "required_trait_tags": [
+      "calm"
+    ],
+    "title": "The club meeting",
+    "setup_text": "Your child says they left a school club meeting because another member was being unfair. The club leader says your child also interrupted before leaving. Both agree the meeting ended badly, but you have heard only a little about what started it. The next meeting is tomorrow.",
+    "choices": [
+      {
+        "label": "Listen to your child before contacting school",
+        "outcome_text": "Your child had time to explain what they remembered. The family still had questions for the club leader.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Arrange a conversation with the club leader",
+        "outcome_text": "The leader and family made time to discuss the meeting. Your child could add their account before a plan for the next session.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child what would make returning possible",
+        "outcome_text": "The conversation focused on what your child needed next. The family planned how to raise the remaining questions at school.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01"
+  },
+  {
+    "slug": "nigeria-preteen-church-memory-follow",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "values",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "Sunday plans grow complicated",
+    "setup_text": "When you were younger parents, you tried alternating between two churches. Your child now has friends in both youth groups, but a special event at each falls on the same Sunday. Relatives are involved in one event; your child has a small role in the other.",
+    "choices": [
+      {
+        "label": "Attend the event with your child’s role",
+        "outcome_text": "Your child kept their place in the programme. The family made time to speak with relatives about missing the other event.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Go to the event with relatives",
+        "outcome_text": "The family spent the day with relatives. Your child spoke with the youth leader about the role they could no longer take.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Ask whether part of each event is possible",
+        "outcome_text": "The family checked the timing before choosing a plan. They saw some of each event, but could not stay for everything.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-baby-worship-service",
+        "choice": 2
+      }
+    ]
+  },
+  {
+    "slug": "nigeria-preteen-school-near-memory-follow",
+    "min_age": 10,
+    "max_age": 12,
+    "category": "school",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "A journey that has changed",
+    "setup_text": "Years ago, you chose the school close to home. Your child now asks to travel to a different school where a close friend is going. They say they want a fresh start; the current school says they are welcome to discuss any concerns. Travel and fees would both change.",
+    "choices": [
+      {
+        "label": "Explore the new school together",
+        "outcome_text": "The family visited and asked about the longer journey and fees. Your child had time to explain what a fresh start meant to them.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Talk to the current school first",
+        "outcome_text": "The family opened a conversation with the current school. Your child’s wish for a change stayed on the table while questions were answered.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Compare the two choices at home",
+        "outcome_text": "The family put travel, costs and your child’s hopes on paper. The decision took longer, and everyone had more to consider.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-preteen-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-choosing-school-distance",
+        "choice": 1
+      }
+    ]
+  }
+]

@@ -81,3 +81,14 @@ test('published content references real earlier choices', async () => {
     assert.ok(source.min_age < event.min_age, `${event.slug} must follow an earlier-age event`);
   }
 });
+
+test('older scene database limit permits detail without widening young scenes', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`CREATE TABLE public.event_templates (min_age smallint, setup_text text NOT NULL CONSTRAINT event_templates_setup_text_check CHECK (char_length(btrim(setup_text)) BETWEEN 1 AND 220));`);
+    await db.exec(await readFile(new URL('../supabase/migrations/202610300006_raise_child_older_scenes.sql', import.meta.url), 'utf8'));
+    await db.query('INSERT INTO public.event_templates VALUES ($1,$2)', [10, 'x'.repeat(480)]);
+    await assert.rejects(db.query('INSERT INTO public.event_templates VALUES ($1,$2)', [10, 'x'.repeat(481)]));
+    await assert.rejects(db.query('INSERT INTO public.event_templates VALUES ($1,$2)', [9, 'x'.repeat(221)]));
+  } finally { await db.close(); }
+});

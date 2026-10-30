@@ -1685,8 +1685,9 @@ with your pick.”
    `202610300002_raise_a_child_talk_it_out.sql` (the split, the two decisions each, the
    lead parent's call), `202610300003_raise_a_child_chat_links.sql` (the link from a
    "Talk it out" message back to its moment), and `202610300005_raise_child_decision_memory.sql`
-   (strict age ranges and family-scoped decision prerequisites) in the SQL Editor — or use
-   `supabase/schema.sql` on a new project. These migrations are safe to rerun. The memory
+   (strict age ranges and family-scoped decision prerequisites), and
+   `202610300006_raise_child_older_scenes.sql` (longer scenes starting at age 10) in the
+   SQL Editor — or use `supabase/schema.sql` on a new project. These migrations are safe to rerun. The memory
    migration adds a column to `event_templates` and updates the picker. Then run
    `supabase/verify-games.sql`: it checks the family tables and the chat links, that the
    temperament and the bonds are unreadable from the app, and that only the nine app RPCs
@@ -1789,7 +1790,8 @@ npm run events:coverage   -- --batch=batch-01
 
 `validate` and `import` refuse a batch on any problem and print every one with its slug and
 field: missing fields, unknown category or tone, `min_age`/`max_age` outside 0–17 or out of
-order, 1 or 5 choices, duplicate labels, `setup_text` over 220 characters, `outcome_text`
+order, 1 or 5 choices, duplicate labels, `setup_text` over 220 characters for events
+starting before age 10 or 480 for events starting at age 10 and above, `outcome_text`
 over 260, unknown child trait keys, effect weights outside −2…2, unknown or contradictory
 trait tags, duplicate slugs, near-duplicate titles or scenes (80% of the words shared), and
 an obvious-word screen for the excluded topics. `import` upserts on `slug`, so re-running a

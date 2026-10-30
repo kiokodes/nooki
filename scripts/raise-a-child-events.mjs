@@ -41,6 +41,7 @@ export const LIMITS = {
   slug: 64,
   title: 80,
   setupText: 220,
+  setupTextOlder: 480,
   outcomeText: 260,
   label: 60,
   choicesMin: 2,
@@ -191,8 +192,10 @@ export function validateEvents(events, { knownChildTraits = CHILD_TRAITS, knownP
     else if (title.length > LIMITS.title) add(slug, 'title', `Title is ${title.length} characters; the limit is ${LIMITS.title}.`);
 
     const setup = text(event.setup_text);
+    // Longer scenes are reserved for events that cannot be drawn before age ten.
+    const setupLimit = Number.isInteger(minAge) && minAge >= 10 ? LIMITS.setupTextOlder : LIMITS.setupText;
     if (!setup) add(slug, 'setup_text', 'Missing setup_text.');
-    else if (setup.length > LIMITS.setupText) add(slug, 'setup_text', `setup_text is ${setup.length} characters; the limit is ${LIMITS.setupText}.`);
+    else if (setup.length > setupLimit) add(slug, 'setup_text', `setup_text is ${setup.length} characters; the limit is ${setupLimit}.`);
 
     for (const field of ['required_trait_tags', 'excluded_trait_tags']) {
       const tags = event[field];

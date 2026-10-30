@@ -82,6 +82,13 @@ test('setup_text and titles have character limits', () => {
   assert.ok(problems.some((line) => line.startsWith('setup_text') && line.includes('the limit is 220')));
 });
 
+test('older scenes can carry more context without changing the younger limit', () => {
+  const older = { ...good(), min_age: 10, max_age: 12, setup_text: 'x'.repeat(480) };
+  assert.ok(!validateEvents([older]).some((p) => p.field === 'setup_text'));
+  assert.ok(validateEvents([{ ...older, setup_text: 'x'.repeat(481) }]).some((p) => p.field === 'setup_text'));
+  assert.ok(validateEvents([{ ...older, min_age: 9, setup_text: 'x'.repeat(221) }]).some((p) => p.field === 'setup_text'));
+});
+
 test('effect keys and ranges are checked against the child trait list', () => {
   const unknownTrait = { ...good(), slug: 'unknown-trait', choices: [{ ...good().choices[0], effects: { traits: { sporty: 1 } } }] };
   const badWeight = { ...good(), slug: 'bad-weight', choices: [{ ...good().choices[0], effects: { traits: { kind: 3 } } }] };

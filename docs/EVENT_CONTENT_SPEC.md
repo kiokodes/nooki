@@ -58,7 +58,7 @@ rows and touches nothing else, so a corrected batch is safe to import again.
 | `max_age` | yes | Whole number 0–17, not less than `min_age`. |
 | `category` | yes | One of `home`, `school`, `friends`, `health`, `money`, `values`, `fun`. |
 | `title` | yes | At most 80 characters. A place or a thing, not a lesson. |
-| `setup_text` | yes | At most 220 characters. The scene, in one or two sentences. |
+| `setup_text` | yes | At most 220 characters if `min_age` is under 10; up to 480 if `min_age` is 10 or older. Older scenes can include multiple perspectives and relevant uncertainty. |
 | `choices` | yes | 2 to 4 options. Four is the ceiling; **three is what the game is written for** — two reads as yes or no, and the validator will suggest a third. |
 | `choices[].label` | yes | At most 60 characters. What the parent does, in the parent's voice ("Clean it up together"). |
 | `choices[].outcome_text` | yes | At most 260 characters. Two or three sentences about what the year did. This is the card saved to the album. |
@@ -160,8 +160,11 @@ described as a failure.
 **The child is a person, not a project.** Outcomes are about what the year was like, not
 about what the parents achieved. No "you taught her an important lesson".
 
-**Length is the design.** Setup under 220 characters; each outcome under 260. Short
-sentences. Concrete nouns (a jar, a gate, a map on the wall), not abstractions.
+**Length is the design.** Setups are at most 220 characters for younger children and
+480 when `min_age` is at least 10; each outcome is at most 260. Use the extra space to
+show concrete context and different accounts, not filler. When facts are uncertain,
+make the uncertainty explicit and do not invent an answer in the outcome. Short
+sentences and concrete nouns still matter.
 
 **Culturally flexible.** No specific religion, holiday or school system unless the card
 still works without it. Names, food and homes should fit anywhere.
