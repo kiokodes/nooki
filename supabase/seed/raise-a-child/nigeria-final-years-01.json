@@ -1,0 +1,650 @@
+[
+  {
+    "slug": "nigeria-final-admission-two-cities",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "school",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "Two offers on the table",
+    "setup_text": "Your child has places on two courses: one is nearby and the other is in a different city. The course away is their first choice, but housing and transport would stretch the family budget. A relative offers a room, though the journey to classes would still be long.",
+    "choices": [
+      {
+        "label": "Work out the full cost of each offer",
+        "outcome_text": "The family wrote down fees, travel and housing before choosing. Your child had more information, though neither path was without a cost.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Visit the relative and the distant campus",
+        "outcome_text": "A visit made the room and journey easier to picture. It took time and money before the family could settle on a plan.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Explore the nearby course in more detail",
+        "outcome_text": "Your child asked what the local course could offer. The offer in the other city stayed on the table while the family gathered answers.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-course-family-expectations",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "values",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "The course everyone is discussing",
+    "setup_text": "Your child wants to study a subject they enjoy. An auntie suggests a different course, saying her contacts could help later. Your child appreciates the offer but worries that accepting it would mean spending years on work they do not want. The application date is close.",
+    "choices": [
+      {
+        "label": "Ask the auntie about her offer together",
+        "outcome_text": "Your child heard what help was actually available. The conversation also made space to explain the subject they wanted.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Support your child’s preferred application",
+        "outcome_text": "Your child prepared an application for their preferred subject. The family still needed a practical plan for fees and next steps.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Compare both paths before applying",
+        "outcome_text": "The family looked at costs and possible next steps with your child. A decision had to be made before the deadline.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-paid-work-school-hours",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "money",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The paid opportunity",
+    "setup_text": "A family friend offers your child paid work after school. Your child wants to earn towards a training course, but the suggested hours include the evening journey home and would leave less time for rest. The employer says the schedule could be discussed before anyone agrees.",
+    "choices": [
+      {
+        "label": "Discuss a shorter schedule with the employer",
+        "outcome_text": "The family asked about fewer hours and a clear journey home. Your child could earn less each week but had more room in the schedule.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest starting during the school holiday",
+        "outcome_text": "The work was discussed for a later start. Your child had to wait longer to save, while the school-week routine stayed in place.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child to propose a workable plan",
+        "outcome_text": "Your child prepared questions about hours, travel and pay. The employer had a chance to respond before anyone made a commitment.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-relationship-family-introduction",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "friends",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "Someone important to them",
+    "setup_text": "Your child tells you they are dating someone and would like to invite them to a family meal. One relative believes introductions should wait until the relationship is more serious; your child says meeting at home would feel less secretive. The other person has not yet said whether they feel ready.",
+    "choices": [
+      {
+        "label": "Invite them to a relaxed family meal",
+        "outcome_text": "An invitation went out without treating the meal as a promise about the future. The other person could decide whether they wanted to come.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest meeting briefly before a family meal",
+        "outcome_text": "The first meeting was planned on a smaller scale. A larger family introduction could wait until everyone felt ready.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child how they want the meeting to feel",
+        "outcome_text": "Your child helped plan who would be there and what felt comfortable. The meal took a little longer to arrange.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-holiday-family-visit-or-course",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "home",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The holiday calendar",
+    "setup_text": "The family has planned a visit to grandparents during the school holiday. Your child has been offered a short course on the same dates and says the place may not be offered again. The grandparents have already made preparations and were looking forward to the visit.",
+    "choices": [
+      {
+        "label": "Ask about joining part of the visit",
+        "outcome_text": "The family checked whether the course and a shorter visit could fit. The travel plan became more complicated, but both mattered.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Keep the family visit and ask about another course",
+        "outcome_text": "The visit stayed on the calendar. Your child asked whether another course date or a similar opportunity was available.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Support the course and plan another visit",
+        "outcome_text": "Your child took the course while the family arranged another time with the grandparents. The change needed a conversation with them.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-school-celebration-money",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "money",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "The end-of-school contribution",
+    "setup_text": "Your child’s classmates are planning an end-of-school celebration. Some want to pay for a larger event; others say the suggested amount is too much. Your child wants to be part of it but does not want the family’s finances discussed in the class group. A decision is needed this week.",
+    "choices": [
+      {
+        "label": "Agree on an amount privately with your child",
+        "outcome_text": "Your child knew what the family could contribute without sharing the details. The class still had to agree on the event.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the organisers about flexible contributions",
+        "outcome_text": "A private question opened a discussion about how the event could include more people. The final plan took a little longer.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Help plan a simpler gathering with friends",
+        "outcome_text": "Your child explored another way to mark the occasion. It was smaller than the first plan, but there was room for friends.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-shared-family-account",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "values",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "A post about the family",
+    "setup_text": "A cousin posts a video from a family celebration. Your child appears in it and asks for the post to come down; the cousin says they shared it because everyone seemed happy to be filmed. Some relatives have already forwarded it, and your child wants to handle the conversation themselves.",
+    "choices": [
+      {
+        "label": "Support your child in speaking to the cousin",
+        "outcome_text": "Your child spoke to the cousin with support nearby. The family also discussed what could be done about copies already shared.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the cousin privately to remove the post",
+        "outcome_text": "The family contacted the cousin away from the larger group. Your child still had a say in what was asked.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Plan the request together before contacting anyone",
+        "outcome_text": "The family worked out what to ask and who would speak. The conversation happened later, with the forwarding still to address.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-friend-falling-out-incomplete",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "friends",
+    "required_trait_tags": [
+      "calm"
+    ],
+    "title": "The friend who stopped calling",
+    "setup_text": "Your child comes home quiet after a disagreement with a close friend. They say the friend cancelled plans without explaining; the friend’s parent mentions that their child felt pressured to share more than they wanted. You do not know what was said between them, and your child asks you not to contact the other family.",
+    "choices": [
+      {
+        "label": "Listen without contacting the other family",
+        "outcome_text": "Your child had room to describe what they were ready to share. The friend’s side remained something the two of them might discuss.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask what support would be useful",
+        "outcome_text": "Your child could ask for advice, company or time. The family did not need to decide who was right that evening.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Offer to help prepare a conversation",
+        "outcome_text": "Your child thought about what they wanted to say and hear. Whether to have the conversation remained their choice.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-travel-for-interview",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "school",
+    "required_trait_tags": [
+      "anxious"
+    ],
+    "title": "A trip for an interview",
+    "setup_text": "Your child is invited to an interview for a training programme in another city. They want to travel with a classmate, whose family has offered to help arrange the journey. You have not met the classmate’s family, and the interview is on a workday that is difficult for both parents.",
+    "choices": [
+      {
+        "label": "Discuss the travel plan with the other family",
+        "outcome_text": "The families compared routes, costs and contact details. Your child was included in the planning before the journey was agreed.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask about a different interview time",
+        "outcome_text": "The programme considered the request while the family looked at travel options. Your child had to wait for an answer.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Arrange for a trusted relative to travel along",
+        "outcome_text": "A relative made room for the journey. The family adjusted its plans and talked with your child about what support would feel comfortable.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-family-faith-personal-choice",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "values",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "The place in the programme",
+    "setup_text": "Your family usually attends a place of worship together. Your child says they would rather not take a speaking role in an upcoming programme, although a relative has already told the organiser they will do it. Your child is willing to attend, but wants to decide what participation means for them.",
+    "choices": [
+      {
+        "label": "Tell the organiser your child will not speak",
+        "outcome_text": "The speaking role was offered to someone else. Your child and the relative had a conversation about the promise that had already been made.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Help your child speak to the relative",
+        "outcome_text": "Your child explained their wishes with support nearby. The organiser waited while the family worked out a response.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Ask about another way to take part",
+        "outcome_text": "The family asked whether a different role was available. Your child could consider it without promising to speak.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-family-contribution-after-work",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "home",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "The first earnings",
+    "setup_text": "Your child has earned some money from a short holiday job and wants to save for a device needed for a course. A relative suggests contributing some of it to a family expense. Your child says they want to help but had already made a savings plan; the expense can be discussed without an immediate deadline.",
+    "choices": [
+      {
+        "label": "Let your child keep the savings plan",
+        "outcome_text": "The money stayed set aside for the device. The family discussed other ways to meet the shared expense.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child what contribution feels possible",
+        "outcome_text": "Your child considered a contribution alongside the savings goal. The device would take longer to buy if money went elsewhere.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Discuss the expense and the course costs together",
+        "outcome_text": "The family laid out both needs without deciding on an amount in advance. Your child had a voice in what happened to the earnings.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-leaving-home-keys",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "home",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "What to take along",
+    "setup_text": "Your child may move away for a course and has started sorting their room. They want to leave some things untouched for when they visit; the family has been hoping to use the space while they are away. No date is final, but everyone has started making plans for the room.",
+    "choices": [
+      {
+        "label": "Agree on space that stays theirs",
+        "outcome_text": "A part of the room was kept for visits and belongings. The family found another way to use the remaining space.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Plan a shared use of the room",
+        "outcome_text": "The family discussed how the room could serve different needs. Your child helped choose what would be kept and where.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Wait until the move is confirmed",
+        "outcome_text": "The room stayed as it was while the course plans were unsettled. Everyone had to wait longer to make changes.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01"
+  },
+  {
+    "slug": "nigeria-final-follow-design-workshop-future",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "school",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "A portfolio from the workshop",
+    "setup_text": "Earlier, your child tried a design workshop for a set period. Now they want to use work from that time in an application to a creative programme. A relative offers to introduce them to someone in the field, but your child worries the work is not ready to show.",
+    "choices": [
+      {
+        "label": "Ask what support would help with the portfolio",
+        "outcome_text": "Your child chose where to begin reviewing the work. The introduction could happen later, when they felt ready.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Arrange a conversation without sharing work yet",
+        "outcome_text": "The family asked whether the contact could talk about the field first. Your child kept control of when to show the portfolio.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Help plan time to finish the application",
+        "outcome_text": "The family made room in the week for the portfolio and deadline. Your child still had to decide what to include.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-teen-after-school-apprenticeship",
+        "choice": 1
+      }
+    ]
+  },
+  {
+    "slug": "nigeria-final-follow-church-youth-commitment",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "values",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "Another Sunday decision",
+    "setup_text": "Earlier, your child kept a commitment to a church youth event when it conflicted with a team meeting. A new programme now overlaps with a course they are considering. Your child says the earlier choice mattered, but they are not sure it should decide every Sunday from now on.",
+    "choices": [
+      {
+        "label": "Ask your child what matters most this time",
+        "outcome_text": "Your child had room to compare the two commitments without treating the earlier choice as a permanent rule. The organisers still needed an answer.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Talk to both organisers about the dates",
+        "outcome_text": "The family asked what flexibility existed on each side. It took a few conversations before a plan could be made.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Support your child in choosing the course",
+        "outcome_text": "Your child spoke with the programme organiser about stepping back. The new course had time in the calendar, and the earlier commitment was still remembered.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-teen-church-service-or-team",
+        "choice": 1
+      }
+    ]
+  },
+  {
+    "slug": "nigeria-final-follow-near-school-path",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "school",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "The next journey",
+    "setup_text": "Years ago, the family chose the school close to home. Now your child is looking at a programme in another city. They say leaving would be exciting and frightening; a relative says staying nearby worked before. The family has not yet seen the programme’s costs or housing arrangements.",
+    "choices": [
+      {
+        "label": "Gather the costs and housing details",
+        "outcome_text": "The family asked for information before deciding. Your child could talk about both the excitement and the worry of leaving.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Explore local programmes as well",
+        "outcome_text": "A local option joined the list without taking the distant one away. Comparing them took more time.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the relative and child to share their views",
+        "outcome_text": "Both had room to explain what staying and leaving meant to them. The financial questions remained for the family to investigate.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-final-years-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-choosing-school-distance",
+        "choice": 1
+      }
+    ]
+  }
+]
