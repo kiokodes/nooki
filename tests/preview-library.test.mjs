@@ -34,7 +34,8 @@ test('design preview: every game is a chip in the rail, Chess included', async (
     const rail = document.querySelector('.game-rail');
     assert.ok(rail, 'the preview shows the game rail');
     const chips = [...rail.querySelectorAll('[data-preview-game]')].map((chip) => chip.dataset.previewGame);
-    assert.deepEqual(chips, ['snake', 'chess', 'tetris', 'word'], 'every duel is a chip, in the app order');
+    assert.deepEqual(chips, ['snake', 'chess', 'tetris', 'word', 'truth-or-dare'],
+      'every chip is here, in the app order');
     const chessChip = rail.querySelector('[data-preview-game="chess"]');
     assert.ok(chessChip, 'Chess is one of them');
     assert.equal(chessChip.textContent.includes('Chess'), true);
@@ -79,6 +80,36 @@ test('design preview: every game is a chip in the rail, Chess included', async (
     assert.ok(document.querySelector('.word-timer'), "this player's clock starts independently");
     assert.ok(document.body.textContent.includes('Ana: not started'), 'the sample partner may still be unstarted');
     assert.ok(settingsAgain, 'the settings page remains the stable entry point after leaving a run');
+
+    // Truth or Dare and Raise a Child ride the same rail, wearing the app's own panels:
+    // the shared round opens from the chip, and the placeholder cannot be started.
+    await act(async () => document.querySelector('[data-preview-game="truth-or-dare"]').click());
+    const todPanel = document.querySelector('[data-game="truth-or-dare"]');
+    assert.ok(todPanel, 'Truth or Dare has a panel in the rail, not a card of its own');
+    assert.equal(document.querySelector('.tod-view'), null, 'and does not open until asked');
+    await act(async () => buttonText('Choose a theme →').click());
+    assert.ok(document.querySelector('.tod-view'), 'the shared round opens from that panel');
+    assert.equal(document.querySelectorAll('.tod-theme-option').length, 3, 'with the three themes');
+    assert.equal(document.querySelector('.tod-theme-option.is-locked')?.textContent.includes('Spicy'), true, 'Spicy still locked');
+    await act(async () => buttonText('← All games').click());
+    assert.ok(document.querySelector('[data-game="truth-or-dare"]'), 'and comes back to the rail');
+
+    // Raise a Child is not a chip: it is its own card, above the ongoing matches, and the
+    // preview wears the app's card so the two cannot drift apart.
+    assert.equal(document.querySelector('[data-preview-game="raise-a-child"]'), null, 'the placeholder is not a chip');
+    const placeholder = document.querySelector('[data-card="raise-a-child"]');
+    assert.ok(placeholder, 'Raise a Child has a card of its own');
+    assert.equal(placeholder.querySelector('h2').textContent.trim(), 'Raise a Child');
+    assert.equal(placeholder.querySelectorAll('p').length, 0, 'the card is the name and nothing else');
+    assert.deepEqual(
+      [...placeholder.querySelectorAll('button')].map((item) => item.disabled),
+      [true],
+      'there is nothing to start in a game that has no rules yet',
+    );
+    assert.ok(
+      placeholder.compareDocumentPosition(document.querySelector('[data-ongoing-games]')) & 4,
+      'the placeholder sits above the ongoing matches',
+    );
   } finally {
     await act(async () => root.unmount());
     await server.close();

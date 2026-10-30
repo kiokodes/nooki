@@ -17,6 +17,10 @@ import { PreviewTetris } from './PreviewTetris';
 import { PreviewWordWheel } from './PreviewWordWheel';
 import { PreviewEpistles } from './PreviewEpistles';
 import { ChessDuel } from '../components/games/ChessDuel';
+import { TruthOrDare } from '../components/games/TruthOrDare';
+import { TruthOrDarePanel, RaiseAChildCard } from '../components/games/LibraryPanels';
+import { TRUTH_OR_DARE_ENTRY, RAISE_A_CHILD_ENTRY } from '../lib/gameLibrary';
+import { usePreviewTruthOrDare } from './usePreviewTruthOrDare';
 import { OngoingGames } from '../components/games/OngoingGames';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
 import { HomeView } from '../components/home/HomeView';
@@ -112,7 +116,17 @@ const PRESETS: Preset[] = [
 ];
 
 type PreviewTab = 'home' | 'chat' | 'games' | 'epistles';
-type PreviewGame = 'snake' | 'chess' | 'tetris' | 'word';
+const PREVIEW_TABS: PreviewTab[] = ['home', 'chat', 'games', 'epistles'];
+
+/**
+ * The tab the page opens on: Home, unless the URL asks for another one
+ * (`/preview.html?tab=games`), so a review can link straight to the surface in question.
+ */
+function startingTab(): PreviewTab {
+  const asked = new URLSearchParams(window.location.search).get('tab');
+  return PREVIEW_TABS.find((tab) => tab === asked) ?? 'home';
+}
+type PreviewGame = 'snake' | 'chess' | 'tetris' | 'word' | 'truth-or-dare';
 
 /**
  * Today's decision on the Home card, one stage at a time: the control above the phone
@@ -138,6 +152,8 @@ const PREVIEW_GAMES: { id: PreviewGame; icon: string; name: string }[] = [
   { id: 'chess', icon: '♞', name: 'Chess' },
   { id: 'tetris', icon: '🧱', name: 'Tetris Duel' },
   { id: 'word', icon: '🔤', name: 'Word Wheel' },
+  // Truth or Dare is the last chip, in the app's order, wearing the app's own panel.
+  { id: 'truth-or-dare', icon: TRUTH_OR_DARE_ENTRY.icon, name: TRUTH_OR_DARE_ENTRY.name },
 ];
 
 interface PreviewMessage extends ChatEntry {
@@ -259,9 +275,12 @@ export const AppPreview = () => {
   const [partnerOnline, setPartnerOnline] = useState(true);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-  const [tab, setTab] = useState<PreviewTab>('home');
+  const [tab, setTab] = useState<PreviewTab>(startingTab);
   // Which duel the Games tab is showing: the preview has both, one at a time.
   const [previewGame, setPreviewGame] = useState<PreviewGame>('tetris');
+  // Truth or Dare is played out here the way the other duels are: its chip's panel is the
+  // real panel, and the round behind it is sample state that never touches a backend.
+  const [previewTruthOrDareOpen, setPreviewTruthOrDareOpen] = useState(false);
   // How many letters Ana has sealed for this phone: the mailbox's number, and the
   // envelope the epistles preview delivers when it is opened.
   const [epistleNudge, setEpistleNudge] = useState(0);
@@ -333,6 +352,7 @@ export const AppPreview = () => {
     created_at: NOW,
   };
   const profile = savedProfile ?? presetProfile;
+  const previewTruthOrDare = usePreviewTruthOrDare({ userId: profile.id, partnerId: 'preview-ana' });
   const partner: Profile = {
     id: 'preview-ana',
     couple_id: couple.id,
@@ -600,6 +620,9 @@ export const AppPreview = () => {
                   <span className="games-eyebrow">A little lovers rivalry</span>
                   <h1 style={{ fontSize: '1.6rem', margin: '6px 0 0', color: tokens.colors.textPrimary }}>Play together</h1>
                 </header>
+                {/* The next game's seat sits where a game of its own lives: above the
+                    ongoing matches, not as a chip in the rail. */}
+                <RaiseAChildCard entry={RAISE_A_CHILD_ENTRY} />
                 <OngoingGames
                   slides={[
                     { id: 'sample-tetris', name: 'Tetris Duel', waitingOn: 'me', statusLine: 'Your move' },
@@ -636,7 +659,21 @@ export const AppPreview = () => {
                           ? <PreviewTetris partnerName={partner.name} />
                           : previewGame === 'word'
                             ? <PreviewWordWheel userId={profile.id} partnerId={partner.id} partnerName={partner.name} />
-                            : <PreviewSnake partnerName={partner.name} />}
+                            : previewGame === 'truth-or-dare'
+                              ? (previewTruthOrDareOpen
+                                ? <TruthOrDare
+                                    game={previewTruthOrDare}
+                                    userId={profile.id}
+                                    partnerName={partner.name}
+                                    onExit={() => setPreviewTruthOrDareOpen(false)}
+                                  />
+                                : <TruthOrDarePanel
+                                    entry={TRUTH_OR_DARE_ENTRY}
+                                    round={previewTruthOrDare.snapshot?.round ?? null}
+                                    ready
+                                    onOpen={() => setPreviewTruthOrDareOpen(true)}
+                                  />)
+                              : <PreviewSnake partnerName={partner.name} />}
                     </div>
                   </div>
                 </section>
@@ -933,7 +970,9 @@ export const AppPreview = () => {
                 ? 'Tetris Duel preview · played out on this page, no backend · the real duel is scored by the database'
                 : previewGame === 'word'
                   ? 'Word Wheel preview · sample wheel, played on this page · the real round is timed and scored by the database'
-                  : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
+                  : previewGame === 'truth-or-dare'
+                    ? 'Truth or Dare preview · sample prompts, Ana joins a beat after you · the real room is refereed by the database'
+                    : 'Snake Duel preview · played out on this page, no backend · the real duel is scored by the database')
             : tab === 'epistles'
               ? 'Epistles preview · the real experience over sample letters · write, seal, open, and let Ana send you one'
               : 'Home preview · sample data only · tap the calendar icon, or switch to Chat below'}

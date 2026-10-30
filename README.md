@@ -579,7 +579,10 @@ nothing about it is instant except the arrival.
 
 - **The life of a letter.** An author writes on the writing desk (serif type, a dateline
   naming their own town, an optional title, a word counter) and the draft autosaves as
-  they write — a letter is too heavy to lose to a closed app. Sealing is a ceremony, not a
+  they write — a letter is too heavy to lose to a closed app. The letter is never signed
+  for them: the last line is theirs to write — *love, Ana*, *always, your Angel*, whatever
+  nickname the two of them use — so `LetterPaper` prints the dateline, the optional title
+  and their words, and nothing after them. Sealing is a ceremony, not a
   button: read it once more exactly as the partner will see it, choose *when it may be
   opened* (as soon as they like, or a chosen day — an anniversary letter waits sealed with
   a countdown), then press the wax, which carries the writer's initial the way a signet
@@ -1384,7 +1387,8 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
 
 ### Truth or Dare
 
-Truth or Dare lives in the Games tab and uses a couple-scoped room with server-refereed
+Truth or Dare lives in the Games tab — as one chip in the game rail, beside the duels
+rather than as its own card on the tab — and uses a couple-scoped room with server-refereed
 turns and Supabase Realtime updates. Both partners tap **I’m in** for each round. Flirty
 requires both to meet 18+, using a stored profile date of birth when available and
 otherwise a one-time minimum-age confirmation; only the confirmed age tier is stored, and
@@ -1435,13 +1439,25 @@ the app keeps that theme unavailable.
   is local and never affects multiplayer scores.
 - **The library is a carousel, not a scroll.** The game titles sit in a rail at the top
   (Rock Paper Scissors → Snake → Chess → Sudoku → Tetris → Connect Four → Dash → Word
-  Wheel) and only the chosen game's rules, settings and start button sit under it. Tap a
-  title, use the arrow keys, or swipe the card sideways to walk the rail; a swipe that
-  ends on a button is never mistaken for a tap on it. Adding a game means adding one entry
-  to `GAMES` and one panel — the rail, the focus order and the swipe come for free.
-- **The Games tab is two things.** An **Ongoing games** card, always showing how many
-  games are open, holding one swipe per live match at a single card's height; and the
-  game catalogue carousel beneath it. Nothing else sits on the tab. A match waiting on
+  Wheel → Truth or Dare) and only the chosen game's rules, settings and start button sit
+  under it. Tap a title, use the arrow keys, or swipe the card sideways to walk the rail;
+  a swipe that ends on a button is never mistaken for a tap on it. Adding a game means
+  adding one entry to `GAMES` and one panel — the rail, the focus order and the swipe come
+  for free.
+- **Truth or Dare is a chip, not a card above the rail.** Its panel names any open round
+  and opens the shared round (or the theme picker) from there; it is the same entry point
+  as Sudoku's. `src/lib/gameLibrary.ts` holds the rail order: the duels from `GAMES`
+  followed by Truth or Dare, the one entry there that is not a duel row.
+- **Raise a Child is a reserved seat, and its own card.** It sits above the Ongoing games
+  card — the place a game of its own takes on this tab — and holds nothing but the game's
+  name and a disabled **Coming soon** button, on a dashed edge. No rules, no promise, no
+  way to start it: it is deliberately kept out of the rail because it is the one thing on
+  the tab that is not a game yet. `RaiseAChildCard` in
+  `components/games/LibraryPanels.tsx` is where it will start when its rules exist.
+- **The Games tab is three things.** The **Raise a Child** seat described above; an
+  **Ongoing games** card, always showing how many games are open, holding one swipe per
+  live match at a single card's height; and the game catalogue carousel beneath it.
+  Nothing else sits on the tab. A match waiting on
   you wears a 🔔 bell and says **Your move**; a match waiting on your partner says
   **Waiting for {partner}** and wears no bell, so you can see at a glance which game to
   open. A duel whose two runs are in — and every settled match — leaves the card

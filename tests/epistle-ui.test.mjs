@@ -417,3 +417,34 @@ test('epistle UI: a letter past the limit is refused and said so, never quietly 
     dom.window.close();
   }
 });
+
+// A couple does not sign letters the way a form does. "love, Ana", "always, your Angel",
+// a nickname only the two of them use — the last line is theirs to write, so the paper
+// must not paste a name on after it.
+test('epistle UI: the letter is never signed for the writer', async () => {
+  const dom = setupDom();
+  const { default: React, act } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
+  const root = createRoot(document.getElementById('root'));
+  try {
+    const { LetterPaper } = await server.ssrLoadModule('/src/components/epistle/LetterPaper.tsx');
+    await act(async () => {
+      root.render(React.createElement(LetterPaper, {
+        letter: letter({ title: 'The long way home', body: 'My dearest Alice,\n\nThe distance is only geography.\n\nlove, your Angel' }),
+        dateline: 'Lagos, Nigeria · 19 October 2026',
+      }));
+    });
+    const paper = document.querySelector('[data-component="epistle-letter"]');
+    assert.ok(paper, 'the paper renders');
+    assert.equal(document.querySelector('.epistle-letter-sign'), null, 'no sign-off line is added');
+    assert.equal(paper.textContent.includes('— Bob'), false, 'and certainly not the writer\'s account name');
+    assert.match(paper.textContent, /love, your Angel/, 'the way they closed it is kept exactly as written');
+    assert.match(paper.textContent, /The long way home/);
+    assert.match(paper.textContent, /Sealed /, 'the sealed line under the words is still there');
+  } finally {
+    await act(async () => root.unmount());
+    await server.close();
+    dom.window.close();
+  }
+});

@@ -10,6 +10,9 @@
 .games-view button:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; }
 .games-view .game-back { background:transparent; padding-left:0; margin-bottom:12px; }
 .game-icon { font-size:1.8rem; letter-spacing:8px; }
+/* A card whose icon is a single glyph (Truth or Dare's heart, the child) needs no
+   letter spacing, or the glyph drifts left of the heading. */
+.game-icon-glyph { letter-spacing:0; }
 .games-view fieldset { border:0; padding:0; margin:16px 0; display:flex; flex-wrap:wrap; gap:8px; }
 .games-view legend { font-size:.75rem; font-weight:700; flex:0 0 100%; margin:0 0 8px; }
 .games-view [aria-pressed] { background:#f4edf5; }
@@ -40,6 +43,9 @@
 @keyframes game-panel-in { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:none; } }
 @keyframes game-panel-in-prev { from { opacity:0; transform:translateX(-16px); } to { opacity:1; transform:none; } }
 .game-library-hint { margin:0!important; font-size:.72rem; }
+/* The reserved seat for the next game reads as unfinished at a glance: a dashed edge the
+   way the locked Spicy card does. */
+.raise-a-child-card { border-style:dashed; border-color:#e6d8e6; background:#fffdff; }
 @media (prefers-reduced-motion:reduce) {
   .game-panel { animation:none; }
   .game-panel-track { transition:none; }
