@@ -99,8 +99,8 @@ test('design preview: every game is a chip in the rail, Chess included', async (
     assert.equal(document.querySelector('[data-preview-game="raise-a-child"]'), null, 'the placeholder is not a chip');
     const placeholder = document.querySelector('[data-card="raise-a-child"]');
     assert.ok(placeholder, 'Raise a Child has a card of its own');
-    assert.ok(placeholder.textContent.includes('Raise a Child'));
-    assert.ok(placeholder.textContent.includes('still being written'), 'the card is honest about being a placeholder');
+    assert.equal(placeholder.querySelector('h2').textContent.trim(), 'Raise a Child');
+    assert.equal(placeholder.querySelectorAll('p').length, 0, 'the card is the name and nothing else');
     assert.deepEqual(
       [...placeholder.querySelectorAll('button')].map((item) => item.disabled),
       [true],

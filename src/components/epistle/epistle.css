@@ -1421,17 +1421,6 @@ p.epistle-reading-reply {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.epistle-letter-sign {
-  margin: 0;
-  min-height: var(--ep-rule);
-  line-height: var(--ep-rule);
-  font-family: 'Lora', Georgia, serif;
-  font-style: italic;
-  font-size: 0.92rem;
-  color: var(--ep-ink-soft);
-  animation: epistle-ink-appear 800ms ease 1100ms both;
-}
-
 /* Sealed and opened dates, for the keepsake shelf's quiet honesty. */
 .epistle-seal-line {
   margin: 0;
@@ -1572,15 +1561,13 @@ p.epistle-reading-reply {
   .epistle-paper,
   .epistle-letter-paper,
   .epistle-letter-body p,
-  .epistle-letter-sign,
   .epistle-stage-caption,
   .epistle-sealed-env,
   .nooki-mailbox-hint {
     animation: none !important;
   }
 
-  .epistle-letter-body p,
-  .epistle-letter-sign {
+  .epistle-letter-body p {
     opacity: 1 !important;
   }
 

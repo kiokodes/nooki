@@ -23,7 +23,6 @@ export const RAISE_A_CHILD_ENTRY = {
   kind: 'raise-a-child',
   name: 'Raise a Child',
   icon: '👶',
-  description: 'Grow a little one together — a game about the everyday choices of raising a family.',
 } as const;
 
 /** The shared-round chip's entry. */

@@ -5,8 +5,6 @@ import type { Epistle } from '../../types/database';
 export interface LetterPaperProps {
   /** The letter — or just the words of one, for the read-it-once-more preview. */
   letter: Pick<Epistle, 'id' | 'title' | 'body' | 'sealed_at' | 'opened_at'>;
-  /** The writer's name, for the sign-off line. */
-  senderName: string;
   /** The dateline above the letter: where it was written, and the day. */
   dateline?: string | null;
   /** True for the once-only reading, where the ink arrives paragraph by paragraph. */
@@ -21,15 +19,18 @@ export interface LetterPaperProps {
 /**
  * The letter itself, on its paper — the same sheet in the preview before sealing,
  * in the reading ceremony, and in the keepsakes. No bubbles, no chrome: a dateline,
- * an optional name, the words, and who they came from.
+ * an optional name, and the words.
  *
- * Every line of it sits on the paper's ruling: the dateline, the name, each line of
- * ink and the sign-off are all one ruling tall, and the gaps between them are whole
- * rulings too — so the words never drift off their lines, however long the letter.
+ * The letter is never signed for the writer. A couple closes with whatever they like —
+ * "love, Ana", "always, your Angel", a nickname only the two of them use — so the last
+ * line of the letter belongs to them, not to a name the app pasted on.
+ *
+ * Every line of it sits on the paper's ruling: the dateline, the name and each line of
+ * ink are one ruling tall, and the gaps between them are whole rulings too — so the
+ * words never drift off their lines, however long the letter.
  */
 export const LetterPaper: React.FC<LetterPaperProps> = ({
   letter,
-  senderName,
   dateline,
   animate = false,
   showSealLine = true,
@@ -52,7 +53,6 @@ export const LetterPaper: React.FC<LetterPaperProps> = ({
           <p key={index}>{paragraph}</p>
         ))}
       </div>
-      <p className="epistle-letter-sign">— {senderName}</p>
       {/* Sealed and opened dates, for the keepsake shelf's quiet honesty. */}
       {showSealLine && (
         <p className="epistle-seal-line">

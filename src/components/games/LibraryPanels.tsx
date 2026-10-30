@@ -55,8 +55,9 @@ export function TruthOrDarePanel({
 }
 
 /**
- * Raise a Child has no rules yet, so its card says so and offers nothing to start. It sits
- * above the ongoing matches, which is where a game of its own lives on this tab.
+ * Raise a Child has no rules yet, so its card is just the game's name and a Coming soon
+ * button — no rules, no promise, nothing to start. It sits above the ongoing matches,
+ * which is where a game of its own lives on this tab.
  */
 export function RaiseAChildCard({ entry, direction = 'next' }: {
   entry: RaiseAChildEntry;
@@ -68,14 +69,9 @@ export function RaiseAChildCard({ entry, direction = 'next' }: {
     data-direction={direction}
   >
     <div className="game-icon game-icon-glyph" aria-hidden="true">{entry.icon}</div>
-    <h2>{entry.name} <span className="game-soon-chip">In the works</span></h2>
-    <p>{entry.description}</p>
-    <p className="game-hint" id="raise-a-child-note">
-      A placeholder for now: the milestones, the choices and how the two of you raise a
-      little one together are still being written.
-    </p>
+    <h2>{entry.name}</h2>
     <div className="game-actions">
-      <button type="button" disabled aria-describedby="raise-a-child-note">Coming soon</button>
+      <button type="button" disabled>Coming soon</button>
     </div>
   </article>;
 }

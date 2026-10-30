@@ -1066,7 +1066,7 @@ function SealingCeremony({
             <p className="epistle-ceremony-note">
               A letter is given, not sent. This is exactly how {partnerName} will see it.
             </p>
-            <LetterPaper letter={preview} senderName={myName} dateline={dateline} showSealLine={false} replyContext={replyContext} className="epistle-ceremony-paper" />
+            <LetterPaper letter={preview} dateline={dateline} showSealLine={false} replyContext={replyContext} className="epistle-ceremony-paper" />
           </div>
           <div className="epistle-ceremony-foot">
             <button type="button" className="epistle-ghost-button" onClick={onCancel}>Keep writing</button>
@@ -1317,7 +1317,6 @@ function ReadingScreen({
 
         <LetterPaper
           letter={epistle}
-          senderName={senderName}
           dateline={dateline}
           animate={wasJustOpened}
         />

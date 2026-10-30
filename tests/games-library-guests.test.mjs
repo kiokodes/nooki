@@ -68,14 +68,16 @@ test('games tab: Truth or Dare is a chip in the rail and Raise a Child its own c
     assert.ok(chip('truth-or-dare'), 'Truth or Dare is a chip in the rail');
     assert.equal(document.querySelectorAll('[role="tabpanel"]').length, 1, 'the tab still shows one panel at a time');
 
-    // The placeholder sits above the ongoing matches, dashed and unstartable.
+    // The placeholder sits above the ongoing matches: a name and a Coming soon button,
+    // nothing else, dashed and unstartable.
     const placeholder = document.querySelector('[data-card="raise-a-child"]');
-    assert.ok(placeholder.querySelector('h2').textContent.includes('Raise a Child'));
-    assert.ok(placeholder.textContent.includes('still being written'), 'it says the rules are still being written');
+    assert.equal(placeholder.querySelector('h2').textContent.trim(), 'Raise a Child', 'the card is the game\'s name');
+    assert.deepEqual([...placeholder.querySelectorAll('p')], [], 'and carries no placeholder copy');
     assert.equal(placeholder.getAttribute('role'), null, 'it is a card, not a tab panel');
     const comingSoon = placeholder.querySelector('.game-actions button');
     assert.equal(comingSoon.textContent.trim(), 'Coming soon');
     assert.equal(comingSoon.disabled, true, 'there is no way to start a game that has no rules yet');
+    assert.equal(placeholder.querySelectorAll('.game-actions button').length, 1, 'and nothing else to tap');
     assert.ok(
       placeholder.compareDocumentPosition(document.querySelector('[data-ongoing-games]')) & 4,
       'the placeholder sits above the ongoing games',

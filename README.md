@@ -579,7 +579,10 @@ nothing about it is instant except the arrival.
 
 - **The life of a letter.** An author writes on the writing desk (serif type, a dateline
   naming their own town, an optional title, a word counter) and the draft autosaves as
-  they write — a letter is too heavy to lose to a closed app. Sealing is a ceremony, not a
+  they write — a letter is too heavy to lose to a closed app. The letter is never signed
+  for them: the last line is theirs to write — *love, Ana*, *always, your Angel*, whatever
+  nickname the two of them use — so `LetterPaper` prints the dateline, the optional title
+  and their words, and nothing after them. Sealing is a ceremony, not a
   button: read it once more exactly as the partner will see it, choose *when it may be
   opened* (as soon as they like, or a chosen day — an anniversary letter waits sealed with
   a countdown), then press the wax, which carries the writer's initial the way a signet
@@ -1446,11 +1449,11 @@ the app keeps that theme unavailable.
   as Sudoku's. `src/lib/gameLibrary.ts` holds the rail order: the duels from `GAMES`
   followed by Truth or Dare, the one entry there that is not a duel row.
 - **Raise a Child is a reserved seat, and its own card.** It sits above the Ongoing games
-  card — the place a game of its own takes on this tab — with a dashed edge, a note that
-  the milestones and shared decisions are still being written, and no way to start it. It
-  is deliberately kept out of the rail: it is the one thing on the tab that is not a game
-  yet, and `RaiseAChildCard` in `components/games/LibraryPanels.tsx` is where it will
-  start when its rules exist.
+  card — the place a game of its own takes on this tab — and holds nothing but the game's
+  name and a disabled **Coming soon** button, on a dashed edge. No rules, no promise, no
+  way to start it: it is deliberately kept out of the rail because it is the one thing on
+  the tab that is not a game yet. `RaiseAChildCard` in
+  `components/games/LibraryPanels.tsx` is where it will start when its rules exist.
 - **The Games tab is three things.** The **Raise a Child** seat described above; an
   **Ongoing games** card, always showing how many games are open, holding one swipe per
   live match at a single card's height; and the game catalogue carousel beneath it.
