@@ -1,0 +1,602 @@
+[
+  {
+    "slug": "nigeria-teen-late-return-from-rehearsal",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "home",
+    "required_trait_tags": [
+      "calm"
+    ],
+    "title": "The journey after rehearsal",
+    "setup_text": "Your child has joined a school play. Rehearsal ended later than planned, and they arrived home after the time you agreed. Your child says a teacher asked everyone to stay; another parent says their own child left earlier. The next rehearsal is tomorrow, and you have not yet heard from the teacher.",
+    "choices": [
+      {
+        "label": "Ask the teacher about the rehearsal schedule",
+        "outcome_text": "A conversation with the teacher helped the family plan the next journey. What happened that afternoon was still discussed with your child.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Agree on a way to update you if plans change",
+        "outcome_text": "The family made a plan for the next unexpected delay. Your child still wanted the chance to explain the first one.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Arrange a pickup for the next rehearsal",
+        "outcome_text": "The next journey had a different plan. It took time to arrange, and the family kept talking about what independence could look like.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-family-contribution-envelope",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "money",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "The envelope for the family",
+    "setup_text": "A relative is collecting money for a family celebration. Your child wants to contribute from savings set aside for a course; another relative says young people should not have to pay. The celebration matters to your child, but the course registration closes next month.",
+    "choices": [
+      {
+        "label": "Let your child choose an affordable amount",
+        "outcome_text": "Your child contributed a smaller amount and kept some savings for the course. The family still needed to plan for the rest of the fee.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Keep the savings for the course",
+        "outcome_text": "The savings stayed in the envelope for registration. Your child found another way to help with the celebration.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Discuss both plans with your child",
+        "outcome_text": "The family laid out the cost of each plan together. The decision took longer, and your child had room to say why both mattered.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-school-friend-conflicting-accounts",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "friends",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The story after lunch",
+    "setup_text": "Your child says a close friend shared something private at school. The friend says several people already knew and thought it was all right to mention. Your child does not want you to speak to the friend’s parents. You cannot tell from either account who understood what had been agreed.",
+    "choices": [
+      {
+        "label": "Ask your child what support they want",
+        "outcome_text": "Your child chose what kind of help felt useful. The friendship still needed a conversation between the people involved.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Help prepare a conversation with the friend",
+        "outcome_text": "Your child thought about what to say and what they wanted to hear. The friend would have their own account to bring.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Agree on a time to check in again",
+        "outcome_text": "The family left room for your child to decide what to do next. A later check-in kept the door open if support was needed.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-church-service-or-team",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "values",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "Two commitments on Sunday",
+    "setup_text": "Your child promised to help with a church youth event, then made a team that meets at the same time. The youth leader says the programme can be adjusted if they know soon; the coach says the team relies on regular attendance. Your child wants both and is waiting for your advice.",
+    "choices": [
+      {
+        "label": "Keep the youth event commitment",
+        "outcome_text": "Your child stayed on the church programme and spoke with the coach about the conflict. The team meeting went ahead without them.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Attend the team meeting",
+        "outcome_text": "Your child spoke to the youth leader in time for the programme to change. The team had their company that Sunday.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Ask both leaders about a workable schedule",
+        "outcome_text": "Two conversations opened up possible arrangements. It took longer to settle the calendar, and neither commitment could be taken for granted.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-parent-reads-school-chat",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "values",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The message on the shared screen",
+    "setup_text": "Your child shows you a school group chat to explain why a class trip is delayed. Another message appears from a friend about a separate disagreement. Your child closes the chat and asks you not to ask about it. You do not know the rest of the conversation or whether your child was involved.",
+    "choices": [
+      {
+        "label": "Respect the boundary and check in later",
+        "outcome_text": "The chat stayed private. A later check-in gave your child room to ask for help without having to show every message.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask if they want help with the disagreement",
+        "outcome_text": "Your child could say what help, if any, would be useful. The family did not need to settle the disagreement that evening.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Talk about privacy on shared devices",
+        "outcome_text": "The family discussed what happens when someone sees an unexpected message. Your child still had a choice about what to share.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-after-school-apprenticeship",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "school",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "A place at the design workshop",
+    "setup_text": "A family friend offers your child a place at a weekend design workshop. It costs more than the usual activities and takes two buses to reach. Your child has been making designs at home for months; a relative thinks the time would be better spent on extra school lessons.",
+    "choices": [
+      {
+        "label": "Try the workshop for a set period",
+        "outcome_text": "The family arranged a short trial and the journeys that came with it. Another expense had to wait while your child explored the workshop.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Look for a closer or cheaper workshop",
+        "outcome_text": "The family searched locally before committing to the journey. Your child waited longer to begin, and the budget had more room.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Plan a home project alongside lessons",
+        "outcome_text": "Your child kept making designs at home while the family arranged learning time. The studio offer remained something to consider later.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-visiting-relative-closed-door",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "home",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "The closed bedroom door",
+    "setup_text": "A cousin staying for the holidays walks into your child’s room without knocking. Your child asks for the door to be kept closed; the cousin says they were looking for a charger and did not know the rule. The adults are preparing dinner, and neither child wants a long family meeting.",
+    "choices": [
+      {
+        "label": "Agree on a knocking rule with both children",
+        "outcome_text": "The children settled on a way to ask before entering. The charger still needed a home everyone could find.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Make a shared place for borrowed things",
+        "outcome_text": "A basket outside the rooms made chargers easier to find. The family also talked briefly about what privacy meant during the visit.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Give them time to settle it together",
+        "outcome_text": "The adults stayed available while the cousins talked. Dinner started a little later, and both children had room to explain.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-friend-event-transport",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "friends",
+    "required_trait_tags": [
+      "anxious"
+    ],
+    "title": "Getting home from the party",
+    "setup_text": "Your child is invited to a friend’s birthday gathering. Another family offers a lift home, but you have not met the driver. Your child says checking every detail in front of friends would be embarrassing. The host has shared a time and address, and needs an answer today.",
+    "choices": [
+      {
+        "label": "Contact the host privately about the journey",
+        "outcome_text": "The adults exchanged the travel details away from the group chat. Your child knew the family had checked before giving an answer.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Arrange your own pickup",
+        "outcome_text": "Your child could attend with a familiar journey home. The family rearranged its evening to manage the pickup.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Plan the journey together with your child",
+        "outcome_text": "Your child helped make the calls and agree on a return plan. It took a little longer before the host got an answer.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-meal-budget-unexpected-guest",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "money",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "One more person for dinner",
+    "setup_text": "Your child invites a friend to dinner without asking first. The week’s food has already been planned, and your child says the invitation mattered because the friend was having a difficult day. You have not heard from the friend, and there is little time before they arrive.",
+    "choices": [
+      {
+        "label": "Welcome the friend and adjust the meal",
+        "outcome_text": "The family made the meal stretch with what was available. Later, they talked about how to plan invitations together.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child to help plan with what is available",
+        "outcome_text": "Your child joined the dinner preparations and saw what was already in the kitchen. The invitation stayed, with a simpler meal.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest a shorter visit before dinner",
+        "outcome_text": "The friends had time together before the meal. The family made another plan for sharing food when there was more notice.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-school-leadership-dispute",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "school",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "The list for the committee",
+    "setup_text": "Your child says they were left off a school committee list despite being asked to help plan the event. A teacher says the first list contains only meeting organisers and more names may follow. Your child wants to withdraw their help, but the event is next week.",
+    "choices": [
+      {
+        "label": "Help your child ask what the list means",
+        "outcome_text": "Your child asked about the list before deciding whether to continue. The teacher explained what was known and what was still being planned.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Support taking a break from the planning",
+        "outcome_text": "Your child stepped back while considering what felt fair. The committee had to rearrange some work for the coming week.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest agreeing on a role before continuing",
+        "outcome_text": "Your child and the organisers discussed what help was expected. The plan took another conversation, but the role became clearer.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-career-talk-at-family-gathering",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "values",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "The question at lunch",
+    "setup_text": "At a family lunch, an uncle asks what your child wants to do after school. Your child mentions an interest in film; the uncle suggests a different path with a steadier income. Later your child says they felt dismissed, while the uncle says he was trying to be helpful.",
+    "choices": [
+      {
+        "label": "Ask your child what they want you to do",
+        "outcome_text": "Your child had space to say whether they wanted support or a private conversation. The family did not have to settle a career at lunch.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Invite a conversation with the uncle",
+        "outcome_text": "Your child and uncle each had a chance to explain what they meant. They did not need to reach the same conclusion that day.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Explore the interest and practical paths together",
+        "outcome_text": "The family looked for information about the work and its costs. Your child’s interest stayed in the conversation alongside practical questions.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-friend-group-event-budget",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "fun",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "The matching outfits",
+    "setup_text": "Your child’s friends want matching outfits for a school event. The contribution is more than your family planned to spend, and your child is worried about being the only one dressed differently. Another parent says a simpler outfit might be possible, but the group has not discussed it yet.",
+    "choices": [
+      {
+        "label": "Ask the group about a lower-cost option",
+        "outcome_text": "The families discussed what could be made or borrowed. The plan took another round of messages, and not everyone wanted the same thing.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Set a budget and let your child help choose",
+        "outcome_text": "Your child helped look for something within the agreed amount. It was not the first outfit the group had imagined.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Use something already at home",
+        "outcome_text": "The family worked with what was in the wardrobe. Your child talked with friends about how it could fit the group’s plan.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01"
+  },
+  {
+    "slug": "nigeria-teen-follow-child-phone-privacy",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "values",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The phone conversation continues",
+    "setup_text": "Earlier, your family discussed privacy on the shared phone. Now your child has their own school group chat and wants you to stop checking it altogether. A teacher recommends that families agree on online boundaries; your child says trust should include private conversations.",
+    "choices": [
+      {
+        "label": "Agree on boundaries together",
+        "outcome_text": "The family revisited its earlier conversation and wrote down what privacy and asking for help would mean now. They planned to review it later.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      },
+      {
+        "label": "Keep some agreed check-ins for now",
+        "outcome_text": "The family chose a limited check-in arrangement. Your child knew what would be checked and could discuss whether it still felt fair.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Give the chat privacy and set a support plan",
+        "outcome_text": "The group chat stayed private. The family agreed how your child could ask for help if a conversation became difficult.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-preteen-shared-phone-message",
+        "choice": 3
+      }
+    ]
+  },
+  {
+    "slug": "nigeria-teen-follow-school-near-future",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "school",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "Looking beyond the familiar gate",
+    "setup_text": "Earlier, you chose the school close to home. Your child is now curious about a programme farther away that offers an activity they love. A teacher at the current school offers to help find local opportunities too. Both paths would take planning, and you have not compared their costs.",
+    "choices": [
+      {
+        "label": "Find out more about the distant programme",
+        "outcome_text": "The family asked about fees and travel before making a decision. Your child had a chance to describe what drew them to the programme.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Explore the local opportunities first",
+        "outcome_text": "The teacher helped the family look nearby. The distant programme stayed on the list while everyone gathered information.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Compare both paths with your child",
+        "outcome_text": "The family put the journeys, costs and opportunities side by side. No decision was needed before the questions were answered.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-teen-years-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-choosing-school-distance",
+        "choice": 1
+      }
+    ]
+  }
+]
