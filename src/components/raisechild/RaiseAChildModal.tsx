@@ -653,13 +653,22 @@ export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({
   const status = snapshot?.family?.status ?? null;
   const [view, setView] = useState<View>(status === 'letter' ? 'letter' : 'home');
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+
+  // The app re-renders all the time while this sheet is open — presence, the chat, a
+  // partner's nudge — and every one of those renders hands over a new onClose. Keeping it
+  // in a ref lets the effect below run once, on open: re-running it would pull focus off
+  // whatever the reader is typing in, and on a phone that shuts the keyboard.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
-    closeRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    // Never take focus from inside the sheet: a half-typed name belongs to the reader.
+    if (!sheetRef.current?.contains(document.activeElement)) closeRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onCloseRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     if (view === 'album') void state.loadAlbum();
@@ -686,7 +695,7 @@ export const RaiseAChildModal: React.FC<RaiseAChildModalProps> = ({
       aria-label="Raise a child"
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <div className="raise-child-sheet">
+      <div className="raise-child-sheet" ref={sheetRef}>
         <header className="raise-child-sheet__head">
           {effectiveView === 'album' && (
             <button
