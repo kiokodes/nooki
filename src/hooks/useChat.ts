@@ -47,6 +47,8 @@ export interface ChatState {
   ) => Promise<void>;
   /** Rewrites the words of a message this phone sent. There is no delete. */
   edit: (messageId: string, content: string) => Promise<void>;
+  /** Re-reads the transcript, for a message another tab wrote through the database. */
+  refresh: () => Promise<void>;
   retry: (entryId: string) => Promise<void>;
   /** Call on every keystroke; the throttle lives here. */
   notifyTyping: () => void;
@@ -194,31 +196,37 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     };
   }, [applyStored, coupleId, partnerId, setPending, userId]);
 
-  // --- Initial load ---------------------------------------------------------------
-  useEffect(() => {
+  // --- Loading, and reloading after a hand-off from another tab --------------------
+  const load = useCallback(async (options: { quiet?: boolean } = {}): Promise<void> => {
     // With no couple there is nothing to load; `stored` already ignores other couples.
     if (!coupleId) return;
-    let cancelled = false;
-    void (async () => {
-      setLoading(true);
-      try {
-        const fetched = await fetchMessages(coupleId, MESSAGE_PAGE_SIZE);
-        if (cancelled) return;
-        // Anything the socket delivered while we were loading stays put.
-        setLoaded((current) => ({
-          coupleId,
-          items: (current && current.coupleId === coupleId ? current.items : [])
-            .reduce((items, entry) => upsert(items, entry), fetched.map(toEntry)),
-        }));
-        setError(null);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Your messages could not be loaded.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    if (!options.quiet) setLoading(true);
+    try {
+      const fetched = await fetchMessages(coupleId, MESSAGE_PAGE_SIZE);
+      // Anything the socket delivered while we were loading stays put.
+      setLoaded((current) => ({
+        coupleId,
+        items: (current && current.coupleId === coupleId ? current.items : [])
+          .reduce((items, entry) => upsert(items, entry), fetched.map(toEntry)),
+      }));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Your messages could not be loaded.');
+    } finally {
+      if (!options.quiet) setLoading(false);
+    }
   }, [coupleId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => { if (!cancelled) await load(); })();
+    return () => { cancelled = true; };
+  }, [load]);
+
+  /** Re-read the transcript now: a message another tab wrote server-side appears at once. */
+  const refresh = useCallback(async (): Promise<void> => {
+    await load({ quiet: true });
+  }, [load]);
 
   // --- Read receipts: stamp the partner's messages while the chat is on screen -----
   useEffect(() => {
@@ -336,6 +344,7 @@ export function useChat({ coupleId, userId, partnerId, active }: UseChatOptions)
     send,
     edit,
     retry,
+    refresh,
     notifyTyping,
     notifyStoppedTyping,
     clearError: () => setError(null),

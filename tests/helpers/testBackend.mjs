@@ -114,6 +114,7 @@ export async function installTestBackend(client) {
       'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
       'push_subscriptions', 'miss_you_taps',
       'daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses',
+      'daily_decision_chat_links', 'raise_child_chat_links',
       'couple_photo', 'everyday_status', 'visits', 'someday_items',
       'visit_wishes', 'visit_checklist_items', 'visit_memory_entries',
       'epistles',

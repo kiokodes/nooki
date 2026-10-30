@@ -39,8 +39,9 @@ import { useMissYou } from './hooks/useMissYou';
 import { useCouplePhoto } from './hooks/useCouplePhoto';
 import { useDailyDecision } from './hooks/useDailyDecision';
 import { useRaiseChild } from './hooks/useRaiseChild';
-import { useRaiseChildChatLinks } from './hooks/useRaiseChildChatLinks';
+import { useChatCardLinks } from './hooks/useChatCardLinks';
 import type { RaiseChildMoment } from './lib/raiseChildService';
+import { takeDailyDecisionToChat } from './lib/dailyDecisionService';
 import { RaiseAChildModal } from './components/raisechild/RaiseAChildModal';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { VisitPlanningModal } from './components/together/VisitPlanningModal';
@@ -57,7 +58,7 @@ import {
   signOutUser,
   type AuthUser,
 } from './lib/authService';
-import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
+import type { Profile, Couple } from './types/database';
 
 type TabKey = 'chat' | 'together' | 'home' | 'discuss' | 'games';
 
@@ -216,7 +217,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     partnerId: partner?.id ?? null,
     active: activeTab === 'chat' && appVisible,
   });
-  const sendChatMessage = chat.send;
 
   // The Discuss question engine sits at app level too, so a question the partner asks
   // still badges its tab while this phone is somewhere else.
@@ -278,9 +278,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     userId: currentUser?.id ?? null,
     coupleId: couple?.id ?? null,
   });
-  // "Talk it out" leaves a linked message behind: this is the way back from that bubble.
+  // "Talk it out" and "Take to chat" both leave a linked message behind: this is the way
+  // back from those bubbles, to the moment or to today's decision.
   const chatMessageIds = useMemo(() => chat.messages.map((message) => message.id), [chat.messages]);
-  const raiseChildChatLinks = useRaiseChildChatLinks(
+  const chatCardLinks = useChatCardLinks(
     chatMessageIds,
     activeTab === 'chat' && appVisible,
   );
@@ -312,20 +313,20 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     setActiveTab('chat');
   }, []);
 
-  // "Take to chat" shares the prompt and all three choices as a normal message, so both
-  // partners have the exact decision in their transcript to deliberate on.
-  const handleTakeDecisionToChat = useCallback(async (question: DailyDecisionQuestion) => {
-    const content = [
-      `Today’s decision: ${question.question}`,
-      '',
-      ...question.options.map((option, index) => `${index + 1}. ${option}`),
-      '',
-      'What do you think?',
-    ].join('\n');
-    await sendChatMessage(content);
+  // "Take to chat" leaves one short line behind — the question and a nudge, never the
+  // three options — and that line carries a link back to the card to answer it on.
+  const handleTakeDecisionToChat = useCallback(async () => {
+    await takeDailyDecisionToChat();
     setShowDailyDecision(false);
     setActiveTab('chat');
-  }, [sendChatMessage]);
+    // The line was written by the database, not this phone: read it back straight away.
+    await chat.refresh();
+  }, [chat]);
+
+  // The link on that bubble: straight back to today's decision, wherever this phone is.
+  const handleOpenDailyDecision = useCallback(() => {
+    setShowDailyDecision(true);
+  }, []);
 
   // "Talk it out" puts the split in the chat, both picks spelled out, so the two of them
   // can settle it themselves instead of the year deciding for them. The database writes
@@ -335,7 +336,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     if (!posted) return;
     setShowRaiseChild(false);
     setActiveTab('chat');
-  }, [raiseChild]);
+    await chat.refresh();
+  }, [raiseChild, chat]);
 
   // The link on that bubble: back to Together, with the sheet open on that very moment.
   const handleOpenRaiseChildMoment = useCallback((momentId: string) => {
@@ -738,8 +740,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             questionContext={chatContext}
             onClearQuestionContext={() => setChatContextStored(null)}
             onOpenQuestion={handleOpenQuestion}
-            raiseChildLinks={raiseChildChatLinks}
+            raiseChildLinks={chatCardLinks.raiseChild}
             onOpenRaiseChild={handleOpenRaiseChildMoment}
+            dailyDecisionLinks={chatCardLinks.dailyDecision}
+            onOpenDailyDecision={handleOpenDailyDecision}
           />
         )}
 

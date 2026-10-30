@@ -447,9 +447,12 @@ Decisions are shared only when both people pick the same option:
   from the other partner until both have replied; the sheet can show that a reply is waiting
   without showing its contents.
 - Once both have replied, both choices appear together. If they differ, either partner may
-  change their choice and the sheet offers **Take to chat**, which sends the question and all
-  three options into their shared chat to discuss. The decision becomes final and locked only
-  when the two choices match.
+  change their choice and the sheet offers **Take to chat**, which posts **one short line**
+  into their shared chat — the question and a nudge, never the three options. That message
+  carries an **Open today's decision** link, so either partner can tap it and land straight
+  back on the card to answer, without scrolling the chat for the question. Posting twice
+  reuses the same message. The decision becomes final and locked only when the two choices
+  match.
 - The day rolls over at **midnight UTC**. The questions work the way
   Discuss questions do: they live in an undated pool the owner uploads to Supabase, and each
   day the database randomly picks one question **this couple has never been given before**
@@ -996,7 +999,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql`, `202610210001_epistle_replies.sql`, `202610210002_miss_you_push.sql`, `202610250001_lock_truth_or_dare_spicy.sql`, `202610250002_fix_push_webhooks.sql`, `202610300001_raise_a_child.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql`, `202610210001_epistle_replies.sql`, `202610210002_miss_you_push.sql`, `202610250001_lock_truth_or_dare_spicy.sql`, `202610250002_fix_push_webhooks.sql`, `202610300001_raise_a_child.sql`, `202610300002_raise_a_child_talk_it_out.sql`, `202610300003_raise_a_child_chat_links.sql`, `202610300004_daily_decision_chat_links.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the Games
 retirement migration deletes daily-game and Tic Tac Toe match history,
@@ -1283,7 +1286,8 @@ Use your actual accounts; there is no automatic user creation.
 - [ ] After device A submits, A sees their own choice but device B cannot see it in the UI
       or response rows. Once B replies, both choices appear on both devices.
 - [ ] Matching choices mark the decision agreed and lock it; differing choices stay
-      editable and **Take to chat** sends the prompt and all choices into the shared chat.
+      editable and **Take to chat** posts one line with an **Open today's decision** link
+      (no options in the chat), and tapping that link reopens the card on both devices.
 - [ ] A third account cannot read either partner's responses, and an app user cannot write
       prompt rows or update/delete responses directly.
 - [ ] A third account cannot read the couple's sessions, answers or comments.

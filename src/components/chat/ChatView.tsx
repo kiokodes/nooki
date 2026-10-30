@@ -45,6 +45,10 @@ interface ChatViewProps {
   raiseChildLinks?: Record<string, string>;
   /** Tap the link on that bubble: back to the moment, opened on that card. */
   onOpenRaiseChild?: (momentId: string) => void;
+  /** "Take to chat" messages, keyed by message id: the daily decision each one is about. */
+  dailyDecisionLinks?: Record<string, string>;
+  /** Tap the link on that bubble: back to today's decision, to answer it. */
+  onOpenDailyDecision?: (questionId: string) => void;
 }
 
 const TOAST_MS = 2_000;
@@ -116,6 +120,48 @@ interface GestureState {
   longPressTimer: number | null;
 }
 
+/**
+ * The link a shared card leaves inside its message: a small pill under the text that
+ * takes the reader back to the moment or the decision it came from.
+ */
+const CardLink: React.FC<{
+  label: string;
+  attribute: 'data-raise-child-link' | 'data-daily-decision-link';
+  targetId: string;
+  mine: boolean;
+  onOpen: () => void;
+}> = ({ label, attribute, targetId, mine, onOpen }) => (
+  <button
+    type="button"
+    {...{ [attribute]: targetId }}
+    aria-label={label}
+    title={label}
+    onClick={onOpen}
+    style={{
+      // Clears the floated timestamp so the link sits on its own line.
+      clear: 'both',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      margin: '8px 0 0 0',
+      padding: '6px 10px',
+      borderRadius: tokens.radii.pill,
+      border: 'none',
+      backgroundColor: mine ? 'rgba(255, 255, 255, 0.6)' : tokens.colors.accentSageSoft,
+      color: mine ? tokens.colors.textPrimary : tokens.colors.accentSageDeep,
+      cursor: 'pointer',
+      fontFamily: tokens.typography.fontFamily,
+      fontSize: '0.72rem',
+      fontWeight: 800,
+      lineHeight: 1.35,
+      textAlign: 'left',
+    }}
+  >
+    <Sparkles size={12} style={{ flexShrink: 0 }} aria-hidden="true" />
+    {label}
+  </button>
+);
+
 const Bubble: React.FC<{
   entry: ChatEntry;
   mine: boolean;
@@ -125,6 +171,9 @@ const Bubble: React.FC<{
   /** A "Talk it out" bubble: the Raise a Child moment it came from, and the way back. */
   raiseChildMomentId?: string;
   onOpenRaiseChild?: (momentId: string) => void;
+  /** A "Take to chat" bubble: today's decision, and the way back to the card. */
+  dailyDecisionQuestionId?: string;
+  onOpenDailyDecision?: (questionId: string) => void;
   /** What this bubble answers, looked up by the transcript; undefined when unknown. */
   replyOf?: ReplyQuote;
   onSwipeReply: (entry: ChatEntry) => void;
@@ -139,6 +188,8 @@ const Bubble: React.FC<{
   onOpenQuestion,
   raiseChildMomentId,
   onOpenRaiseChild,
+  dailyDecisionQuestionId,
+  onOpenDailyDecision,
   replyOf,
   onSwipeReply,
   onOpenActions,
@@ -435,35 +486,23 @@ const Bubble: React.FC<{
           </span>
 
           {raiseChildMomentId && (
-            <button
-              type="button"
-              data-raise-child-link={raiseChildMomentId}
-              aria-label="Open this moment in Raise a Child"
-              title="Open this moment in Raise a Child"
-              onClick={() => onOpenRaiseChild?.(raiseChildMomentId)}
-              style={{
-                // Clears the floated timestamp so the link sits on its own line.
-                clear: 'both',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                margin: '8px 0 0 0',
-                padding: '6px 10px',
-                borderRadius: tokens.radii.pill,
-                border: 'none',
-                backgroundColor: mine ? 'rgba(255, 255, 255, 0.6)' : tokens.colors.accentSageSoft,
-                color: mine ? tokens.colors.textPrimary : tokens.colors.accentSageDeep,
-                cursor: 'pointer',
-                fontFamily: tokens.typography.fontFamily,
-                fontSize: '0.72rem',
-                fontWeight: 800,
-                lineHeight: 1.35,
-                textAlign: 'left',
-              }}
-            >
-              <Sparkles size={12} style={{ flexShrink: 0 }} aria-hidden="true" />
-              Open this moment
-            </button>
+            <CardLink
+              label="Open this moment"
+              attribute="data-raise-child-link"
+              targetId={raiseChildMomentId}
+              mine={mine}
+              onOpen={() => onOpenRaiseChild?.(raiseChildMomentId)}
+            />
+          )}
+
+          {dailyDecisionQuestionId && (
+            <CardLink
+              label="Open today’s decision"
+              attribute="data-daily-decision-link"
+              targetId={dailyDecisionQuestionId}
+              mine={mine}
+              onOpen={() => onOpenDailyDecision?.(dailyDecisionQuestionId)}
+            />
           )}
 
         </div>
@@ -534,6 +573,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onOpenQuestion,
   raiseChildLinks,
   onOpenRaiseChild,
+  dailyDecisionLinks,
+  onOpenDailyDecision,
 }) => {
   const [draft, setDraft] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -857,6 +898,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 onOpenQuestion={onOpenQuestion}
                 raiseChildMomentId={raiseChildLinks?.[entry.id]}
                 onOpenRaiseChild={onOpenRaiseChild}
+                dailyDecisionQuestionId={dailyDecisionLinks?.[entry.id]}
+                onOpenDailyDecision={onOpenDailyDecision}
                 replyOf={entry.reply_to_id ? {
                   senderName: messageById.has(entry.reply_to_id)
                     ? replySenderName(messageById.get(entry.reply_to_id) as ChatEntry)

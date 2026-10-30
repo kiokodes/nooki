@@ -308,6 +308,7 @@ test('verify.sql spots a live project that is missing a migration', async () => 
   const togetherAgreementMigration = await readFile(new URL('../supabase/migrations/202610190005_together_time_agreement.sql', import.meta.url), 'utf8');
   const removeBooksMigration = await readFile(new URL('../supabase/migrations/202610190006_remove_shared_books.sql', import.meta.url), 'utf8');
   const notebookRemovalMigration = await readFile(new URL('../supabase/migrations/202610190007_someday_notebook_and_remove_together_time.sql', import.meta.url), 'utf8');
+  const dailyDecisionLinksMigration = await readFile(new URL('../supabase/migrations/202610300004_daily_decision_chat_links.sql', import.meta.url), 'utf8');
   const verification = await readFile(new URL('../supabase/verify.sql', import.meta.url), 'utf8');
 
   const db = new PGlite();
@@ -395,6 +396,12 @@ test('verify.sql spots a live project that is missing a migration', async () => 
     await db.exec(togetherAgreementMigration);
     await db.exec(removeBooksMigration);
     await db.exec(notebookRemovalMigration);
+    // The Daily Decisions chat link is the newest release of all: "Take to chat" would
+    // post a line nothing could link back from without it.
+    await assert.rejects(db.exec(verification), /202610300004_daily_decision_chat_links\.sql/,
+      'the preflight must send the owner to the Daily Decisions chat link migration');
+    try { await db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+    await db.exec(dailyDecisionLinksMigration);
     const results = await db.exec(verification);
     assert(JSON.stringify(results).includes('PASS'), 'verify.sql passes once the migrations are applied');
   } finally {
@@ -429,6 +436,7 @@ async function server_paths() {
   const togetherAgreement = await read('../supabase/migrations/202610190005_together_time_agreement.sql');
   const removeBooks = await read('../supabase/migrations/202610190006_remove_shared_books.sql');
   const notebookRemoval = await read('../supabase/migrations/202610190007_someday_notebook_and_remove_together_time.sql');
+  const dailyDecisionLinks = await read('../supabase/migrations/202610300004_daily_decision_chat_links.sql');
   const verify = await read('../supabase/verify.sql');
   const schemaBeforeCalendar = schema.split('-- 11. Couple events')[0];
   const schemaBeforeChat = schema.split('-- 12. Couple messages')[0];
@@ -512,7 +520,7 @@ async function server_paths() {
   check('schema.sql on a project with no auto-grant', freshNew, true);
   await freshNew.db.close();
 
-  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement, removeBooks, notebookRemoval];
+  const allMigrations = [pairing, calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement, removeBooks, notebookRemoval, dailyDecisionLinks];
   const existingOld = await run({
     defaults: legacyDefaults,
     // Every migration twice: a live project may have run any of them before.
@@ -532,7 +540,7 @@ async function server_paths() {
     defaults: legacyDefaults,
     steps: [schemaBeforeCalendar, pairing, legacyCalendar,
             calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement,
-            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement, removeBooks, notebookRemoval],
+            calendar, chat, discuss, links, replies, push, missYou, locations, dailyDecisions, dailyDecisionPool, couplePhoto, together, somedayDetails, togetherRestructure, togetherAgreement, removeBooks, notebookRemoval, dailyDecisionLinks],
   });
   check('project on the earlier calendar revision upgrades in place', upgraded, true);
   const rows = await upgraded.db.query("SELECT repeat_frequency FROM public.couple_events WHERE title = 'Legacy birthday'");
@@ -617,6 +625,10 @@ async function server_paths() {
   await missingLinks.db.exec(togetherAgreement);
   await missingLinks.db.exec(removeBooks);
   await missingLinks.db.exec(notebookRemoval);
+  await assert.rejects(missingLinks.db.exec(verify), /202610300004_daily_decision_chat_links\.sql/,
+    'and finally until the Daily Decisions chat link lands');
+  try { await missingLinks.db.exec('ROLLBACK'); } catch { /* the failed script already rolled back */ }
+  await missingLinks.db.exec(dailyDecisionLinks);
   await missingLinks.db.exec(verify);
   await missingLinks.db.close();
 
@@ -641,6 +653,7 @@ async function server_paths() {
   await missingPush.db.exec(togetherAgreement);
   await missingPush.db.exec(removeBooks);
   await missingPush.db.exec(notebookRemoval);
+  await missingPush.db.exec(dailyDecisionLinks);
   await missingPush.db.exec(verify);
   await missingPush.db.close();
 
