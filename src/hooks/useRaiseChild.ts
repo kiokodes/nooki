@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  adoptRaiseChildSetup,
   ageUpRaiseChild,
   decideRaiseChildMoment,
   fetchRaiseChildAlbum,
@@ -14,6 +15,7 @@ import {
   type RaiseChildAlbumEntry,
   type RaiseChildSnapshot,
   type SetupInput,
+  type SetupPart,
 } from '../lib/raiseChildService';
 
 interface UseRaiseChildOptions {
@@ -31,6 +33,8 @@ export interface RaiseChildState {
   clearError: () => void;
   refresh: () => Promise<void>;
   saveSetup: (input: SetupInput) => Promise<void>;
+  /** "Use their name" / "Use their face": move onto the partner's suggestion. */
+  adoptSetup: (part: SetupPart) => Promise<void>;
   vote: (momentId: string, choiceIndex: number) => Promise<void>;
   /** The lead parent settles a split with their own pick. */
   decide: (momentId: string) => Promise<void>;
@@ -125,6 +129,7 @@ export function useRaiseChild({ coupleId, userId }: UseRaiseChildOptions): Raise
   }, [scope]);
 
   const saveSetup = useCallback((input: SetupInput) => run(() => saveRaiseChildSetup(input)), [run]);
+  const adoptSetup = useCallback((part: SetupPart) => run(() => adoptRaiseChildSetup(part)), [run]);
   const vote = useCallback((momentId: string, choiceIndex: number) => run(() => submitRaiseChildVote(momentId, choiceIndex)), [run]);
   const decide = useCallback((momentId: string) => run(() => decideRaiseChildMoment(momentId)), [run]);
   const openGift = useCallback((giftId: string) => run(() => openRaiseChildGift(giftId)), [run]);
@@ -196,6 +201,7 @@ export function useRaiseChild({ coupleId, userId }: UseRaiseChildOptions): Raise
     clearError: () => setFailure((current) => (current?.scope === scope ? null : current)),
     refresh,
     saveSetup,
+    adoptSetup,
     vote,
     decide,
     toChat,

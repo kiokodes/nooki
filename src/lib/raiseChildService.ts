@@ -4,8 +4,9 @@ import { describeDatabaseError } from './authService';
 /** Apply before deploying: the family tables, the private votes, the RPCs, and the split. */
 export const RAISE_CHILD_MIGRATION =
   'supabase/migrations/202610300001_raise_a_child.sql, '
-  + 'supabase/migrations/202610300002_raise_a_child_talk_it_out.sql and '
-  + 'supabase/migrations/202610300003_raise_a_child_chat_links.sql';
+  + 'supabase/migrations/202610300002_raise_a_child_talk_it_out.sql, '
+  + 'supabase/migrations/202610300003_raise_a_child_chat_links.sql and '
+  + 'supabase/migrations/202610300005_raise_a_child_mutual_setup.sql';
 
 function isMissingMigration(error: { message: string; code?: string }): boolean {
   return error.code === '42P01'
@@ -122,6 +123,36 @@ export interface RaiseChildAlbumEntry {
   created_at: string;
 }
 
+/** One parent's suggestion: the name and face they would give the child. */
+export interface SetupProposal {
+  name: string;
+  look: ChildLook;
+}
+
+/**
+ * Both parents' suggestions, as this parent is allowed to see them. The child is only
+ * named once the two agree — the same name and the same face — so nothing here is a
+ * decision on its own.
+ */
+export interface SetupProposals {
+  mine: SetupProposal | null;
+  partner: SetupProposal | null;
+  name_same: boolean;
+  look_same: boolean;
+  agreed: boolean;
+  /** The childhood has opened: the name and the face are settled and cannot change. */
+  locked: boolean;
+}
+
+export const NO_SETUP_PROPOSALS: SetupProposals = {
+  mine: null,
+  partner: null,
+  name_same: false,
+  look_same: false,
+  agreed: false,
+  locked: false,
+};
+
 export interface RaiseChildSnapshot {
   family: { id: string; status: FamilyStatus; since: string } | null;
   configured: boolean;
@@ -135,6 +166,8 @@ export interface RaiseChildSnapshot {
     partner_traits_ready: boolean;
     ready: boolean;
     content_ready: boolean;
+    /** What each of you has suggested so far. The name is only real when both agree. */
+    proposal: SetupProposals;
   };
   me: {
     user_id: string | null;
@@ -270,6 +303,26 @@ function toLetter(value: unknown): RaiseChildLetter | null {
   return { paragraphs, written_at: asString(row.written_at), child: asString(row.child) };
 }
 
+function toProposal(value: unknown): SetupProposal | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = asObject(value);
+  const name = asString(row.name).trim();
+  if (!name) return null;
+  return { name, look: asObject(row.look) as ChildLook };
+}
+
+export function toProposals(value: unknown): SetupProposals {
+  const row = asObject(value);
+  return {
+    mine: toProposal(row.mine),
+    partner: toProposal(row.partner),
+    name_same: Boolean(row.name_same),
+    look_same: Boolean(row.look_same),
+    agreed: Boolean(row.agreed),
+    locked: Boolean(row.locked),
+  };
+}
+
 export function toSnapshot(value: unknown): RaiseChildSnapshot {
   if (!value || typeof value !== 'object') throw new Error('The family could not be loaded. Please try again.');
   const row = asObject(value);
@@ -292,6 +345,7 @@ export function toSnapshot(value: unknown): RaiseChildSnapshot {
       partner_traits_ready: Boolean(setup.partner_traits_ready),
       ready: Boolean(setup.ready),
       content_ready: Boolean(setup.content_ready),
+      proposal: setup.proposal === undefined ? NO_SETUP_PROPOSALS : toProposals(setup.proposal),
     },
     me: {
       user_id: row.me ? (asObject(row.me).user_id == null ? null : asString(asObject(row.me).user_id)) : null,
@@ -329,9 +383,17 @@ async function call<T>(name: string, args: Record<string, unknown> = {}): Promis
   return data as T;
 }
 
-/** The whole family as this parent is allowed to see it. */
+/**
+ * The whole family as this parent is allowed to see it. The proposals ride along with the
+ * state so the setup screen always shows both parents' ideas, never just this one's.
+ */
 export async function fetchRaiseChildState(): Promise<RaiseChildSnapshot> {
-  return toSnapshot(await call('raise_child_state'));
+  const [state, proposals] = await Promise.all([
+    call('raise_child_state'),
+    call('raise_child_setup_proposals'),
+  ]);
+  const snapshot = toSnapshot(state);
+  return { ...snapshot, setup: { ...snapshot.setup, proposal: toProposals(proposals) } };
 }
 
 export interface SetupInput {
@@ -340,13 +402,29 @@ export interface SetupInput {
   traits?: string[];
 }
 
-/** Save this parent's three traits and, together, the child's name and look. */
+/**
+ * Save this parent's three traits and suggest a name and a face. A name here is only ever
+ * a suggestion: the child is named by the database once both parents have suggested the
+ * same one. Re-reading afterwards brings the partner's suggestion back with it.
+ */
 export async function saveRaiseChildSetup({ name, look, traits }: SetupInput): Promise<RaiseChildSnapshot> {
-  return toSnapshot(await call('raise_child_setup', {
+  await call('raise_child_setup', {
     p_name: name ?? null,
     p_look: look ?? {},
     p_traits: traits ?? null,
-  }));
+  });
+  return fetchRaiseChildState();
+}
+
+export type SetupPart = 'name' | 'look' | 'all';
+
+/**
+ * "Use Mia" / "Use their face": move this parent's suggestion onto the partner's, so the
+ * two agree on purpose rather than by one of you overwriting the other.
+ */
+export async function adoptRaiseChildSetup(part: SetupPart = 'all'): Promise<RaiseChildSnapshot> {
+  await call('raise_child_adopt_setup', { p_part: part });
+  return fetchRaiseChildState();
 }
 
 /** Answer today's card privately. The database reveals both answers itself. */
@@ -457,7 +535,7 @@ export interface RaiseChildChannel {
   close: () => void;
 }
 
-const REALTIME_TABLES = ['family_moments', 'album_entries', 'family_gifts', 'families', 'child_state'] as const;
+const REALTIME_TABLES = ['family_moments', 'album_entries', 'family_gifts', 'families', 'child_state', 'family_setup_proposals'] as const;
 
 /**
  * Live updates for one family. RLS still decides what arrives: a partner's sealed vote is

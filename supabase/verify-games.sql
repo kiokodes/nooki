@@ -286,6 +286,20 @@ BEGIN
     RAISE EXCEPTION 'raise_child_chat_links must be read-only for signed-in phones.';
   END IF;
 
+  -- Mutual naming: both parents' suggestions are readable by both, written by neither.
+  IF to_regclass('public.family_setup_proposals') IS NULL THEN
+    RAISE EXCEPTION 'family_setup_proposals is missing: apply 202610300005_raise_a_child_mutual_setup.sql.';
+  END IF;
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.family_setup_proposals'::regclass) THEN
+    RAISE EXCEPTION 'family_setup_proposals must have row level security on.';
+  END IF;
+  IF NOT has_table_privilege('authenticated','public.family_setup_proposals','SELECT')
+     OR has_table_privilege('authenticated','public.family_setup_proposals','INSERT')
+     OR has_table_privilege('authenticated','public.family_setup_proposals','UPDATE')
+     OR has_table_privilege('anon','public.family_setup_proposals','SELECT') THEN
+    RAISE EXCEPTION 'family_setup_proposals must be read-only for signed-in phones.';
+  END IF;
+
   -- Content is read (active rows only) and written by nobody but the owner's script.
   IF NOT has_table_privilege('authenticated','public.event_templates','SELECT')
      OR has_table_privilege('authenticated','public.event_templates','INSERT')
@@ -298,7 +312,8 @@ BEGIN
     'public.raise_child_vote(uuid,integer)','public.raise_child_open_gift(uuid)',
     'public.raise_child_age_up()','public.raise_child_album(integer,timestamptz)',
     'public.raise_child_reply(text)','public.raise_child_new_child()',
-    'public.raise_child_lead_decide(uuid)','public.raise_child_take_to_chat(uuid)'] LOOP
+    'public.raise_child_lead_decide(uuid)','public.raise_child_take_to_chat(uuid)',
+    'public.raise_child_setup_proposals()','public.raise_child_adopt_setup(text)'] LOOP
     IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child RPC: %', fn; END IF;
     IF NOT has_function_privilege('authenticated',fn,'EXECUTE')
        OR has_function_privilege('anon',fn,'EXECUTE') THEN
@@ -309,7 +324,9 @@ BEGIN
   FOREACH fn IN ARRAY ARRAY['public.raise_child_daily_tick(date)','public.raise_child_resolve(uuid,boolean)',
     'public.raise_child_resolve_due(uuid)','public.raise_child_write_letter(uuid)',
     'public.raise_child_claim_notifications(integer)',
-    'public.raise_child_resolve_as(uuid,boolean,text)'] LOOP
+    'public.raise_child_resolve_as(uuid,boolean,text)',
+    'public.raise_child_settle_setup(uuid)','public.raise_child_same_name(text,text)',
+    'public.raise_child_same_look(jsonb,jsonb)'] LOOP
     IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child job function: %', fn; END IF;
     IF has_function_privilege('authenticated',fn,'EXECUTE')
        OR has_function_privilege('anon',fn,'EXECUTE') THEN
@@ -318,5 +335,5 @@ BEGIN
   END LOOP;
 END $$;
 
-SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, Dash Duel and Word Wheel, the Snake and Tetris replays, the Chess referee, the Raise a Child family tables, hidden columns and chat links, and the secret-table permissions are configured. Test both devices before release.' AS result;
+SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, Dash Duel and Word Wheel, the Snake and Tetris replays, the Chess referee, the Raise a Child family tables, hidden columns, chat links and mutual naming, and the secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;
