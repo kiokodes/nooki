@@ -1,0 +1,338 @@
+[
+  {
+    "slug": "nigeria-first-christmas-visits",
+    "min_age": 0,
+    "max_age": 3,
+    "category": "home",
+    "title": "Christmas on the road",
+    "setup_text": "Both sides of the family want to see your child at Christmas. The homes are far apart, and two visits in one day would be tiring.",
+    "choices": [
+      {
+        "label": "Visit one family and call the other",
+        "outcome_text": "One home got the long visit; the other joined by phone. There were already questions about next Christmas."
+      },
+      {
+        "label": "Make shorter visits to both",
+        "outcome_text": "Both homes got a visit, and the day involved a lot of packing and travelling. The journey made for a long day."
+      },
+      {
+        "label": "Stay home and invite relatives over",
+        "outcome_text": "Christmas happened at home, with an open invitation and a pot on the stove. Some relatives could come; others joined by phone."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-baby-worship-service",
+    "min_age": 0,
+    "max_age": 3,
+    "category": "values",
+    "title": "Sunday together",
+    "setup_text": "You each have a church you feel at home in. With a young child, attending both services every Sunday would make for a very long morning.",
+    "choices": [
+      {
+        "label": "Attend one church together for now",
+        "outcome_text": "The family found a regular Sunday rhythm in one place. There were still people at the other church to call and visit."
+      },
+      {
+        "label": "Alternate between the two churches",
+        "outcome_text": "Sunday mornings had two familiar destinations. It took more planning, and both congregations got to know your child."
+      },
+      {
+        "label": "Keep separate services for now",
+        "outcome_text": "Each parent kept a familiar service in the week. The family had less time together that morning and met again afterwards."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-new-baby-unasked-advice",
+    "min_age": 0,
+    "max_age": 2,
+    "category": "home",
+    "title": "The advice at bedtime",
+    "setup_text": "A relative who helps with the baby suggests a different bedtime routine. Their help matters, but the current routine has finally begun to work.",
+    "choices": [
+      {
+        "label": "Try the relative’s suggestion for a week",
+        "outcome_text": "The evenings changed for a while. The family kept notes on what worked and made time to talk again."
+      },
+      {
+        "label": "Keep the routine and explain why",
+        "outcome_text": "The familiar bedtime stayed. The conversation took care, and the relative continued to help in other ways."
+      },
+      {
+        "label": "Ask the relative to help with another part",
+        "outcome_text": "Bedtime stayed as it was, while the relative took on another task. There was more to coordinate, but help remained close."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-nursery-fees-decision",
+    "min_age": 2,
+    "max_age": 3,
+    "category": "school",
+    "title": "A place at nursery",
+    "setup_text": "A nursery you like has offered a place, but its fees would mean spending less at home. A less expensive nursery is farther away.",
+    "choices": [
+      {
+        "label": "Choose the nearby nursery and adjust spending",
+        "outcome_text": "The shorter trip became part of the week. The family made room in the budget by putting some other plans on hold."
+      },
+      {
+        "label": "Choose the farther nursery",
+        "outcome_text": "The fees left more room in the budget. Mornings started earlier to make the longer journey."
+      },
+      {
+        "label": "Wait and keep the current care for now",
+        "outcome_text": "The current arrangement continued while the family saved and looked again. The nursery place went to another child."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-choosing-school-distance",
+    "min_age": 3,
+    "max_age": 5,
+    "category": "school",
+    "title": "Two school gates",
+    "setup_text": "One school is close enough to walk to. Another has a teaching style you like, but the drive would change every working morning.",
+    "choices": [
+      {
+        "label": "Choose the school nearby",
+        "outcome_text": "The school run became a walk. The family stayed in touch with teachers about what happened in the classroom."
+      },
+      {
+        "label": "Choose the school farther away",
+        "outcome_text": "The preferred teaching style came with an earlier start. The family made a new plan for the drive."
+      },
+      {
+        "label": "Visit both schools again with your child",
+        "outcome_text": "The decision took another week. Your child met both places, and the family had more questions to ask."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-christmas-grandparents-turn",
+    "min_age": 3,
+    "max_age": 5,
+    "category": "home",
+    "title": "Whose house this Christmas?",
+    "setup_text": "Your child is excited to see both sets of grandparents. Each family has planned Christmas lunch at the same time.",
+    "choices": [
+      {
+        "label": "Spend this Christmas with one side",
+        "outcome_text": "One table had the long visit this year. The other family got a call and a plan for another day together."
+      },
+      {
+        "label": "Divide the day between both homes",
+        "outcome_text": "There were greetings at both houses and a long journey in between. Lunch happened in stages."
+      },
+      {
+        "label": "Host a meal at home on another day",
+        "outcome_text": "Christmas lunch stayed with one set of plans, and a shared meal followed at home. Hosting took work, but gave everyone more time."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-church-child-programme",
+    "min_age": 3,
+    "max_age": 5,
+    "category": "values",
+    "title": "Two Sunday communities",
+    "setup_text": "Your churches both have children’s activities. One is close to home; the other is where relatives worship and your child knows the songs.",
+    "choices": [
+      {
+        "label": "Choose the church close to home",
+        "outcome_text": "Sunday travel became simpler. The family kept visits to the other congregation for some special days."
+      },
+      {
+        "label": "Choose the church with family",
+        "outcome_text": "Familiar relatives and songs became part of Sunday. The longer trip needed planning each week."
+      },
+      {
+        "label": "Alternate for a trial period",
+        "outcome_text": "The child spent time in both communities. A check-in was planned after a few weeks, though the changing routine took getting used to."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-school-language-at-home",
+    "min_age": 3,
+    "max_age": 5,
+    "category": "school",
+    "title": "The words for home",
+    "setup_text": "Your child is picking up English at school. A grandparent hopes they will also learn the family language, which needs practice at home.",
+    "choices": [
+      {
+        "label": "Set aside time for the family language",
+        "outcome_text": "A few familiar words found their way into the week. Finding time to practise meant moving another activity."
+      },
+      {
+        "label": "Ask the grandparent to share stories",
+        "outcome_text": "Stories travelled between generations, sometimes over the phone. Everyone worked around the grandparent’s availability."
+      },
+      {
+        "label": "Use whichever language comes naturally",
+        "outcome_text": "Conversations stayed easy and mixed. The family language came up less often, but the door stayed open to learning more."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-school-birthday-party-list",
+    "min_age": 4,
+    "max_age": 5,
+    "category": "friends",
+    "title": "The birthday list",
+    "setup_text": "Your child wants a birthday party and has named the whole class. Your budget would cover a small gathering or a simple treat for everyone.",
+    "choices": [
+      {
+        "label": "Invite a few friends for a small party",
+        "outcome_text": "A few children gathered at home. There was time for each friend, and some classmates were not on the list."
+      },
+      {
+        "label": "Send a simple treat for the class",
+        "outcome_text": "The celebration reached the whole class without a party at home. The day was simpler than the party your child imagined."
+      },
+      {
+        "label": "Make a family celebration this year",
+        "outcome_text": "The birthday stayed close to home and within the budget. Your child helped choose how to mark the day with family."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-school-homework-and-play",
+    "min_age": 4,
+    "max_age": 5,
+    "category": "school",
+    "title": "After the school run",
+    "setup_text": "Your child comes home with a small school activity and wants to play immediately. Dinner and bedtime are not far away.",
+    "choices": [
+      {
+        "label": "Do the activity before play",
+        "outcome_text": "The activity was done while the table was clear. Play started later and had to fit into the time left."
+      },
+      {
+        "label": "Play first and return to the activity",
+        "outcome_text": "There was time to unwind first. The family came back to the activity later, closer to bedtime."
+      },
+      {
+        "label": "Ask the teacher about a manageable routine",
+        "outcome_text": "The evening stayed simple while a note went to school. A conversation about what fits at home began the next day."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-child-hair-school-photo",
+    "min_age": 4,
+    "max_age": 5,
+    "category": "values",
+    "title": "Picture day hair",
+    "setup_text": "School picture day is coming. Your child wants one hairstyle; a relative has offered to make a different style that takes longer.",
+    "choices": [
+      {
+        "label": "Choose the style your child asked for",
+        "outcome_text": "Picture day began with a familiar style. The relative found another day to share the style they had in mind."
+      },
+      {
+        "label": "Accept the relative’s offer",
+        "outcome_text": "The styling took longer and became time spent together. Your child had a different look for the photograph."
+      },
+      {
+        "label": "Find a shorter version together",
+        "outcome_text": "Everyone looked for a style that could be finished sooner. It took some discussion, and the morning had a little more room."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-family-visitors-child-room",
+    "min_age": 4,
+    "max_age": 5,
+    "category": "home",
+    "title": "Room for a cousin",
+    "setup_text": "A cousin is visiting for a week and needs a place to sleep. Your child likes the cousin but is unsure about sharing their room.",
+    "choices": [
+      {
+        "label": "Make space in the child’s room",
+        "outcome_text": "The cousins shared a room for the week. Bedtime became livelier, and each child needed a little space during the day."
+      },
+      {
+        "label": "Make a bed in the sitting room",
+        "outcome_text": "Your child kept their room while the sitting room became a bedroom at night. The family rearranged its evening routine."
+      },
+      {
+        "label": "Ask the children to plan the space together",
+        "outcome_text": "The children chose where to put the bags and bedding with grown-up help. The planning took time, and both had a say in the visit."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-school-uniform-cost",
+    "min_age": 4,
+    "max_age": 5,
+    "category": "money",
+    "title": "A new uniform",
+    "setup_text": "Your child has grown out of a school uniform. A relative offers a clean hand-me-down; your child has noticed classmates wearing new ones.",
+    "choices": [
+      {
+        "label": "Use the hand-me-down and adjust it",
+        "outcome_text": "The uniform got a few alterations and another year of use. There was money left for other school needs."
+      },
+      {
+        "label": "Buy a new uniform",
+        "outcome_text": "A new uniform went into the school bag. The family moved another purchase to make room for it."
+      },
+      {
+        "label": "Let your child help choose between options",
+        "outcome_text": "The family looked at the cost and the fit together. Choosing took longer, and your child had a voice in what came home."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  },
+  {
+    "slug": "nigeria-church-or-family-event",
+    "min_age": 4,
+    "max_age": 5,
+    "category": "values",
+    "title": "The Sunday invitation",
+    "setup_text": "A family celebration falls on the same morning as an activity your child has been looking forward to at church. Both matter to your family.",
+    "choices": [
+      {
+        "label": "Attend the church activity first",
+        "outcome_text": "The child took part in the activity. The family arrived at the celebration later and caught the rest of the gathering."
+      },
+      {
+        "label": "Go to the family celebration",
+        "outcome_text": "The family spent the morning with relatives. The missed activity was disappointing, and the child heard about it from friends later."
+      },
+      {
+        "label": "Ask whether you can join part of each",
+        "outcome_text": "The day needed careful timing and a few phone calls. The family shared some time in both places without staying for everything."
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-early-years-02"
+  }
+]

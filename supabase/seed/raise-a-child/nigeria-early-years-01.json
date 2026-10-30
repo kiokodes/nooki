@@ -1,0 +1,134 @@
+[
+  {
+    "slug": "nigeria-first-visit-after-birth",
+    "min_age": 0, "max_age": 0, "category": "home", "tone": "warm", "batch": "nigeria-early-years-01",
+    "title": "A full sitting room",
+    "setup_text": "The baby is home. Relatives want to visit this weekend, but the house is tired and meals are still being worked out.",
+    "choices": [
+      { "label": "Welcome everyone for a short afternoon", "outcome_text": "The sitting room filled with greetings and covered dishes. By evening the house was quiet again, with a little less food to cook.", "effects": { "mood": "content" } },
+      { "label": "Ask a few relatives to come at a time", "outcome_text": "The visits stretched across several days. There was time to sit with each person, though the doorbell kept finding its moment.", "effects": { "mood": "safe" } },
+      { "label": "Wait a week before hosting visitors", "outcome_text": "The first week stayed small and sleepy. Relatives sent messages and made plans to meet the baby later.", "effects": { "mood": "quiet" } }
+    ]
+  },
+  {
+    "slug": "nigeria-baby-name-family",
+    "min_age": 0, "max_age": 0, "category": "values", "tone": "gentle", "batch": "nigeria-early-years-01",
+    "title": "Another name for the baby",
+    "setup_text": "An elder offers a family name for the baby. You both like the name you chose, and there is room for another.",
+    "choices": [
+      { "label": "Add the family name", "outcome_text": "The baby came to have another name and a story attached to it. The elder repeated both names slowly, as if learning a song.", "effects": { "mood": "tender" } },
+      { "label": "Keep the name you chose", "outcome_text": "The name stayed as it was. The elder told its bearer the family story anyway, over a long phone call.", "effects": { "mood": "content" } },
+      { "label": "Use the family name as a nickname", "outcome_text": "The official name stayed, and another name began to travel around the family. Some people needed reminding which one to write down.", "effects": { "mood": "delighted" } }
+    ]
+  },
+  {
+    "slug": "nigeria-mother-tongue-lullaby",
+    "min_age": 0, "max_age": 1, "category": "values", "tone": "warm", "batch": "nigeria-early-years-01",
+    "title": "The song on the phone",
+    "setup_text": "A grandparent sends a lullaby in a language neither of you speaks well. You want the baby to know it, but the words are unfamiliar.",
+    "choices": [
+      { "label": "Learn the song from the recording", "outcome_text": "The tune became familiar before the words did. Some evenings ended with the recording playing softly while everyone tried to follow along.", "effects": { "mood": "tender" } },
+      { "label": "Ask the grandparent to sing it live", "outcome_text": "The phone became part of bedtime on some evenings. The song arrived with a familiar voice, even when the connection broke up.", "effects": { "mood": "safe" } },
+      { "label": "Make your own song for now", "outcome_text": "A new little song found its way into the room. The recording stayed on the phone for a day when there was more time to learn it.", "effects": { "mood": "content" } }
+    ]
+  },
+  {
+    "slug": "nigeria-care-when-work-resumes",
+    "min_age": 0, "max_age": 1, "category": "home", "tone": "honest", "batch": "nigeria-early-years-01",
+    "title": "When work starts again",
+    "setup_text": "Work is starting again. A relative offers daytime help at their home; a nearby carer has a place too. The journeys and costs are different.",
+    "choices": [
+      { "label": "Accept the relative's offer", "outcome_text": "The baby spent days with a familiar face. The longer trip became part of the family's morning rhythm.", "effects": { "mood": "safe" } },
+      { "label": "Choose the nearby carer", "outcome_text": "The shorter journey gave the mornings some room. Getting to know a new carer took a little more time and money.", "effects": { "mood": "content" } },
+      { "label": "Arrange a shorter work schedule for now", "outcome_text": "The days were rearranged around shorter work hours. There was more time at home and less room in the budget.", "effects": { "mood": "quiet" } }
+    ]
+  },
+  {
+    "slug": "nigeria-baby-photo-family-group",
+    "min_age": 0, "max_age": 1, "category": "values", "tone": "honest", "batch": "nigeria-early-years-01",
+    "title": "The family group chat",
+    "setup_text": "A relative asks for a photo of the baby to share in the family group. Some members live far away; others may pass pictures on.",
+    "choices": [
+      { "label": "Share a photo with the group", "outcome_text": "The group filled with greetings from people near and far. The photo travelled farther than the sitting room ever could.", "effects": { "mood": "tender" } },
+      { "label": "Send it to a few people privately", "outcome_text": "A few relatives received the photo directly. It took more messages, but each one became a small conversation.", "effects": { "mood": "safe" } },
+      { "label": "Share an update without a photo", "outcome_text": "The family heard how the baby was doing without a picture attached. A few people asked for a visit instead.", "effects": { "mood": "quiet" } }
+    ]
+  },
+  {
+    "slug": "nigeria-baby-hot-night-power",
+    "min_age": 0, "max_age": 1, "category": "health", "tone": "gentle", "batch": "nigeria-early-years-01",
+    "title": "A warm evening",
+    "setup_text": "The power is out on a warm evening. The baby is restless, and the family is deciding where to spend the next few hours.",
+    "choices": [
+      { "label": "Sit together in the airy sitting room", "outcome_text": "The family settled in the breezier room for a while. The evening routine started later, but the air felt easier.", "effects": { "mood": "content" } },
+      { "label": "Visit a nearby relative for the evening", "outcome_text": "The evening moved to a relative's house. There was company and a change of air, followed by a sleepy trip home.", "effects": { "mood": "tender" } },
+      { "label": "Keep the evening quiet at home", "outcome_text": "The family stayed close to the usual routine, with fewer clothes and a cool drink for the grown-ups. It took a while for the house to settle.", "effects": { "mood": "quiet" } }
+    ]
+  },
+  {
+    "slug": "nigeria-toddler-food-at-family-table",
+    "min_age": 1, "max_age": 3, "category": "home", "tone": "warm", "batch": "nigeria-early-years-01",
+    "title": "A plate at the table",
+    "setup_text": "Your toddler wants food from the family pot, but today's stew is hotter than the meals they know. Everyone is ready to eat.",
+    "choices": [
+      { "label": "Make a milder portion from the same meal", "outcome_text": "A small plate joined the others at the table. It took an extra pot, and there was plenty of pointing at everyone else's food.", "effects": { "mood": "curious" } },
+      { "label": "Offer a familiar meal alongside yours", "outcome_text": "The familiar food arrived beside the family meal. Dinner was easier to serve, even as little hands reached towards other plates.", "effects": { "mood": "content" } },
+      { "label": "Let them choose from the mild side dishes", "outcome_text": "The side dishes got a great deal of attention. The meal looked different on one small plate, and there were more bowls to wash.", "effects": { "mood": "delighted" } }
+    ]
+  },
+  {
+    "slug": "nigeria-greeting-visiting-auntie",
+    "min_age": 2, "max_age": 3, "category": "values", "tone": "gentle", "batch": "nigeria-early-years-01",
+    "title": "A greeting at the door",
+    "setup_text": "An auntie arrives and waits for a greeting. Your toddler stays close to you, watching her from behind your leg.",
+    "choices": [
+      { "label": "Greet her together and leave room to join", "outcome_text": "The greeting began with the grown-ups. After a while, a small wave appeared from behind a leg.", "effects": { "traits": { "gentle": 1 }, "mood": "safe" } },
+      { "label": "Offer a choice of wave or hello", "outcome_text": "A wave became the greeting of the day. The auntie laughed and settled down to wait for the rest of the conversation.", "effects": { "traits": { "brave": 1 }, "mood": "shy" } },
+      { "label": "Give the greeting a little more time", "outcome_text": "The visit began without a hello from the smallest person. By the time the plates came out, everyone had found a place in the room.", "effects": { "mood": "quiet" } }
+    ]
+  },
+  {
+    "slug": "nigeria-toddler-market-trip",
+    "min_age": 2, "max_age": 3, "category": "money", "tone": "warm", "batch": "nigeria-early-years-01",
+    "title": "One more thing at the market",
+    "setup_text": "At the market, your child spots a bright little ball. It was not on the list, and the money in your hand has other jobs today.",
+    "choices": [
+      { "label": "Buy the ball and adjust the list", "outcome_text": "The ball came home in the shopping bag, and one item waited for another day. It bounced across the floor before the bags were put away.", "effects": { "traits": { "playful": 1 }, "mood": "delighted" } },
+      { "label": "Leave it and plan a treat another day", "outcome_text": "The ball stayed at the stall. There was disappointment on the walk home, and later the family talked about what to save for.", "effects": { "mood": "thoughtful" } },
+      { "label": "Look for a small ball within the budget", "outcome_text": "A smaller ball made it into the bag after a little searching. The shopping took longer, and the list stayed mostly intact.", "effects": { "mood": "content" } }
+    ]
+  },
+  {
+    "slug": "nigeria-toddler-neighbour-toy",
+    "min_age": 2, "max_age": 3, "category": "friends", "tone": "honest", "batch": "nigeria-early-years-01",
+    "title": "The red bucket",
+    "setup_text": "A neighbour's child wants the red bucket your toddler is using. Both children reach for it, and play has come to a stop.",
+    "choices": [
+      { "label": "Help them take turns with the bucket", "outcome_text": "The bucket went back and forth with grown-up help. Waiting was not easy, but play had somewhere to go.", "effects": { "traits": { "kind": 1 }, "mood": "thoughtful" } },
+      { "label": "Find another container for the game", "outcome_text": "A plastic bowl joined the game. It took a little finding, and soon two sets of hands were busy filling and emptying.", "effects": { "traits": { "playful": 1 }, "mood": "delighted" } },
+      { "label": "Let your child finish before offering it", "outcome_text": "The neighbour waited while the bucket stayed in use. When it was finally free, the game picked up again in a different corner.", "effects": { "mood": "quiet" } }
+    ]
+  },
+  {
+    "slug": "nigeria-toddler-weekend-grandparent",
+    "min_age": 1, "max_age": 3, "category": "home", "tone": "warm", "batch": "nigeria-early-years-01",
+    "title": "Saturday at Grandma's",
+    "setup_text": "Grandma asks for a longer Saturday visit with your toddler. You have errands to do, and the usual nap falls in the middle of her plan.",
+    "choices": [
+      { "label": "Visit for the whole afternoon", "outcome_text": "The afternoon stretched over stories, food and a nap away from home. The errands had to wait for another time.", "effects": { "mood": "tender" } },
+      { "label": "Visit around the usual nap", "outcome_text": "The visit was shorter, but the familiar nap stayed in place. Grandma packed a little food for the journey home.", "effects": { "mood": "content" } },
+      { "label": "Invite Grandma to spend time at your home", "outcome_text": "Grandma came over instead, bringing the visit into the usual Saturday routine. There was still a little tidying to do before she arrived.", "effects": { "mood": "safe" } }
+    ]
+  },
+  {
+    "slug": "nigeria-toddler-first-nursery",
+    "min_age": 2, "max_age": 3, "category": "school", "tone": "honest", "batch": "nigeria-early-years-01",
+    "title": "The nursery down the road",
+    "setup_text": "A nearby nursery has a place for your toddler. Your current care arrangement works, but the nursery offers a chance to play with other children.",
+    "choices": [
+      { "label": "Try nursery for a few mornings", "outcome_text": "A few mornings gained a new route and new faces. The rest of the week kept its familiar rhythm while everyone adjusted.", "effects": { "mood": "curious" } },
+      { "label": "Keep the current arrangement for now", "outcome_text": "The days stayed familiar. The nursery kept its notice by the gate, and the family agreed to look again later.", "effects": { "mood": "safe" } },
+      { "label": "Visit the nursery before deciding", "outcome_text": "The family spent a morning looking around and asking questions. The decision took longer, but the rooms were no longer a mystery.", "effects": { "mood": "thoughtful" } }
+    ]
+  }
+]
