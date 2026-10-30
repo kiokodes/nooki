@@ -31,6 +31,16 @@ export async function installTestBackend(client) {
     GRANT SELECT ON public.miss_you_taps, public.daily_decision_assignments, public.daily_decision_responses TO authenticated;
     -- The couple's framed picture: read by both partners, replaced by either.
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.couple_photo TO authenticated;
+    -- Raise a Child: the tuning rows and content are read by signed-in accounts; a
+    -- family's rows only through RLS. The child's temperament and the parents' bonds
+    -- are column-level grants, exactly as the migration leaves them.
+    GRANT SELECT ON public.game_config, public.trait_catalog, public.temperaments,
+      public.temperament_bias, public.families, public.event_templates,
+      public.family_moments, public.family_votes, public.album_entries,
+      public.family_gifts, public.raise_child_notifications TO authenticated;
+    GRANT SELECT (family_id, user_id, traits, joined_at) ON public.family_parents TO authenticated;
+    GRANT SELECT (family_id, name, look, visible_traits, mood, age, lead_user_id, letter,
+      letter_written_at, created_at, updated_at) ON public.child_state TO authenticated;
   `);
   const users = new Map();
   let currentUser = null;
@@ -104,6 +114,7 @@ export async function installTestBackend(client) {
       'questions', 'question_sessions', 'answers', 'answer_comments', 'couple_settings',
       'push_subscriptions', 'miss_you_taps',
       'daily_decision_questions', 'daily_decision_assignments', 'daily_decision_responses',
+      'daily_decision_chat_links', 'raise_child_chat_links',
       'couple_photo', 'everyday_status', 'visits', 'someday_items',
       'visit_wishes', 'visit_checklist_items', 'visit_memory_entries',
       'epistles',
@@ -214,6 +225,12 @@ export async function installTestBackend(client) {
     // shape `db.exec` gives directly).
     exec: async (sql) => { await db.exec('RESET ROLE'); return db.exec(sql); },
     query: async (sql, params) => { await db.exec('RESET ROLE'); return db.query(sql, params); },
+    // A statement as a signed-in account: RLS and column grants both apply, so a test
+    // can prove what the app's own client genuinely cannot read.
+    asUser: async (sql, params) => {
+      await db.exec('SET ROLE authenticated');
+      try { return await db.query(sql, params); } finally { await db.exec('RESET ROLE'); }
+    },
     resetRole: async () => { await db.exec('RESET ROLE'); },
     // verify.sql opens its own read-only transaction: a script that raises on purpose
     // leaves it aborted, and nothing else runs until it is rolled back. RESET ROLE is

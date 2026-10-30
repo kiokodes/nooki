@@ -17,7 +17,12 @@
     "check:functions": "tsc -p tsconfig.functions.json",
     "build:word-puzzles": "node scripts/build-word-puzzles.mjs",
     "upload:word-puzzles": "node scripts/upload-word-puzzles.mjs",
-    "seed:truth-or-dare": "node scripts/seed-truth-or-dare.mjs"
+    "seed:truth-or-dare": "node scripts/seed-truth-or-dare.mjs",
+    "events:validate": "node scripts/raise-a-child-events.mjs validate",
+    "events:import": "node scripts/raise-a-child-events.mjs import",
+    "events:activate": "node scripts/raise-a-child-events.mjs activate",
+    "events:deactivate": "node scripts/raise-a-child-events.mjs deactivate",
+    "events:coverage": "node scripts/raise-a-child-events.mjs coverage"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",

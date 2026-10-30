@@ -603,7 +603,28 @@ BEGIN
       RAISE EXCEPTION 'The visit-memories storage bucket is missing or public.';
     END IF;
   END IF;
+
+  -- The way back from the chat: "Take to chat" posts one linked line, so the card
+  -- stays the only place the three options are answered.
+  IF to_regclass('public.daily_decision_chat_links') IS NULL THEN
+    RAISE EXCEPTION 'Missing public.daily_decision_chat_links. Apply supabase/migrations/202610300004_daily_decision_chat_links.sql.';
+  END IF;
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.daily_decision_chat_links'::regclass) THEN
+    RAISE EXCEPTION 'daily_decision_chat_links must have row level security on. Apply supabase/migrations/202610300004_daily_decision_chat_links.sql.';
+  END IF;
+  IF NOT has_table_privilege('authenticated', 'public.daily_decision_chat_links', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.daily_decision_chat_links', 'INSERT')
+     OR has_table_privilege('anon', 'public.daily_decision_chat_links', 'SELECT') THEN
+    RAISE EXCEPTION 'daily_decision_chat_links must be read-only for signed-in phones.';
+  END IF;
+  IF to_regprocedure('public.daily_decision_take_to_chat()') IS NULL THEN
+    RAISE EXCEPTION 'Missing public.daily_decision_take_to_chat(). Apply supabase/migrations/202610300004_daily_decision_chat_links.sql.';
+  END IF;
+  IF NOT has_function_privilege('authenticated', 'public.daily_decision_take_to_chat()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.daily_decision_take_to_chat()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'Daily Decisions chat link permissions are incorrect.';
+  END IF;
 END;
 $$;
-SELECT 'PASS: required functions, pairing permissions, RLS, calendar/chat, Discuss, web push, daily decisions, partner locations, couple photos, visit planning, private Someday matching, Together-time reminders and visit memories are present. Still complete the two-device acceptance test and enable the scheduled push secrets.' AS result;
+SELECT 'PASS: required functions, pairing permissions, RLS, calendar/chat, Discuss, web push, daily decisions (with the chat link back to the card), partner locations, couple photos, visit planning, private Someday matching, Together-time reminders and visit memories are present. Still complete the two-device acceptance test and enable the scheduled push secrets.' AS result;
 COMMIT;

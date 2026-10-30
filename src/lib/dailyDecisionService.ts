@@ -9,7 +9,7 @@ function isMissingMigration(error: { message: string; code?: string }): boolean 
   return error.code === '42P01'
     || error.code === '42883'
     || error.code === 'PGRST202'
-    || /daily_decision_(questions|assignments|responses|state|choice)/i.test(error.message)
+    || /daily_decision_(questions|assignments|responses|state|choice|chat_links|take_to_chat)/i.test(error.message)
        && /does not exist|could not find|schema cache/i.test(error.message);
 }
 
@@ -95,6 +95,50 @@ export async function submitDailyDecisionChoice(optionIndex: number): Promise<vo
     if (isMissingMigration(error)) throw missingMigration();
     throw new Error(describeDatabaseError(error));
   }
+}
+
+/**
+ * "Take to chat": the server posts one short line with a link back to today's decision,
+ * so the chat stays a conversation and the three options stay on the card. Tapping it
+ * twice reuses the same message.
+ */
+export async function takeDailyDecisionToChat(): Promise<{ message_id: string; question_id: number | null }> {
+  const { data, error } = await requireSupabase().rpc('daily_decision_take_to_chat');
+  if (error) {
+    if (isMissingMigration(error)) throw missingMigration();
+    throw new Error(describeDatabaseError(error));
+  }
+  const row = (data ?? {}) as Record<string, unknown>;
+  const questionId = Number(row.question_id);
+  return {
+    message_id: typeof row.message_id === 'string' ? row.message_id : '',
+    question_id: Number.isInteger(questionId) ? questionId : null,
+  };
+}
+
+/**
+ * Which chat messages are about a daily decision, so a bubble can offer the way back.
+ * Reads the couple's own links only; row level security filters everything else.
+ */
+export async function fetchDailyDecisionChatLinks(messageIds: string[]): Promise<Record<string, string>> {
+  const ids = messageIds.filter(Boolean).slice(0, 200);
+  if (!ids.length) return {};
+  const { data, error } = await requireSupabase()
+    .from('daily_decision_chat_links')
+    .select('message_id, question_id')
+    .in('message_id', ids);
+  if (error) {
+    // A missing table only means the link layer is not deployed yet: the chat still works.
+    if (isMissingMigration(error)) return {};
+    throw new Error(describeDatabaseError(error));
+  }
+  const links: Record<string, string> = {};
+  for (const entry of (data ?? []) as Array<{ message_id?: unknown; question_id?: unknown }>) {
+    const messageId = typeof entry.message_id === 'string' ? entry.message_id : '';
+    const questionId = entry.question_id === null || entry.question_id === undefined ? '' : String(entry.question_id);
+    if (messageId && questionId) links[messageId] = questionId;
+  }
+  return links;
 }
 
 export interface DailyDecisionSubscriptionHandlers {

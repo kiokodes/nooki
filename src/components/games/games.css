@@ -45,7 +45,6 @@
 .game-library-hint { margin:0!important; font-size:.72rem; }
 /* The reserved seat for the next game reads as unfinished at a glance: a dashed edge the
    way the locked Spicy card does. */
-.raise-a-child-card { border-style:dashed; border-color:#e6d8e6; background:#fffdff; }
 @media (prefers-reduced-motion:reduce) {
   .game-panel { animation:none; }
   .game-panel-track { transition:none; }

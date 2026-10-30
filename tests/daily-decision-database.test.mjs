@@ -126,6 +126,39 @@ test('Daily Decisions: random unseen pool, private choices, matching consensus a
     assert(locked.error);
     assert.match(locked.error.message, /already agreed/);
 
+    // "Take to chat" leaves one short line behind, linked back to the card; the three
+    // options stay in the sheet, and tapping it twice brings the same message back.
+    await login('alice@example.com');
+    const shared = await supabase.rpc('daily_decision_take_to_chat');
+    assert.equal(shared.error, null, shared.error?.message);
+    assert.equal(shared.data.question_id, todaysQuestion.id);
+    const posted = (await backend.query('SELECT * FROM public.messages WHERE id = $1', [shared.data.message_id])).rows[0];
+    assert.equal(posted.couple_id, couple.id);
+    assert.equal(posted.sender_id, alice.id);
+    assert.equal(posted.content.includes(`Today’s decision — “${todaysQuestion.question}”.`), true,
+      'the line names the question the card is showing');
+    assert.equal(posted.content.includes('Pick whenever you have a moment.'), true);
+    assert.equal(/Cook together|Watch a film|Go for a walk/.test(posted.content), false, 'the options never leave the card');
+
+    const link = (await backend.query('SELECT * FROM public.daily_decision_chat_links WHERE message_id = $1', [shared.data.message_id])).rows[0];
+    assert.equal(link.couple_id, couple.id);
+    assert.equal(Number(link.question_id), todaysQuestion.id);
+
+    await login('bob@example.com');
+    const again = await supabase.rpc('daily_decision_take_to_chat');
+    assert.equal(again.data.message_id, shared.data.message_id, 'the day keeps one thread, not a copy');
+    assert.equal((await backend.query('SELECT count(*)::int AS count FROM public.messages WHERE couple_id = $1', [couple.id])).rows[0].count, 1);
+    const visibleLinks = await supabase.from('daily_decision_chat_links').select('message_id');
+    assert.equal((visibleLinks.data ?? []).length, 1, 'the couple can read their own link');
+    const forgedLink = await supabase.from('daily_decision_chat_links').insert({
+      message_id: shared.data.message_id, couple_id: couple.id, question_id: 1, decision_date: '2026-01-01',
+    });
+    assert(forgedLink.error, 'links are written by the RPC only');
+
+    await login('cara@example.com');
+    assert.deepEqual((await supabase.from('daily_decision_chat_links').select('*')).data, [],
+      'another couple cannot see the link');
+
     // The second couple works through the whole pool one day at a time and is
     // never handed the same question twice. Moving today's assignment back a
     // day (as the owner) stands in for the next UTC day arriving.
@@ -175,6 +208,9 @@ test('Daily Decisions: random unseen pool, private choices, matching consensus a
     result = await state();
     assert.equal(result.data.question, null, 'an unpaired account has no couple decision');
     assert.equal(result.data.partner_choice, null);
+    const noDecision = await supabase.rpc('daily_decision_take_to_chat');
+    assert(noDecision.error, 'an account with no couple has nothing to take to chat');
+    assert.match(noDecision.error.message, /Pair|no decision/i);
     const poolRead = await supabase.from('daily_decision_questions').select('*');
     assert(poolRead.error || (poolRead.data ?? []).length === 0,
       'the pool itself is not readable directly; only the state RPC hands out a question');

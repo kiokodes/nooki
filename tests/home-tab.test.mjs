@@ -293,12 +293,19 @@ test('global header: live counter, presence ticker and partner clock', async () 
     assert.equal(homeTabButton().getAttribute('aria-label'), 'Home',
       'waiting for the partner does not badge a decision you have already answered');
 
-    // Take to chat shares the exact prompt and all three options so the couple can deliberate.
+    // Take to chat leaves one short line behind, with a link back to the card to answer it.
     await act(async () => { decisionModal().querySelector('[data-action="take-decision-to-chat"]').click(); });
     await waitFor(() => document.querySelector('[data-screen="chat"]'), 'Take to chat opens the shared conversation');
     await waitFor(() => body().includes('What should we plan together?'), 'the decision prompt is sent to Chat');
-    assert(body().includes('1. Cook dinner') && body().includes('2. Watch a film') && body().includes('3. Take a walk'),
-      'the chat message carries all three options');
+    assert.equal(body().includes('Cook dinner'), false, 'the three options stay on the card, not in the chat');
+    await waitFor(() => document.querySelector('[data-daily-decision-link]'), 'the message carries a way back to the decision');
+    const decisionLink = document.querySelector('[data-daily-decision-link]');
+    assert.equal(decisionLink.textContent.includes('Open today’s decision'), true);
+
+    // The link opens the decision card again, from the chat, ready to answer.
+    await act(async () => { decisionLink.click(); });
+    await waitFor(() => decisionModal()?.querySelector('[data-decision-question]'), 'the link reopens today’s decision');
+    await act(async () => { decisionModal().querySelector('[aria-label="Close daily decision"]').click(); });
     await act(async () => { document.querySelector('button[aria-label="Home"]').click(); });
 
     // The shared nook stays at the bottom of Home, with its caption pinned to the top-right.

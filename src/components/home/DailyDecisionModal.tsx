@@ -341,7 +341,7 @@ export const DailyDecisionModal: React.FC<DailyDecisionModalProps> = ({
               </button>
               {shareError && <p role="alert" style={{ margin: 0, color: '#B91C1C', fontSize: '0.76rem', fontWeight: 700 }}>{shareError}</p>}
               <p style={{ margin: '-6px 0 0', textAlign: 'center', color: tokens.colors.textMuted, fontSize: '0.68rem', lineHeight: 1.4 }}>
-                This shares the question and all three options in your chat.
+                This drops one line in your chat, with a link back to here.
               </p>
               {state.agreed && (
                 <div data-decision-agreed style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: tokens.colors.accentSageDeep, fontSize: '0.78rem', fontWeight: 800 }}>

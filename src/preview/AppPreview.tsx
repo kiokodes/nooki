@@ -1,5 +1,5 @@
 import { PreviewEverydayStatus } from './PreviewEverydayStatus';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   Gamepad2,
@@ -16,10 +16,11 @@ import { PreviewSnake } from './PreviewSnake';
 import { PreviewTetris } from './PreviewTetris';
 import { PreviewWordWheel } from './PreviewWordWheel';
 import { PreviewEpistles } from './PreviewEpistles';
+import { PreviewTogether } from './PreviewTogether';
 import { ChessDuel } from '../components/games/ChessDuel';
 import { TruthOrDare } from '../components/games/TruthOrDare';
-import { TruthOrDarePanel, RaiseAChildCard } from '../components/games/LibraryPanels';
-import { TRUTH_OR_DARE_ENTRY, RAISE_A_CHILD_ENTRY } from '../lib/gameLibrary';
+import { TruthOrDarePanel } from '../components/games/LibraryPanels';
+import { TRUTH_OR_DARE_ENTRY } from '../lib/gameLibrary';
 import { usePreviewTruthOrDare } from './usePreviewTruthOrDare';
 import { OngoingGames } from '../components/games/OngoingGames';
 import { SplashScreen, SPLASH_DURATION_MS } from '../components/common/SplashScreen';
@@ -115,8 +116,8 @@ const PRESETS: Preset[] = [
   { label: 'Long distance (6Y 8M 1D)', anniversary: '2020-02-14' },
 ];
 
-type PreviewTab = 'home' | 'chat' | 'games' | 'epistles';
-const PREVIEW_TABS: PreviewTab[] = ['home', 'chat', 'games', 'epistles'];
+type PreviewTab = 'home' | 'chat' | 'together' | 'games' | 'epistles';
+const PREVIEW_TABS: PreviewTab[] = ['home', 'chat', 'together', 'games', 'epistles'];
 
 /**
  * The tab the page opens on: Home, unless the URL asks for another one
@@ -159,6 +160,26 @@ const PREVIEW_GAMES: { id: PreviewGame; icon: string; name: string }[] = [
 interface PreviewMessage extends ChatEntry {
   /** The name shown nowhere but useful when reading this file. */
   author: 'sam' | 'ana';
+}
+
+/** The message "Talk it out" leaves behind, shaped exactly like the database writes it. */
+const RAISE_CHILD_SHARE_ID = 'preview-raise-child-share';
+
+function raiseChildShareMessage(senderId: string): PreviewMessage {
+  return {
+    id: RAISE_CHILD_SHARE_ID,
+    couple_id: 'preview-couple',
+    sender_id: senderId,
+    content: 'About Mia — “The broken vase”.\nAna picked “Clean it up together”; Ravi picked “Ask what happened first”.\nWhich way should this year go?',
+    type: 'text',
+    session_id: null,
+    reply_to_id: null,
+    created_at: new Date().toISOString(),
+    read_at: null,
+    edited_at: null,
+    delivery: 'sent',
+    author: 'ana',
+  };
 }
 
 /** A transcript that already spans two days, so the day separators are visible. */
@@ -286,6 +307,11 @@ export const AppPreview = () => {
   const [epistleNudge, setEpistleNudge] = useState(0);
   const [events, setEvents] = useState<CoupleEvent[]>(STARTING_EVENTS);
   const [messages, setMessages] = useState<PreviewMessage[]>(STARTING_MESSAGES);
+  // "Talk it out" in the preview: the sheet's open state lives here so the chat's link can
+  // bring it back, and the shared moment is what that message points at.
+  const [familyOpen, setFamilyOpen] = useState(false);
+  const [familyFocus, setFamilyFocus] = useState<string | null>(null);
+  const [sharedMomentId, setSharedMomentId] = useState<string | null>(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   // Which stage of today's decision the Home card is showing (see PREVIEW_DECISION_STAGES).
   const [decisionStage, setDecisionStage] = useState(0);
@@ -352,6 +378,10 @@ export const AppPreview = () => {
     created_at: NOW,
   };
   const profile = savedProfile ?? presetProfile;
+  const chatMessages = useMemo(
+    () => (sharedMomentId ? [...messages, raiseChildShareMessage(profile.id)] : messages),
+    [messages, sharedMomentId, profile.id],
+  );
   const previewTruthOrDare = usePreviewTruthOrDare({ userId: profile.id, partnerId: 'preview-ana' });
   const partner: Profile = {
     id: 'preview-ana',
@@ -610,6 +640,16 @@ export const AppPreview = () => {
               /* The real epistle experience over an in-memory mailbox: the mailbox,
                  the writing desk, the wax seal and the reading ceremony, no backend. */
               <PreviewEpistles inboxNudge={epistleNudge} />
+            ) : tab === 'together' ? (
+              /* The Together tab, with the real family card and the real sheet over it. */
+              <PreviewTogether
+                partnerName={partner.name}
+                userName={profile.name}
+                open={familyOpen}
+                onOpenChange={(next) => { setFamilyOpen(next); if (!next) setFamilyFocus(null); }}
+                focusMomentId={familyFocus}
+                onOpenChat={(momentId) => { setSharedMomentId(momentId); setTab('chat'); }}
+              />
             ) : tab === 'games' ? (
               /* The Games tab head — the real eyebrow, the real swipeable Ongoing games
                  card and the real Last duel row, fed sample matches — and below it the
@@ -622,7 +662,6 @@ export const AppPreview = () => {
                 </header>
                 {/* The next game's seat sits where a game of its own lives: above the
                     ongoing matches, not as a chip in the rail. */}
-                <RaiseAChildCard entry={RAISE_A_CHILD_ENTRY} />
                 <OngoingGames
                   slides={[
                     { id: 'sample-tetris', name: 'Tetris Duel', waitingOn: 'me', statusLine: 'Your move' },
@@ -722,7 +761,7 @@ export const AppPreview = () => {
             ) : (
               /* The real chat: sending, receipts, typing and day separators all work. */
               <ChatView
-                messages={messages}
+                messages={chatMessages}
                 currentUserId={profile.id}
                 partnerName={partner.name}
                 partnerOnline={partnerOnline}
@@ -738,6 +777,12 @@ export const AppPreview = () => {
                 onDismissError={() => {}}
                 questionBySessionId={PREVIEW_SESSION_QUESTIONS}
                 onOpenQuestion={() => {}}
+                raiseChildLinks={sharedMomentId ? { [RAISE_CHILD_SHARE_ID]: sharedMomentId } : undefined}
+                onOpenRaiseChild={(momentId) => {
+                  setFamilyFocus(momentId);
+                  setFamilyOpen(true);
+                  setTab('together');
+                }}
               />
             )}
 
@@ -832,16 +877,28 @@ export const AppPreview = () => {
                 Chat
               </button>
 
-                {[
-                { label: 'Together', Icon: ImageIcon, tint: tokens.colors.primaryGreenSoft, ink: tokens.colors.primaryGreenDeep },
-              ].map(({ label, Icon, tint, ink }) => (
-                <span key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: tokens.colors.textMuted }}>
-                  <span style={{ width: '30px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: tokens.radii.sm, backgroundColor: tint, color: ink }}>
-                    <Icon size={19} />
-                  </span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: 500 }}>{label}</span>
+              <button
+                type="button"
+                aria-label="Together"
+                onClick={() => setTab('together')}
+                style={navItemStyle(tab === 'together')}
+              >
+                <span
+                  style={{
+                    width: '30px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: tokens.radii.sm,
+                    backgroundColor: tab === 'together' ? tokens.colors.primaryGreenSoft : 'transparent',
+                    color: tab === 'together' ? tokens.colors.primaryGreenDeep : tokens.colors.textMuted,
+                  }}
+                >
+                  <ImageIcon size={19} />
                 </span>
-              ))}
+                Together
+              </button>
 
               <button type="button" aria-label="Home" onClick={() => setTab('home')} style={{ ...navItemStyle(tab === 'home'), position: 'relative', top: '-10px', gap: '1px' }}>
                 <span

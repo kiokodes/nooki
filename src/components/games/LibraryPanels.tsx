@@ -1,13 +1,10 @@
 import type { TodRound } from '../../lib/truthOrDare';
-import type { RaiseAChildEntry, TruthOrDareEntry } from '../../lib/gameLibrary';
+import type { TruthOrDareEntry } from '../../lib/gameLibrary';
 
 /**
- * The two cards for games that are not duels: Truth or Dare's panel in the library rail,
- * and the Raise a Child card that stands above the ongoing matches until its rules exist.
- *
- * They live here rather than inside `GamesView` so the design preview can render the very
- * same cards — the copy and the placeholder's honesty cannot drift apart from the app they
- * stand in for.
+ * The panel for the guest game in the library rail: Truth or Dare's round, launched from
+ * its chip. It lives here rather than inside `GamesView` so the design preview can render
+ * the very same panel the app does.
  */
 
 /** How an open round reads on the panel, without opening it. */
@@ -54,24 +51,3 @@ export function TruthOrDarePanel({
   </article>;
 }
 
-/**
- * Raise a Child has no rules yet, so its card is just the game's name and a Coming soon
- * button — no rules, no promise, nothing to start. It sits above the ongoing matches,
- * which is where a game of its own lives on this tab.
- */
-export function RaiseAChildCard({ entry, direction = 'next' }: {
-  entry: RaiseAChildEntry;
-  direction?: 'next' | 'prev';
-}) {
-  return <article
-    className="game-card raise-a-child-card"
-    data-card="raise-a-child"
-    data-direction={direction}
-  >
-    <div className="game-icon game-icon-glyph" aria-hidden="true">{entry.icon}</div>
-    <h2>{entry.name}</h2>
-    <div className="game-actions">
-      <button type="button" disabled>Coming soon</button>
-    </div>
-  </article>;
-}

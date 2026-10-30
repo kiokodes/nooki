@@ -38,6 +38,11 @@ import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
 import { useCouplePhoto } from './hooks/useCouplePhoto';
 import { useDailyDecision } from './hooks/useDailyDecision';
+import { useRaiseChild } from './hooks/useRaiseChild';
+import { useChatCardLinks } from './hooks/useChatCardLinks';
+import type { RaiseChildMoment } from './lib/raiseChildService';
+import { takeDailyDecisionToChat } from './lib/dailyDecisionService';
+import { RaiseAChildModal } from './components/raisechild/RaiseAChildModal';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { VisitPlanningModal } from './components/together/VisitPlanningModal';
 import {
@@ -53,7 +58,7 @@ import {
   signOutUser,
   type AuthUser,
 } from './lib/authService';
-import type { Profile, Couple, DailyDecisionQuestion } from './types/database';
+import type { Profile, Couple } from './types/database';
 
 type TabKey = 'chat' | 'together' | 'home' | 'discuss' | 'games';
 
@@ -164,6 +169,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const [showCalendar, setShowCalendar] = useState(false);
   // Visit planning modal for the Together tab
   const [showVisitPlanning, setShowVisitPlanning] = useState(false);
+  // Raising a child is one card in Together and a sheet over it, never a tab.
+  const [showRaiseChild, setShowRaiseChild] = useState(false);
+  // Which moment the sheet should open on: set by the link in the chat, cleared on close.
+  const [raiseChildMomentId, setRaiseChildMomentId] = useState<string | null>(null);
   // The couple's letters: a full-screen world over whatever tab is open, entered
   // from the mailbox standing in the Home nook.
   const [showEpistles, setShowEpistles] = useState(false);
@@ -208,7 +217,6 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     partnerId: partner?.id ?? null,
     active: activeTab === 'chat' && appVisible,
   });
-  const sendChatMessage = chat.send;
 
   // The Discuss question engine sits at app level too, so a question the partner asks
   // still badges its tab while this phone is somewhere else.
@@ -266,6 +274,17 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     userId: currentUser?.id ?? null,
     coupleId: couple?.id ?? null,
   });
+  const raiseChild = useRaiseChild({
+    userId: currentUser?.id ?? null,
+    coupleId: couple?.id ?? null,
+  });
+  // "Talk it out" and "Take to chat" both leave a linked message behind: this is the way
+  // back from those bubbles, to the moment or to today's decision.
+  const chatMessageIds = useMemo(() => chat.messages.map((message) => message.id), [chat.messages]);
+  const chatCardLinks = useChatCardLinks(
+    chatMessageIds,
+    activeTab === 'chat' && appVisible,
+  );
 
   // A reminder belongs to this account, not to the partner who may still be deciding.
   // No loaded question (including an empty/exhausted pool) means nothing is pending.
@@ -294,20 +313,38 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     setActiveTab('chat');
   }, []);
 
-  // "Take to chat" shares the prompt and all three choices as a normal message, so both
-  // partners have the exact decision in their transcript to deliberate on.
-  const handleTakeDecisionToChat = useCallback(async (question: DailyDecisionQuestion) => {
-    const content = [
-      `Today’s decision: ${question.question}`,
-      '',
-      ...question.options.map((option, index) => `${index + 1}. ${option}`),
-      '',
-      'What do you think?',
-    ].join('\n');
-    await sendChatMessage(content);
+  // "Take to chat" leaves one short line behind — the question and a nudge, never the
+  // three options — and that line carries a link back to the card to answer it on.
+  const handleTakeDecisionToChat = useCallback(async () => {
+    await takeDailyDecisionToChat();
     setShowDailyDecision(false);
     setActiveTab('chat');
-  }, [sendChatMessage]);
+    // The line was written by the database, not this phone: read it back straight away.
+    await chat.refresh();
+  }, [chat]);
+
+  // The link on that bubble: straight back to today's decision, wherever this phone is.
+  const handleOpenDailyDecision = useCallback(() => {
+    setShowDailyDecision(true);
+  }, []);
+
+  // "Talk it out" puts the split in the chat, both picks spelled out, so the two of them
+  // can settle it themselves instead of the year deciding for them. The database writes
+  // the message and its link in one go, so the bubble can carry the way back.
+  const handleRaiseChildToChat = useCallback(async (moment: RaiseChildMoment) => {
+    const posted = await raiseChild.toChat(moment.id);
+    if (!posted) return;
+    setShowRaiseChild(false);
+    setActiveTab('chat');
+    await chat.refresh();
+  }, [raiseChild, chat]);
+
+  // The link on that bubble: back to Together, with the sheet open on that very moment.
+  const handleOpenRaiseChildMoment = useCallback((momentId: string) => {
+    setRaiseChildMomentId(momentId);
+    setActiveTab('together');
+    setShowRaiseChild(true);
+  }, []);
 
   // The quote on a linked bubble: jump back to that question and its answers.
   const handleOpenQuestion = useCallback((sessionId: string) => {
@@ -679,6 +716,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onToggleSomedayItem={somedayList.toggleItem}
             onReorderSomedayItems={somedayList.reorderItems}
             onDeleteSomedayItem={somedayList.deleteItem}
+            raiseChild={raiseChild}
+            onOpenRaiseChild={() => { setRaiseChildMomentId(null); setShowRaiseChild(true); }}
+            partnerName={partner.name}
           />
         ) : (
           <ChatView
@@ -700,6 +740,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             questionContext={chatContext}
             onClearQuestionContext={() => setChatContextStored(null)}
             onOpenQuestion={handleOpenQuestion}
+            raiseChildLinks={chatCardLinks.raiseChild}
+            onOpenRaiseChild={handleOpenRaiseChildMoment}
+            dailyDecisionLinks={chatCardLinks.dailyDecision}
+            onOpenDailyDecision={handleOpenDailyDecision}
           />
         )}
 
@@ -895,6 +939,18 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onEditEvent={calendar.editEvent}
             onDeleteEvent={calendar.removeEvent}
             onClose={() => setShowCalendar(false)}
+          />
+        )}
+
+        {/* Raising a child: the family, the year's moments and the album, over Together. */}
+        {showRaiseChild && (
+          <RaiseAChildModal
+            state={raiseChild}
+            userName={profile.name}
+            partnerName={partner.name}
+            onTakeToChat={handleRaiseChildToChat}
+            focusMomentId={raiseChildMomentId}
+            onClose={() => { setShowRaiseChild(false); setRaiseChildMomentId(null); }}
           />
         )}
 

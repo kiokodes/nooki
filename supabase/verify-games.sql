@@ -236,5 +236,87 @@ BEGIN
    END IF;
  END LOOP;
 END $$;
-SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, Dash Duel and Word Wheel, the Snake and Tetris replays, the Chess referee and secret-table permissions are configured. Test both devices before release.' AS result;
+-- Raise a Child: the family tables exist, the hidden columns are actually hidden, the
+-- app can only reach its eight functions, and the job's functions stay server-side.
+DO $$
+DECLARE fn text;
+BEGIN
+  FOREACH fn IN ARRAY ARRAY['public.families','public.family_parents','public.child_state',
+    'public.event_templates','public.family_moments','public.family_votes','public.album_entries',
+    'public.family_gifts','public.raise_child_notifications','public.game_config',
+    'public.trait_catalog','public.temperaments','public.raise_child_chat_links'] LOOP
+    IF to_regclass(fn) IS NULL THEN
+      RAISE EXCEPTION 'Missing Raise a Child table %: apply 202610300001_raise_a_child.sql.', fn;
+    END IF;
+  END LOOP;
+
+  IF NOT (SELECT bool_and(relrowsecurity) FROM pg_class
+           WHERE oid IN ('public.families'::regclass,'public.child_state'::regclass,
+                         'public.family_parents'::regclass,'public.family_moments'::regclass,
+                         'public.family_votes'::regclass,'public.album_entries'::regclass,
+                         'public.family_gifts'::regclass,'public.event_templates'::regclass)) THEN
+    RAISE EXCEPTION 'Raise a Child tables must all have row level security on.';
+  END IF;
+
+  -- The child's temperament and the parents' bonds are column grants, not prose.
+  IF has_column_privilege('authenticated','public.child_state','temperament','SELECT')
+     OR has_column_privilege('anon','public.child_state','temperament','SELECT') THEN
+    RAISE EXCEPTION 'The child temperament must never be readable by the app.';
+  END IF;
+  IF has_column_privilege('authenticated','public.family_parents','bond','SELECT')
+     OR has_column_privilege('anon','public.family_parents','bond','SELECT') THEN
+    RAISE EXCEPTION 'Bond values must never be readable by the app.';
+  END IF;
+
+  -- Two decisions each: the second say is a column, and it can only ever be used once.
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'family_votes'
+                    AND column_name = 'revisions') THEN
+    RAISE EXCEPTION 'family_votes.revisions is missing: apply 202610300002_raise_a_child_talk_it_out.sql.';
+  END IF;
+
+  -- The way back from the chat: the link table is readable by the app, written by nobody.
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid = 'public.raise_child_chat_links'::regclass
+                  AND relrowsecurity) THEN
+    RAISE EXCEPTION 'raise_child_chat_links must have row level security on: apply 202610300003_raise_a_child_chat_links.sql.';
+  END IF;
+  IF NOT has_table_privilege('authenticated','public.raise_child_chat_links','SELECT')
+     OR has_table_privilege('authenticated','public.raise_child_chat_links','INSERT')
+     OR has_table_privilege('anon','public.raise_child_chat_links','SELECT') THEN
+    RAISE EXCEPTION 'raise_child_chat_links must be read-only for signed-in phones.';
+  END IF;
+
+  -- Content is read (active rows only) and written by nobody but the owner's script.
+  IF NOT has_table_privilege('authenticated','public.event_templates','SELECT')
+     OR has_table_privilege('authenticated','public.event_templates','INSERT')
+     OR has_table_privilege('authenticated','public.event_templates','UPDATE')
+     OR has_table_privilege('anon','public.event_templates','SELECT') THEN
+    RAISE EXCEPTION 'event_templates must be read-only for signed-in phones.';
+  END IF;
+
+  FOREACH fn IN ARRAY ARRAY['public.raise_child_state()','public.raise_child_setup(text,jsonb,text[])',
+    'public.raise_child_vote(uuid,integer)','public.raise_child_open_gift(uuid)',
+    'public.raise_child_age_up()','public.raise_child_album(integer,timestamptz)',
+    'public.raise_child_reply(text)','public.raise_child_new_child()',
+    'public.raise_child_lead_decide(uuid)','public.raise_child_take_to_chat(uuid)'] LOOP
+    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child RPC: %', fn; END IF;
+    IF NOT has_function_privilege('authenticated',fn,'EXECUTE')
+       OR has_function_privilege('anon',fn,'EXECUTE') THEN
+      RAISE EXCEPTION 'Unsafe Raise a Child RPC permissions: %', fn;
+    END IF;
+  END LOOP;
+
+  FOREACH fn IN ARRAY ARRAY['public.raise_child_daily_tick(date)','public.raise_child_resolve(uuid,boolean)',
+    'public.raise_child_resolve_due(uuid)','public.raise_child_write_letter(uuid)',
+    'public.raise_child_claim_notifications(integer)',
+    'public.raise_child_resolve_as(uuid,boolean,text)'] LOOP
+    IF to_regprocedure(fn) IS NULL THEN RAISE EXCEPTION 'Missing Raise a Child job function: %', fn; END IF;
+    IF has_function_privilege('authenticated',fn,'EXECUTE')
+       OR has_function_privilege('anon',fn,'EXECUTE') THEN
+      RAISE EXCEPTION 'Raise a Child job functions must stay server-side: %', fn;
+    END IF;
+  END LOOP;
+END $$;
+
+SELECT 'PASS: always-available Games RPCs, server-refereed Connect Four, Dash Duel and Word Wheel, the Snake and Tetris replays, the Chess referee, the Raise a Child family tables, hidden columns and chat links, and the secret-table permissions are configured. Test both devices before release.' AS result;
 COMMIT;

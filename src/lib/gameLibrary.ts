@@ -13,24 +13,10 @@ export const TRUTH_OR_DARE_ENTRY = {
   description: 'Take turns with playful questions and long-distance dares. Every prompt can be done apart, by text, voice call or on your own phone.',
 } as const;
 
-/**
- * Raise a Child is the next game, still being designed. It is not a chip: it keeps its own
- * card above the ongoing matches, so the seat it will take is visible before its rules are
- * written.
- */
-export const RAISE_A_CHILD_ENTRY = {
-  id: 'raise-a-child',
-  kind: 'raise-a-child',
-  name: 'Raise a Child',
-  icon: '👶',
-} as const;
-
 /** The shared-round chip's entry. */
 export type TruthOrDareEntry = typeof TRUTH_OR_DARE_ENTRY;
-/** The placeholder card's entry. */
-export type RaiseAChildEntry = typeof RAISE_A_CHILD_ENTRY;
-/** A non-duel game, either of the two. */
-export type GuestEntry = TruthOrDareEntry | RaiseAChildEntry;
+/** A non-duel game played from a panel: Truth or Dare, for now the only one. */
+export type GuestEntry = TruthOrDareEntry;
 /** One duel from the game service, tagged so the rail can tell it from the guest chip. */
 export type GameEntry = typeof GAMES[number];
 /** One chip in the rail, and the panel it brings in. */
