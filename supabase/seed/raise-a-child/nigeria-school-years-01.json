@@ -1,0 +1,572 @@
+[
+  {
+    "slug": "nigeria-school-trip-fee",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "school",
+    "required_trait_tags": [],
+    "title": "The class trip",
+    "setup_text": "The class is going on a trip. The fee fits this month only if the family postpones something else your child has been looking forward to.",
+    "choices": [
+      {
+        "label": "Pay for the trip and postpone the plan",
+        "outcome_text": "Your child joined the class trip. The family made a new date for the plan that had to wait.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Keep the family plan and skip the trip",
+        "outcome_text": "The family plan stayed on the calendar. Your child missed the trip and later listened to classmates tell their stories.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the school about payment options",
+        "outcome_text": "A conversation with school opened up more information. The family had to wait before making its plans.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-school-pickup-neighbour",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "home",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "A lift after school",
+    "setup_text": "A neighbour offers to pick up your child with theirs. It would save a daily journey, but you do not know their routine well yet.",
+    "choices": [
+      {
+        "label": "Try the lift on one agreed day",
+        "outcome_text": "One afternoon became easier to plan. The family checked how the journey had gone before arranging another.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Keep the current pickup routine",
+        "outcome_text": "The familiar journey stayed in place. The neighbour remained available for an occasional change of plans.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Meet and plan the route together",
+        "outcome_text": "A short meeting made room for questions about the journey. The daily routine stayed as it was while everyone decided.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-money-for-friend",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "money",
+    "required_trait_tags": [],
+    "title": "Money at the school gate",
+    "setup_text": "Your child wants to buy a snack for a friend who forgot theirs. The money was meant to last the week.",
+    "choices": [
+      {
+        "label": "Let your child share the snack money",
+        "outcome_text": "The friend got a snack and there was less money for the remaining days. Your child thought about how to make it last.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Offer to share food brought from home",
+        "outcome_text": "A snack from the bag was split between two children. The saved money stayed for another day.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Talk about a small amount for sharing",
+        "outcome_text": "The family made a small sharing plan. It meant choosing what else the weekly money could cover.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-praise-in-family-group",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "values",
+    "required_trait_tags": [],
+    "title": "The photograph of a drawing",
+    "setup_text": "A relative wants to post your child’s drawing in the family group. Your child worked hard on it but has not decided who should see it.",
+    "choices": [
+      {
+        "label": "Ask your child before it is shared",
+        "outcome_text": "The drawing waited while your child chose who could see it. The relative received an answer a little later.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Show it at the next family visit",
+        "outcome_text": "The picture stayed at home until the family met. There was a chance to see people’s faces as they looked at it.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Offer to send it privately to the relative",
+        "outcome_text": "One person received the picture instead of the whole group. Your child kept the original on the table.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-friend-from-different-church",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "friends",
+    "required_trait_tags": [],
+    "title": "A Sunday invitation",
+    "setup_text": "A school friend invites your child to a Sunday activity at their family’s church. Your own family usually spends that morning elsewhere.",
+    "choices": [
+      {
+        "label": "Let your child attend with the friend",
+        "outcome_text": "The morning brought new faces and songs. The family’s usual Sunday plan changed for that week.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Invite the friend to your family’s activity",
+        "outcome_text": "The invitation went the other way. Your child shared a familiar place, while the friend’s original plan stayed on another calendar.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest meeting after both activities",
+        "outcome_text": "Both morning routines stayed in place. The children had a shorter time together later in the day.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-home-chores-and-club",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "home",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "Saturday on the calendar",
+    "setup_text": "Your child wants to join a Saturday club. That is also when the family usually cleans and visits relatives.",
+    "choices": [
+      {
+        "label": "Try the club for a few weeks",
+        "outcome_text": "The club found a place in the week. Cleaning and visits had to move around it.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Keep Saturday for family plans",
+        "outcome_text": "The familiar Saturday routine stayed. Your child looked for another way to spend time on the interest.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Alternate club and family Saturdays",
+        "outcome_text": "The calendar began to change from week to week. There was time for both, but some club days were missed.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-child-cousin-borrowed-book",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "friends",
+    "required_trait_tags": [],
+    "title": "The book at cousin’s house",
+    "setup_text": "A cousin borrowed your child’s favourite book and has not returned it. Your child wants it back before the next visit.",
+    "choices": [
+      {
+        "label": "Help your child ask for it",
+        "outcome_text": "A message went to the cousin. The book came back at the next opportunity, and the children still had other things to share.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the cousin’s parent yourself",
+        "outcome_text": "The grown-ups arranged the return. Your child got the book back without having to raise it directly.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Wait until the next visit to bring it up",
+        "outcome_text": "The book stayed away a little longer. The request was made face to face when the families met.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-holiday-gift-budget",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "money",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "The gift list",
+    "setup_text": "Your child wants to buy holiday gifts for several cousins. The money set aside would cover either small gifts for everyone or one larger gift.",
+    "choices": [
+      {
+        "label": "Choose small gifts for everyone",
+        "outcome_text": "Several small parcels were wrapped. Each cousin received something, though none was the larger gift your child had imagined.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Choose one larger shared gift",
+        "outcome_text": "One larger gift went to the cousins to use together. There were fewer parcels to open and a conversation about sharing it.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Make some gifts and buy one",
+        "outcome_text": "The table filled with paper and tape as well as one bought gift. Making everything took time across several evenings.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-teacher-speaking-up",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "school",
+    "required_trait_tags": [],
+    "title": "A question after class",
+    "setup_text": "Your child says a classroom rule feels unfair. The teacher has invited parents to discuss it, and your child wants to be heard.",
+    "choices": [
+      {
+        "label": "Help your child prepare a question",
+        "outcome_text": "Your child practised the question at home. The conversation at school gave everyone a little more to consider.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Speak with the teacher first",
+        "outcome_text": "The grown-ups started the conversation. Your child heard what was discussed and could decide what to ask next.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Invite the teacher and child to talk together",
+        "outcome_text": "The meeting included your child from the start. It took more arranging, and several views were heard.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-rainy-day-indoor-game",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "fun",
+    "required_trait_tags": [
+      "playful"
+    ],
+    "title": "Rain on a visiting day",
+    "setup_text": "Rain has kept your child and a visiting cousin indoors. One wants a noisy game; the other would rather draw.",
+    "choices": [
+      {
+        "label": "Make room for each activity",
+        "outcome_text": "One corner became a drawing space and another held the game. The room was busy, and both children had something to do.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest taking turns choosing",
+        "outcome_text": "The afternoon moved between a game and drawing. Each child waited for a turn to lead.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Find a game both children can shape",
+        "outcome_text": "Paper and a few household objects became a new game. It took a while to invent rules both children liked.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-first-walk-school",
+    "min_age": 6,
+    "max_age": 7,
+    "category": "school",
+    "required_trait_tags": [],
+    "title": "The last stretch to school",
+    "setup_text": "Your child wants to walk the last short stretch to the school gate with a classmate. You usually walk all the way together.",
+    "choices": [
+      {
+        "label": "Walk nearby while the children lead",
+        "outcome_text": "The children led the way while a grown-up stayed nearby. The morning felt a little different without changing the whole journey.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Keep walking to the gate together",
+        "outcome_text": "The familiar walk continued. Your child had company at the gate and time to talk with the classmate before class.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Agree on a trial with the other family",
+        "outcome_text": "The two families discussed a short trial and a meeting point. It took planning before the new walk could begin.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-after-school-rest",
+    "min_age": 6,
+    "max_age": 7,
+    "category": "health",
+    "required_trait_tags": [],
+    "title": "A quiet hour",
+    "setup_text": "Your child comes home tired and is invited to play outside. There is also a school activity to finish before tomorrow.",
+    "choices": [
+      {
+        "label": "Let your child rest before deciding",
+        "outcome_text": "A quiet break came first. The family looked at the activity later, with less time left for play.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Make room for a short play visit",
+        "outcome_text": "A short visit outside broke up the afternoon. The school activity waited until everyone came back in.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child to choose the order",
+        "outcome_text": "Your child helped arrange the afternoon. The family kept an eye on the clock as the evening got closer.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-older-child-phone-call",
+    "min_age": 8,
+    "max_age": 9,
+    "category": "values",
+    "required_trait_tags": [],
+    "title": "A call from a friend",
+    "setup_text": "Your child wants a regular evening call with a school friend. The phone is shared and the same hour is usually family time.",
+    "choices": [
+      {
+        "label": "Set aside a short call time",
+        "outcome_text": "The friends had a regular time to talk. The shared phone was unavailable for a little while each evening.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Keep calls to certain days",
+        "outcome_text": "The phone stayed free on other evenings. The friends had fewer calls but knew when to expect them.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask your child to plan around family time",
+        "outcome_text": "Your child helped find a time that fitted the evening. The plan needed a little adjusting during the week.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  },
+  {
+    "slug": "nigeria-school-project-parent-help",
+    "min_age": 8,
+    "max_age": 9,
+    "category": "school",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The model on the table",
+    "setup_text": "A school project is due soon. Your child wants to do it alone, but the materials and time are running short.",
+    "choices": [
+      {
+        "label": "Let your child lead while you stay nearby",
+        "outcome_text": "The model took its own shape, including a few uneven edges. Help was close if your child wanted it.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Offer to prepare the materials together",
+        "outcome_text": "The family spent time getting the pieces ready. Your child still had decisions to make about the finished model.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the teacher about simpler materials",
+        "outcome_text": "A question went to school before the work continued. The project took a different shape with what was available.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "nigeria-school-years-01"
+  }
+]
