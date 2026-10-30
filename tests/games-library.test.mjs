@@ -19,7 +19,7 @@ test('games library: the rail shows one game at a time and swipes between them',
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false } });
   try {
     const { GamesView } = await server.ssrLoadModule('/src/components/games/GamesView.tsx');
-    const { GAMES } = await server.ssrLoadModule('/src/lib/gamesService.ts');
+    const { GAME_LIBRARY } = await server.ssrLoadModule('/src/lib/gameLibrary.ts');
     const games = {
       data: { matches: [], wins: {} }, error: null, busy: false, match: undefined, pendingGame: null,
       select: () => {}, start: () => {}, play: () => {}, refresh: () => {},
@@ -32,7 +32,7 @@ test('games library: the rail shows one game at a time and swipes between them',
     assert.ok(track, 'one panel shows under it');
     assert.equal(rail.getAttribute('role'), 'tablist');
     const tabs = [...rail.querySelectorAll('[role="tab"]')];
-    assert.deepEqual(tabs.map(tab => tab.dataset.gameTab), GAMES.map(game => game.id), 'every game has a chip');
+    assert.deepEqual(tabs.map(tab => tab.dataset.gameTab), GAME_LIBRARY.map(entry => entry.id), 'every game has a chip');
     assert.equal(tabs[0].getAttribute('aria-selected'), 'true', 'the first game is chosen by default');
     assert.deepEqual(
       tabs.filter(tab => tab.getAttribute('aria-selected') === 'true').map(tab => tab.dataset.gameTab),
@@ -62,7 +62,7 @@ test('games library: the rail shows one game at a time and swipes between them',
     await act(async () => rail.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
     assert.equal(panels()[0].dataset.game, 'rock-paper-scissors', 'Home returns to the first game');
     await act(async () => rail.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true })));
-    assert.equal(panels()[0].dataset.game, 'word-wheel', 'End jumps to the last game');
+    assert.equal(panels()[0].dataset.game, 'raise-a-child', 'End jumps to the last chip');
 
     // A thumb swipe across the panel is the other way through the carousel.
     const swipe = async (from, to) => {

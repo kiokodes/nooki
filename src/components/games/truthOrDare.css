@@ -7,8 +7,7 @@
   color: var(--text-primary, #372e29);
 }
 
-.tod-view button,
-.tod-launcher button {
+.tod-view button {
   font: inherit;
   font-size: .86rem;
   font-weight: 750;
@@ -21,20 +20,17 @@
   transition: background-color .16s ease, transform .16s ease, box-shadow .16s ease;
 }
 
-.tod-view button:hover:not(:disabled),
-.tod-launcher button:hover:not(:disabled) {
+.tod-view button:hover:not(:disabled) {
   box-shadow: 0 5px 14px #ed91ad38;
   transform: translateY(-1px);
 }
 
-.tod-view button:focus-visible,
-.tod-launcher button:focus-visible {
+.tod-view button:focus-visible {
   outline: 3px solid var(--accent-lavender-deep, #7c3aed);
   outline-offset: 3px;
 }
 
-.tod-view button:disabled,
-.tod-launcher button:disabled {
+.tod-view button:disabled {
   cursor: default;
   opacity: .55;
   transform: none;
@@ -50,8 +46,7 @@
   color: #443c42;
 }
 
-.tod-view p,
-.tod-launcher p {
+.tod-view p {
   font-size: .84rem;
   line-height: 1.55;
   color: #756a68;
@@ -341,41 +336,14 @@
   font-size: 1.25rem;
 }
 
-.tod-launcher {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  background: #fffdfb;
-}
-.tod-launcher-icon {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 15px;
-  background: #fce7f3;
-  color: #d26d95;
-  font-size: 1.35rem;
-}
-.tod-launcher-copy { flex: 1 1 auto; min-width: 0; }
-.tod-launcher .games-eyebrow { font-size: .59rem; }
-.tod-launcher h2 { margin: 4px 0; font-size: .98rem; }
-.tod-launcher p { margin: 0; font-size: .73rem; }
-.tod-launcher .tod-launcher-status { margin-top: 4px; color: #6b5480; font-weight: 750; }
-.tod-launcher button { flex: 0 0 auto; padding: 10px 12px; font-size: .75rem; white-space: nowrap; }
-
-@media (max-width: 350px) {
-  .tod-launcher { align-items: flex-start; flex-wrap: wrap; }
-  .tod-launcher-copy { flex-basis: calc(100% - 58px); }
-  .tod-launcher button { margin-left: 56px; }
+.tod-panel .tod-panel-status {
+  margin-top: 4px;
+  color: #6b5480;
+  font-weight: 750;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tod-view button,
-  .tod-launcher button { transition: none; }
-  .tod-view button:hover:not(:disabled),
-  .tod-launcher button:hover:not(:disabled) { transform: none; }
+  .tod-view button { transition: none; }
+  .tod-view button:hover:not(:disabled) { transform: none; }
   .tod-dialog { animation: none; }
 }

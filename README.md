@@ -1384,7 +1384,8 @@ removes their date/board columns, and replaces the daily-flag Games RPC.
 
 ### Truth or Dare
 
-Truth or Dare lives in the Games tab and uses a couple-scoped room with server-refereed
+Truth or Dare lives in the Games tab — as one chip in the game rail, beside the duels
+rather than as its own card on the tab — and uses a couple-scoped room with server-refereed
 turns and Supabase Realtime updates. Both partners tap **I’m in** for each round. Flirty
 requires both to meet 18+, using a stored profile date of birth when available and
 otherwise a one-time minimum-age confirmation; only the confirmed age tier is stored, and
@@ -1435,10 +1436,18 @@ the app keeps that theme unavailable.
   is local and never affects multiplayer scores.
 - **The library is a carousel, not a scroll.** The game titles sit in a rail at the top
   (Rock Paper Scissors → Snake → Chess → Sudoku → Tetris → Connect Four → Dash → Word
-  Wheel) and only the chosen game's rules, settings and start button sit under it. Tap a
-  title, use the arrow keys, or swipe the card sideways to walk the rail; a swipe that
-  ends on a button is never mistaken for a tap on it. Adding a game means adding one entry
-  to `GAMES` and one panel — the rail, the focus order and the swipe come for free.
+  Wheel → Truth or Dare → Raise a Child) and only the chosen game's rules, settings and
+  start button sit under it. Tap a title, use the arrow keys, or swipe the card sideways
+  to walk the rail; a swipe that ends on a button is never mistaken for a tap on it.
+  Adding a game means adding one entry to `GAMES` and one panel — the rail, the focus
+  order and the swipe come for free.
+- **Truth or Dare is a chip, not a card above the rail.** Its panel names any open round
+  and opens the shared round (or the theme picker) from there; it is the same entry point
+  as Sudoku's. `src/lib/gameLibrary.ts` holds the rail order: the duels from `GAMES`
+  followed by the two games that are not duel rows.
+- **Raise a Child is a reserved seat.** Its chip and panel exist so the game has a home in
+  the rail, but the panel says it is still being written and offers no way to start it —
+  the rules, milestones and shared decisions still have to be designed.
 - **The Games tab is two things.** An **Ongoing games** card, always showing how many
   games are open, holding one swipe per live match at a single card's height; and the
   game catalogue carousel beneath it. Nothing else sits on the tab. A match waiting on

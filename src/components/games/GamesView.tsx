@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { GAMES, type GameMatch } from '../../lib/gamesService';
+import { GAME_LIBRARY, type GameEntry, type GuestEntry, type LibraryEntry } from '../../lib/gameLibrary';
 import { needsMyMove, type GamesState } from '../../hooks/useGames';
 import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
 import { dealPracticePieces, tetrisModeLabel, type TetrisMode } from '../../lib/tetris';
@@ -12,7 +13,7 @@ import { ChessDuel } from './ChessDuel';
 import { ConnectFour } from './ConnectFour';
 import { DashDuel, DashFreePlay } from './DashDuel';
 import { WordWheel } from './WordWheel';
-import { TruthOrDare, TruthOrDareLauncher } from './TruthOrDare';
+import { TruthOrDare } from './TruthOrDare';
 import type { TruthOrDareState } from '../../hooks/useTruthOrDare';
 import { OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
@@ -23,9 +24,6 @@ import {
 } from '../../lib/wordWheel';
 import { dealPracticeWordSession, type WordPracticeSession } from '../../lib/wordWheelPractice';
 import './games.css';
-
-/** One game in the library rail. */
-type GameEntry = typeof GAMES[number];
 
 /** A practice run in progress: its own pieces or food, dealt on this phone and never reported. */
 interface WarmUp {
@@ -90,7 +88,7 @@ export function GamesView({ games, userId, coupleId, partnerId, partnerName, par
       setWordPracticeLoading(false);
     }
   };
-  const activeGame = GAMES[libraryIndex] ?? GAMES[0];
+  const activeEntry = GAME_LIBRARY[libraryIndex] ?? GAME_LIBRARY[0];
   const selectGame = (index: number) => {
     if (index === libraryIndex) return;
     setLibraryDirection(index > libraryIndex ? 'next' : 'prev');
@@ -162,6 +160,70 @@ export function GamesView({ games, userId, coupleId, partnerId, partnerName, par
       },
     } : current);
   };
+  /** Whether a shared round is already open, shown on the Truth or Dare chip's panel. */
+  const truthOrDareRound = truthOrDare?.snapshot?.round ?? null;
+  const truthOrDareStatus = !truthOrDareRound ? null
+    : truthOrDareRound.status === 'paused' ? 'Round paused'
+      : truthOrDareRound.status === 'inviting' ? 'Waiting for both partners to join'
+        : 'Round in progress';
+  /** Truth or Dare's panel: the way into its own shared round, never a card above the rail. */
+  const renderTruthOrDareCard = (entry: GuestEntry) => (
+    <article
+      className="game-card game-panel tod-panel"
+      key={entry.id}
+      data-game={entry.id}
+      data-direction={libraryDirection}
+      role="tabpanel"
+      id={`game-panel-${entry.id}`}
+      aria-labelledby={`game-tab-${entry.id}`}
+    >
+      <div className="game-icon game-icon-glyph" aria-hidden="true">{entry.icon}</div>
+      <h2>{entry.name}</h2>
+      <p>{entry.description}</p>
+      {truthOrDareStatus && <p className="tod-panel-status" role="status">{truthOrDareStatus}</p>}
+      <div className="game-actions">
+        <button
+          type="button"
+          disabled={!truthOrDare}
+          onClick={() => setTruthOrDareOpen(true)}
+        >
+          {!truthOrDare
+            ? 'Opening your shared room…'
+            : truthOrDareRound ? 'Resume round →' : 'Choose a theme →'}
+        </button>
+      </div>
+      <p className="game-hint">Both phones play the same round. Either of you can pause or end it.</p>
+    </article>
+  );
+  /** Raise a Child's panel: a reserved seat until its rules are written. */
+  const renderRaiseAChildCard = (entry: GuestEntry) => (
+    <article
+      className="game-card game-panel raise-a-child-panel"
+      key={entry.id}
+      data-game={entry.id}
+      data-direction={libraryDirection}
+      role="tabpanel"
+      id={`game-panel-${entry.id}`}
+      aria-labelledby={`game-tab-${entry.id}`}
+    >
+      <div className="game-icon game-icon-glyph" aria-hidden="true">{entry.icon}</div>
+      <h2>{entry.name} <span className="game-soon-chip">In the works</span></h2>
+      <p>{entry.description}</p>
+      <p className="game-hint" id="raise-a-child-note">
+        A placeholder for now: the milestones, the choices and how the two of you raise a
+        little one together are still being written.
+      </p>
+      <div className="game-actions">
+        <button type="button" disabled aria-describedby="raise-a-child-note">Coming soon</button>
+      </div>
+    </article>
+  );
+  /** The panel under the rail, whatever kind of entry is chosen there. */
+  const renderLibraryPanel = () => activeEntry.kind === 'truth-or-dare'
+    ? renderTruthOrDareCard(activeEntry)
+    : activeEntry.kind === 'raise-a-child'
+      ? renderRaiseAChildCard(activeEntry)
+      : renderGameCard(activeEntry);
   /** One game's settings and call to action, shown for the game picked in the rail. */
   const renderGameCard = (game: GameEntry) => (
     <article
@@ -344,10 +406,9 @@ export function GamesView({ games, userId, coupleId, partnerId, partnerName, par
       {/* Exactly two things on this tab: the couple's live matches (one swipeable card
           however many are open) and the game catalogue under it. A settled duel, or one
           whose two runs are both in, is history and is not listed here at all. */}
-      {truthOrDare && <TruthOrDareLauncher game={truthOrDare} onOpen={() => setTruthOrDareOpen(true)} />}
       <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
-      <GameLibrary activeIndex={libraryIndex} onSelect={selectGame}>
-        {renderGameCard(activeGame)}
+      <GameLibrary entries={GAME_LIBRARY} activeIndex={libraryIndex} onSelect={selectGame}>
+        {renderLibraryPanel()}
       </GameLibrary>
     </>}
   </section>;
@@ -365,8 +426,13 @@ const SWIPE_COMMIT_PX = 48;
  * brings that game's settings and start button in) and only the chosen game takes up
  * room. The rail scrolls sideways when it outgrows the phone, keeps the chosen chip
  * centred, and answers the arrow keys.
+ *
+ * Every entry is a chip in that one rail — the duels from `GAMES` and the games that are
+ * not duel rows (Truth or Dare, and the Raise a Child placeholder) alike, so no game gets
+ * a card of its own above the carousel.
  */
-function GameLibrary({ activeIndex, onSelect, children }: {
+function GameLibrary({ entries, activeIndex, onSelect, children }: {
+  entries: LibraryEntry[];
   activeIndex: number;
   onSelect: (index: number) => void;
   children: ReactNode;
@@ -377,7 +443,7 @@ function GameLibrary({ activeIndex, onSelect, children }: {
   const gesture = useRef<{ x: number; y: number; id: number | null; moved: boolean }>({ x: 0, y: 0, id: null, moved: false });
   /** A swipe ends on top of the panel's buttons; the click it would fire is not wanted. */
   const swallowed = useRef(false);
-  const clamp = (index: number) => Math.min(Math.max(index, 0), GAMES.length - 1);
+  const clamp = (index: number) => Math.min(Math.max(index, 0), entries.length - 1);
 
   /* Keep the chosen chip in view as the thumb walks the rail. */
   useEffect(() => {
@@ -418,27 +484,28 @@ function GameLibrary({ activeIndex, onSelect, children }: {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
         const next = event.key === 'Home' ? 0
-          : event.key === 'End' ? GAMES.length - 1
+          : event.key === 'End' ? entries.length - 1
             : clamp(activeIndex + (event.key === 'ArrowRight' ? 1 : -1));
         onSelect(next);
-        document.getElementById(`game-tab-${GAMES[next].id}`)?.focus();
+        document.getElementById(`game-tab-${entries[next].id}`)?.focus();
       }}
     >
-      {GAMES.map((game, index) => (
+      {entries.map((entry, index) => (
         <button
-          key={game.id}
+          key={entry.id}
           type="button"
           role="tab"
-          id={`game-tab-${game.id}`}
+          id={`game-tab-${entry.id}`}
           className="game-rail-tab"
-          data-game-tab={game.id}
+          data-game-tab={entry.id}
           aria-selected={index === activeIndex}
-          aria-controls={index === activeIndex ? `game-panel-${game.id}` : undefined}
+          aria-controls={index === activeIndex ? `game-panel-${entry.id}` : undefined}
           tabIndex={index === activeIndex ? 0 : -1}
           onClick={() => onSelect(index)}
         >
-          <span className="game-rail-icon" aria-hidden="true">{game.icon}</span>
-          <span>{game.name}</span>
+          <span className="game-rail-icon" aria-hidden="true">{entry.icon}</span>
+          <span>{entry.name}</span>
+          {entry.kind === 'raise-a-child' && <span className="game-rail-badge">Soon</span>}
         </button>
       ))}
     </div>
@@ -461,7 +528,7 @@ function GameLibrary({ activeIndex, onSelect, children }: {
           current.moved = true;
           event.currentTarget.setPointerCapture?.(event.pointerId);
         }
-        const edge = (dx > 0 && activeIndex === 0) || (dx < 0 && activeIndex === GAMES.length - 1);
+        const edge = (dx > 0 && activeIndex === 0) || (dx < 0 && activeIndex === entries.length - 1);
         const next = edge ? dx * 0.3 : dx;
         dragRef.current = next;
         setDrag(next);

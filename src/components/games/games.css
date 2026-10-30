@@ -10,6 +10,9 @@
 .games-view button:focus-visible { outline:3px solid #8a6c93; outline-offset:3px; }
 .games-view .game-back { background:transparent; padding-left:0; margin-bottom:12px; }
 .game-icon { font-size:1.8rem; letter-spacing:8px; }
+/* A card whose icon is a single glyph (Truth or Dare's heart, the child) needs no
+   letter spacing, or the glyph drifts left of the heading. */
+.game-icon-glyph { letter-spacing:0; }
 .games-view fieldset { border:0; padding:0; margin:16px 0; display:flex; flex-wrap:wrap; gap:8px; }
 .games-view legend { font-size:.75rem; font-weight:700; flex:0 0 100%; margin:0 0 8px; }
 .games-view [aria-pressed] { background:#f4edf5; }
@@ -40,6 +43,11 @@
 @keyframes game-panel-in { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:none; } }
 @keyframes game-panel-in-prev { from { opacity:0; transform:translateX(-16px); } to { opacity:1; transform:none; } }
 .game-library-hint { margin:0!important; font-size:.72rem; }
+/* A chip can say it is not playable yet, so the rail never promises a game that has no
+   rules. The badge is small and quiet — it is a note, not a second title. */
+.game-rail-badge { padding:2px 6px; border-radius:8px; background:#efe6ee; color:#8a6c93; font-size:.6rem; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
+.game-rail-tab[aria-selected=true] .game-rail-badge { background:#ffffff9c; color:#7d4a60; }
+.game-soon-chip { display:inline-block; margin-left:6px; padding:3px 8px; border-radius:9px; background:#efe6ee; color:#8a6c93; font-size:.58rem; font-weight:850; letter-spacing:.06em; text-transform:uppercase; vertical-align:middle; }
 @media (prefers-reduced-motion:reduce) {
   .game-panel { animation:none; }
   .game-panel-track { transition:none; }

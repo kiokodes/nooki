@@ -309,21 +309,3 @@ export function TruthOrDare({
     <button type="button" className="tod-exit" onClick={onExit}>← All games</button>
   </section>;
 }
-
-export function TruthOrDareLauncher({ game, onOpen }: { game: TruthOrDareState; onOpen: () => void }) {
-  const round = game.snapshot?.round;
-  const status = !round ? null
-    : round.status === 'paused' ? 'Round paused'
-      : round.status === 'inviting' ? 'Waiting for both partners to join'
-        : 'Round in progress';
-  return <article className="game-card tod-launcher">
-    <div className="tod-launcher-icon" aria-hidden="true">♥</div>
-    <div className="tod-launcher-copy">
-      <span className="games-eyebrow">A little closer, from anywhere</span>
-      <h2>Truth or Dare</h2>
-      <p>Take turns with playful questions and long-distance dares.</p>
-      {status && <p className="tod-launcher-status">{status}</p>}
-    </div>
-    <button type="button" onClick={onOpen}>{round ? 'Resume round →' : 'Choose a theme →'}</button>
-  </article>;
-}
