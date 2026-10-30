@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { GAMES, type GameMatch } from '../../lib/gamesService';
-import { GAME_LIBRARY, RAISE_A_CHILD_ENTRY, type GameEntry, type LibraryEntry } from '../../lib/gameLibrary';
+import { GAME_LIBRARY, type GameEntry, type LibraryEntry } from '../../lib/gameLibrary';
 import { needsMyMove, type GamesState } from '../../hooks/useGames';
 import { dealPracticeFoods, type SnakePoint } from '../../lib/snake';
 import { dealPracticePieces, tetrisModeLabel, type TetrisMode } from '../../lib/tetris';
@@ -14,7 +14,7 @@ import { ConnectFour } from './ConnectFour';
 import { DashDuel, DashFreePlay } from './DashDuel';
 import { WordWheel } from './WordWheel';
 import { TruthOrDare } from './TruthOrDare';
-import { TruthOrDarePanel, RaiseAChildCard } from './LibraryPanels';
+import { TruthOrDarePanel } from './LibraryPanels';
 import type { TruthOrDareState } from '../../hooks/useTruthOrDare';
 import { OngoingGames, type OngoingSlide } from './OngoingGames';
 import { CHESS_MODES, type ChessMode } from '../../lib/chess';
@@ -355,7 +355,6 @@ export function GamesView({ games, userId, coupleId, partnerId, partnerName, par
       {/* The next game's seat, then the couple's live matches (one swipeable card however
           many are open), then the game catalogue under them. A settled duel, or one whose
           two runs are both in, is history and is not listed here at all. */}
-      <RaiseAChildCard entry={RAISE_A_CHILD_ENTRY} />
       <OngoingGames slides={ongoingSlides} onOpen={openMatch} />
       <GameLibrary entries={GAME_LIBRARY} activeIndex={libraryIndex} onSelect={selectGame}>
         {renderLibraryPanel()}
@@ -379,8 +378,8 @@ const SWIPE_COMMIT_PX = 48;
  *
  * Every entry is a chip in that one rail — the duels from `GAMES` and Truth or Dare, which
  * keeps a shared round rather than a duel row — so no game gets a card of its own above
- * the carousel. (`RaiseAChildCard`, the reserved seat for the next game, is the one card
- * that does live up there, and it is deliberately not a game yet.)
+ * the carousel. Raise a Child is no longer a reserved seat here: it is a real game, and
+ * its one entry point is the card in Together.
  */
 function GameLibrary({ entries, activeIndex, onSelect, children }: {
   entries: LibraryEntry[];

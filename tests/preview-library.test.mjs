@@ -94,22 +94,10 @@ test('design preview: every game is a chip in the rail, Chess included', async (
     await act(async () => buttonText('← All games').click());
     assert.ok(document.querySelector('[data-game="truth-or-dare"]'), 'and comes back to the rail');
 
-    // Raise a Child is not a chip: it is its own card, above the ongoing matches, and the
-    // preview wears the app's card so the two cannot drift apart.
-    assert.equal(document.querySelector('[data-preview-game="raise-a-child"]'), null, 'the placeholder is not a chip');
-    const placeholder = document.querySelector('[data-card="raise-a-child"]');
-    assert.ok(placeholder, 'Raise a Child has a card of its own');
-    assert.equal(placeholder.querySelector('h2').textContent.trim(), 'Raise a Child');
-    assert.equal(placeholder.querySelectorAll('p').length, 0, 'the card is the name and nothing else');
-    assert.deepEqual(
-      [...placeholder.querySelectorAll('button')].map((item) => item.disabled),
-      [true],
-      'there is nothing to start in a game that has no rules yet',
-    );
-    assert.ok(
-      placeholder.compareDocumentPosition(document.querySelector('[data-ongoing-games]')) & 4,
-      'the placeholder sits above the ongoing matches',
-    );
+    // Raise a Child has left this tab entirely: it is a game in Together now, not a
+    // reserved seat above the matches.
+    assert.equal(document.querySelector('[data-preview-game="raise-a-child"]'), null, 'it is not a chip');
+    assert.equal(document.querySelector('[data-card="raise-a-child"]'), null, 'and it is not a card here');
   } finally {
     await act(async () => root.unmount());
     await server.close();

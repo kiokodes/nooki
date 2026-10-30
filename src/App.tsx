@@ -38,6 +38,8 @@ import { useCouplePresence } from './hooks/useCouplePresence';
 import { useMissYou } from './hooks/useMissYou';
 import { useCouplePhoto } from './hooks/useCouplePhoto';
 import { useDailyDecision } from './hooks/useDailyDecision';
+import { useRaiseChild } from './hooks/useRaiseChild';
+import { RaiseAChildModal } from './components/raisechild/RaiseAChildModal';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { VisitPlanningModal } from './components/together/VisitPlanningModal';
 import {
@@ -164,6 +166,8 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
   const [showCalendar, setShowCalendar] = useState(false);
   // Visit planning modal for the Together tab
   const [showVisitPlanning, setShowVisitPlanning] = useState(false);
+  // Raising a child is one card in Together and a sheet over it, never a tab.
+  const [showRaiseChild, setShowRaiseChild] = useState(false);
   // The couple's letters: a full-screen world over whatever tab is open, entered
   // from the mailbox standing in the Home nook.
   const [showEpistles, setShowEpistles] = useState(false);
@@ -263,6 +267,10 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
     coupleId: couple?.id ?? null,
   });
   const dailyDecision = useDailyDecision({
+    userId: currentUser?.id ?? null,
+    coupleId: couple?.id ?? null,
+  });
+  const raiseChild = useRaiseChild({
     userId: currentUser?.id ?? null,
     coupleId: couple?.id ?? null,
   });
@@ -679,6 +687,9 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onToggleSomedayItem={somedayList.toggleItem}
             onReorderSomedayItems={somedayList.reorderItems}
             onDeleteSomedayItem={somedayList.deleteItem}
+            raiseChild={raiseChild}
+            onOpenRaiseChild={() => setShowRaiseChild(true)}
+            partnerName={partner.name}
           />
         ) : (
           <ChatView
@@ -895,6 +906,16 @@ export const App: React.FC<AppProps> = ({ initialTab = null }) => {
             onEditEvent={calendar.editEvent}
             onDeleteEvent={calendar.removeEvent}
             onClose={() => setShowCalendar(false)}
+          />
+        )}
+
+        {/* Raising a child: the family, the year's moments and the album, over Together. */}
+        {showRaiseChild && (
+          <RaiseAChildModal
+            state={raiseChild}
+            userName={profile.name}
+            partnerName={partner.name}
+            onClose={() => setShowRaiseChild(false)}
           />
         )}
 

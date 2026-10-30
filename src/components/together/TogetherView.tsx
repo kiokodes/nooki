@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Check,
   ChevronDown,
+  Sprout,
   ChevronUp,
   CalendarDays,
   CalendarHeart,
@@ -11,6 +12,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { tokens } from '../../tokens/designTokens';
+import { RaiseAChildCard } from '../raisechild/RaiseAChildCard';
+import type { RaiseChildState } from '../../hooks/useRaiseChild';
 import './together.css';
 import type { SomedayItem, Visit } from '../../types/database';
 
@@ -25,6 +28,10 @@ interface TogetherViewProps {
   onToggleSomedayItem?: (item: SomedayItem) => Promise<void>;
   onReorderSomedayItems?: (orderedIds: string[]) => Promise<void>;
   somedaySaving?: boolean;
+  /** The one card that opens the family, raised together, one year at a time. */
+  raiseChild?: RaiseChildState;
+  onOpenRaiseChild?: () => void;
+  partnerName?: string;
 }
 
 const cardStyle: React.CSSProperties = {
@@ -247,6 +254,9 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
   onDeleteSomedayItem,
   onToggleSomedayItem,
   onReorderSomedayItems,
+  raiseChild,
+  onOpenRaiseChild,
+  partnerName = 'your partner',
 }) => {
   return (
     <div data-view="together" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 14px 22px', display: 'grid', alignContent: 'start', gap: '20px', overscrollBehavior: 'contain' }}>
@@ -254,6 +264,13 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
         <SectionHeading icon={<Heart size={17} />} title="Next visit" subtitle="Keep the countdown going." />
         <VisitHero visit={visit} onPlanVisit={onPlanVisit} onViewPlans={onViewVisitPlans} />
       </section>
+
+      {raiseChild && onOpenRaiseChild && (
+        <section data-section="raise-a-child" style={{ display: 'grid', gap: '9px' }}>
+          <SectionHeading icon={<Sprout size={17} />} title="Raise a child" subtitle="One small life, decided together." />
+          <RaiseAChildCard state={raiseChild} partnerName={partnerName} onOpen={onOpenRaiseChild} />
+        </section>
+      )}
 
       <SomedaySection
         items={somedayItems}

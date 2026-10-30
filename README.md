@@ -996,7 +996,7 @@ Run **one** of these, depending on the project:
 | --- | --- |
 | Brand-new, empty project | `supabase/schema.sql` once, then `supabase/verify.sql` |
 | Live project with real couples | The migrations in order — `202610150001_pairing_flow.sql`, `202610150002_couple_events.sql`, `202610150003_messages.sql`, `202610150004_discuss_questions.sql`, `202610150005_discuss_comments_chat_links.sql`, `202610150006_chat_replies_edits.sql`, `202610150007_games.sql`, `202610150010_snake_duel.sql`, `202610150011_chess.sql`, `202610150012_tetris_duel.sql`, `202610150008_shared_books.sql`, `202610150009_two_book_shelf_limit.sql`, `202610150015_web_push.sql`, `202610150016_miss_you.sql`, `202610170001_partner_locations.sql`, `202610170002_daily_decisions.sql`, `202610180001_daily_decision_pool.sql`, `202610180002_remove_daily_games_and_tic_tac_toe.sql`, `202610180003_couple_photo.sql`, `202610180004_duel_report_retries.sql`,
-`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql`, `202610210001_epistle_replies.sql`, `202610210002_miss_you_push.sql`, `202610250001_lock_truth_or_dare_spicy.sql`, `202610250002_fix_push_webhooks.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
+`202610180006_connect_four.sql`, `202610180007_together_visits_and_someday_list.sql`, `202610180008_someday_details_order_and_visit_link.sql`, `202610180009_dash_duel.sql`, `202610190001_word_wheel.sql`, `202610190002_dash_duel_dodge_speed.sql`, `202610190003_word_wheel_async_practice.sql`, `202610190004_together_tab_restructure.sql`, `202610190005_together_time_agreement.sql`, `202610190006_remove_shared_books.sql`, `202610190007_someday_notebook_and_remove_together_time.sql`, `202610200001_epistles.sql`, `202610210001_epistle_replies.sql`, `202610210002_miss_you_push.sql`, `202610250001_lock_truth_or_dare_spicy.sql`, `202610250002_fix_push_webhooks.sql`, `202610300001_raise_a_child.sql` — then `supabase/seed/word_puzzles.sql`, `supabase/verify.sql` (PASS), plus `supabase/verify-games.sql` once Games is live |
 
 All migrations are idempotent and safe to rerun. Take a snapshot first: the Games
 retirement migration deletes daily-game and Tic Tac Toe match history,
@@ -1040,10 +1040,14 @@ place, converting `true` rows to `'yearly'`, then drops the old column.
   `supabase/functions/send-push/index.ts` into the dashboard), set its `VAPID_*` and
   `PUSH_WEBHOOK_SECRET` secrets, add the Database Webhooks on `messages` (Insert),
   `answers` (Insert), `game_matches` (Update) and `miss_you_taps` (Insert, Update), and run
-  `202610250002_fix_push_webhooks.sql` for the letters' trigger. Redeploy the function
-  whenever a new event type is added: a webhook on a function that does not handle its
-  table answers 200 and drops the notification. The step-by-step list, with the exact
-  commands, is under **Push notifications** above.
+  `202610250002_fix_push_webhooks.sql` for the letters' trigger. Raise a Child adds one
+  more caller of the same function: a Database Webhook whose type is **Scheduled**
+  (Dashboard → Database → Webhooks → Create → *Scheduled*, not table events) pointing at
+  `send-push`, plus the Vault secrets `nooki_send_push_url` and
+  `nooki_push_webhook_secret` that the hourly job reads. Redeploy the function whenever a
+  new event type is added: a webhook on a function that does not handle its table answers
+  200 and drops the notification. The step-by-step list is under **Push notifications**
+  above and under **Raise a Child** below.
 - **Realtime**: on by default, nothing to configure. Presence uses a couple-scoped channel,
   chat messages ride Postgres Changes on `messages`, Discuss rides a second couple-scoped
   channel over `question_sessions`, `couple_settings`, `answers` and `answer_comments`,
@@ -1340,8 +1344,10 @@ this repository's own `send-push` Edge Function — no notification service, SDK
 is involved — with a per-device switch in Couple Settings, the platform requirements
 explained in place (an iPhone needs the app on its Home Screen), a tap that opens the Chat
 tab, and an unread count on the installed app's icon. Together hosts **Next visit** (a
-countdown to the next shared date) and **Someday** (a shared, numbered notebook of task titles
-that both partners can add, reorder, complete and delete). Together time and Read together
+countdown to the next shared date), **Raise a Child** (one small life, raised together one
+year at a time — one card opens the family; see its own section below) and **Someday** (a
+shared, numbered notebook of task titles that both partners can add, reorder, complete and
+delete). Together time and Read together
 have been removed. Synced music
 and scrapbooks are still to come. Games includes
 Rock Paper Scissors, Chess, Sudoku, asynchronous Snake and Tetris Duels, and Dash Duel
@@ -1657,6 +1663,191 @@ Before release, use two real paired accounts: set a next visit, then clear it an
 the countdown disappears on both phones; add and reorder tasks from each phone and check
 that both see the same numbering; complete and delete an item from either account. Check
 that a third account sees none of the couple's data.
+
+## Raise a Child — one small life, decided together
+
+A cosy life sim for two: one child, one chapter per year, from birth to eighteen. Both
+parents answer the same small moment privately, the answers reveal together, and the year
+resolves on the server. It is entered from **one card in the Together tab** — not a tab, not
+a rail chip — and it opens as a sheet over the page.
+
+Nothing here shames anyone. There are no bars, scores, streaks or bond numbers; a split is
+described in a sentence and felt as a gentle nudge, and a missed day is met with “We went
+with your pick.”
+
+### Deploying
+
+1. **Database.** Apply `supabase/migrations/202610300001_raise_a_child.sql` in the SQL
+   Editor (or use `supabase/schema.sql` on a new project). It is additive and safe to
+   rerun; it creates twelve new tables and never touches an existing one. Then run
+   `supabase/verify-games.sql`: it checks the family tables, that the temperament and the
+   bonds are unreadable from the app, and that only the eight app RPCs are executable.
+2. **The hourly job.** The migration schedules `nooki-raise-a-child-hourly`
+   (`7 * * * *`) on `pg_cron`, calling `public.raise_child_daily_tick()`. It opens the
+   day's moments and gifts, resolves anything past its timeout, and queues at most one
+   notification per person per day. If your project has no `pg_cron`, the app still works
+   for the current day, but new days only open when someone loads the tab (the state RPC
+   ticks the caller's own family).
+3. **Push (optional).** The same `send-push` function now drains the day's queue:
+   * Vault → add `nooki_send_push_url` = `https://<project>.supabase.co/functions/v1/send-push`
+     and `nooki_push_webhook_secret` = the same long random string you set as
+     `PUSH_WEBHOOK_SECRET` on the function.
+   * Database → Webhooks → **Create a new webhook** → type **Scheduled** (not a table
+     event), name `raise-child-daily`, table `raise_child_notifications`, method `POST`,
+     Edge Function `send-push`, header `Authorization: Bearer <the same secret>`.
+   * Redeploy `send-push` after updating this release: without its
+     `raise_child_notifications` branch the scheduled call answers 200 and sends nothing.
+   * Realtime needs no configuration; the tables are added to `supabase_realtime` by the
+     migration.
+
+### The loop
+
+- **A chapter is a year.** The child's age is the chapter, and a chapter holds
+  `moments_per_chapter` moments (`moments_young` while the child is 0–3) — three normally,
+  two while they are tiny. They arrive one a day, and Age up appears once every moment in
+  the chapter has been answered, once per day by default. A chapter with fewer cards than
+  that has run out of content: it can end rather than stall.
+- **A moment is one card.** Both parents see the same title, scene and 2–4 options. Each
+  answer is sealed: the other phone is told only that a pick exists. The second pick
+  resolves the year on the server.
+- **Same pick** → “You both wanted the same thing.” The option's effects land, and the
+  bond moves by its small value for both.
+- **Different picks** → the year's **lead parent** (alternating each chapter) decides. The
+  outcome card says whose call it was, in a sentence. The option's own bond value is
+  ignored; each parent's bond moves by one point, in opposite directions, and the child
+  keeps their own small mood change. Nothing is scored, and nothing compares the parents.
+- **No answer inside 24 hours** → the pick that was made counts, the note reads “We went
+  with Ana's pick.”, and neither bond moves. No penalty, no mention of the wait.
+- **Gifts** arrive daily for both parents, drawn from the child's age and traits. Each is
+  a small card in the album.
+- **Milestones** write themselves at 1, 5, 7, 14 and 18.
+- **At eighteen** the child writes a templated letter to both parents, built from the
+  traits they showed and how often the parents agreed. There is no external AI in the
+  path, no app-drawn signature, and the letter is never cruel. Both parents can write one
+  short note back, keep the album forever, and start a new child (which archives the old
+  family rather than deleting anything).
+
+### What the parents see, and what they never see
+
+| Kept hidden | Shown instead |
+| --- | --- |
+| the child's temperament (drawn server-side from both parents' traits) | nothing — it only colours which cards and gifts fit |
+| both parents' bond values (0–100) | one soft line of language, and a heart |
+| the partner's sealed pick | “Ana has answered.” |
+| gift weighting | the card itself, from the child |
+
+The hidden columns are hidden by **database grants**, not by politeness: `authenticated`
+may select `child_state` and `family_parents` only through explicit column lists that omit
+`temperament` and `bond`. `verify-games.sql` fails if that ever changes, and
+`tests/raise-a-child-database.test.mjs` proves it with a real `SET ROLE authenticated`.
+
+### Setup
+
+Each parent picks three of the ten parent traits (`trait_catalog`), with a one-line
+description beside each. Together they name the child and choose a skin tone, a hair style
+and an outfit colour. The family only becomes active when both parents have their three
+traits and the child has a name; the first chapter and the opening gift follow immediately.
+
+### Writing the moments — the content pipeline
+
+**This repository contains no production moments.** The game is only as good as the batch
+you write, and `docs/EVENT_CONTENT_SPEC.md` is the brief to paste into whatever writes it:
+the JSON shape, every rule the importer enforces, the effect ranges, the trait lists, the
+content rules (no death, serious injury, abuse, neglect, abandonment, unresolved bullying,
+sexual content, child substance use or self-harm; grade-7 English; no brands; every option a
+trade-off), the coverage targets, and five labelled examples.
+
+```sh
+npm run events:validate -- ./batch-01.json          # rules only; writes nothing
+npm run events:import   -- ./batch-01.json          # validates, then upserts as INACTIVE
+npm run events:import   -- ./batch-01.json --activate   # only once you have read them
+npm run events:activate   -- --batch=batch-01
+npm run events:deactivate -- --slugs=the-broken-vase,one-more-chapter
+npm run events:coverage   -- --batch=batch-01
+```
+
+`validate` and `import` refuse a batch on any problem and print every one with its slug and
+field: missing fields, unknown category or tone, `min_age`/`max_age` outside 0–17 or out of
+order, 1 or 5 choices, duplicate labels, `setup_text` over 220 characters, `outcome_text`
+over 260, unknown child trait keys, effect weights outside −2…2, unknown or contradictory
+trait tags, duplicate slugs, near-duplicate titles or scenes (80% of the words shared), and
+an obvious-word screen for the excluded topics. `import` upserts on `slug`, so re-running a
+corrected batch updates those rows and touches nothing else. A batch is written with
+`active = false` unless you pass `--activate`: nothing reaches a family by accident.
+
+`events:import`, `activate`, `deactivate` and `coverage` need `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` in the environment. The service key never reaches the app, and
+`event_templates` is read-only for every signed-in phone (active rows only).
+
+**Dashboard or script?** The dashboard's row editor is fine for *looking* at a row or
+flipping `active`, but a moment's `choices` is a nested JSON array of objects with their own
+effects; pasting that into the grid view is where quoting mistakes happen, and a broken card
+is only discovered by a family mid-chapter. Write and change content through the script (or
+`WITH ... INSERT` SQL built from a validated file), and use the dashboard only to inspect
+what landed. `--json` on `validate` prints the machine-readable problem list, which is handy
+in CI.
+
+The picker is deliberately forgiving with content that is not there yet: it tries an exact
+age match, then widens to ±1, then any age; it prefers cards matching the family's traits,
+then falls back to unfiltered; it never repeats a card a family has already met; and when
+nothing fits it writes a quiet day rather than an error. `events:coverage` names the thin
+age bands and the categories with no cards, so a batch can be judged before it ships.
+
+### Tuning
+
+Every number lives in one row of `game_config` (edit with SQL; the app cannot write it):
+
+| Column | Default | Meaning |
+| --- | --- | --- |
+| `moments_per_day` | 1 | how many moments can arrive in a day |
+| `moments_per_chapter` | 3 | how many moments a year holds from age 4 up |
+| `moments_young` | 2 | how many a year holds while the child is 0–3 |
+| `timeout_hours` | 24 | how long a moment waits before the lone pick counts |
+| `chapters_per_day` | 1 | age-ups allowed per real day |
+| `gifts_per_day` | 1 | surprise cards per parent per day (0 turns them off) |
+
+`raise_child_state()` returns the whole tuning row to the app, so a change takes effect on
+the next load without a deploy.
+
+### Files
+
+| Piece | File |
+| --- | --- |
+| Tables, RPCs, RLS, cron | `supabase/migrations/202610300001_raise_a_child.sql` |
+| Content pipeline | `scripts/raise-a-child-events.mjs` |
+| The brief for writing moments | `docs/EVENT_CONTENT_SPEC.md` |
+| Service, realtime and error copy | `src/lib/raiseChildService.ts` |
+| State and actions | `src/hooks/useRaiseChild.ts` |
+| The Together card | `src/components/raisechild/RaiseAChildCard.tsx` |
+| The family sheet (setup, home, album, letter) | `src/components/raisechild/RaiseAChildModal.tsx` |
+| The layered child drawing | `src/components/raisechild/ChildAvatar.tsx`, `src/lib/raiseChildLook.ts` |
+| Design-preview state | `src/preview/PreviewTogether.tsx`, `src/preview/usePreviewRaiseChild.ts` |
+| Push queue handler | `supabase/functions/send-push/index.ts` |
+
+### Tests
+
+`node --test tests/raise-a-child-database.test.mjs tests/raise-a-child-events.test.mjs tests/raise-a-child-ui.test.mjs`
+
+- **Database (PGlite, real RLS and real column grants):** setup by one parent then both,
+  trait validation, the temperament absent from every JSON field and unreadable as a column,
+  private votes (the partner sees zero rows until both answer), a split going to the lead
+  parent with a two-point bond difference, the lead alternating at the next chapter, the
+  24-hour timeout resolving with the lone pick and no bond change, the daily and per-moment
+  age-up rules, the configured pacing, eighteen writing the letter, replies, the archived
+  family, another couple's rows being invisible, content being unwritable, and a quiet day
+  with no active content.
+- **Content pipeline:** every validator rule, the CLI refusing a bad batch, the batch
+  summary and coverage report, and that a batch is written inactive unless asked.
+- **UI (jsdom, real components over the preview's in-memory family):** the one card in
+  Together, the private pick, the waiting state, the reveal, the gift, the album grouped by
+  age, and the letter with its one-line reply.
+
+Two-device acceptance before release: pair two real accounts, choose traits on both
+phones, name the child together, answer a moment from each side and watch the reveal appear
+on both without a refresh; check that the second phone never shows the first pick before
+its own; leave a moment unanswered past its timeout; age up twice and confirm the second is
+refused; set `moments_per_day = 2` and confirm the second card appears. Then confirm a third
+account sees no family data and cannot select a temperament or a bond.
 
 ## Everyday status + mood (Home)
 

@@ -1,0 +1,321 @@
+[
+  {
+    "slug": "test-broken-vase",
+    "min_age": 3,
+    "max_age": 6,
+    "category": "home",
+    "required_trait_tags": [
+      "calm"
+    ],
+    "title": "The broken vase",
+    "setup_text": "A favourite vase is in three pieces on the kitchen floor, and Mia is standing very still beside it.",
+    "choices": [
+      {
+        "label": "Clean it up together",
+        "outcome_text": "You swept it up side by side. The vase is gone; the afternoon is not.",
+        "effects": {
+          "traits": {
+            "kind": 2
+          },
+          "mood": "safe",
+          "bond": 1
+        }
+      },
+      {
+        "label": "Ask what happened first",
+        "outcome_text": "She told you the whole story twice. Nobody was cross by the end of it.",
+        "effects": {
+          "traits": {
+            "honest": 1,
+            "thoughtful": 1
+          },
+          "mood": "safe"
+        }
+      },
+      {
+        "label": "Put it on the high shelf and move on",
+        "outcome_text": "The shelf is safer now. She watched you do it without a word.",
+        "effects": {
+          "traits": {
+            "shy": 1
+          },
+          "mood": "quiet",
+          "bond": -1
+        }
+      }
+    ],
+    "tone": "gentle",
+    "batch": "test-batch",
+    "active": false
+  },
+  {
+    "slug": "test-wants-a-pet",
+    "min_age": 4,
+    "max_age": 8,
+    "category": "home",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "A pet, probably",
+    "setup_text": "Mia has drawn a dog and taped it to the fridge with your name on it.",
+    "choices": [
+      {
+        "label": "Say yes to a small fish",
+        "outcome_text": "The fish is called Biscuit. The bowl is cleaned every Sunday without being asked.",
+        "effects": {
+          "traits": {
+            "kind": 1,
+            "thoughtful": 1
+          },
+          "mood": "delighted",
+          "bond": 1
+        }
+      },
+      {
+        "label": "Say not yet, and mean it",
+        "outcome_text": "You made a list of what a dog would need. The list is long. She reads it anyway.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          },
+          "mood": "thoughtful"
+        }
+      }
+    ],
+    "tone": "funny",
+    "batch": "test-batch",
+    "active": false
+  },
+  {
+    "slug": "test-first-day",
+    "min_age": 4,
+    "max_age": 5,
+    "category": "school",
+    "title": "The first morning",
+    "setup_text": "The shoes are too shiny and the gate is too big, and Mia has gone quiet.",
+    "choices": [
+      {
+        "label": "Walk her to the door",
+        "outcome_text": "You got as far as the door. She went in on her own feet.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          },
+          "mood": "brave",
+          "bond": 1
+        }
+      },
+      {
+        "label": "Wait at the gate",
+        "outcome_text": "She turned round twice to check you were there. You were.",
+        "effects": {
+          "traits": {
+            "shy": 1
+          },
+          "mood": "safe"
+        }
+      }
+    ],
+    "tone": "gentle",
+    "batch": "test-batch",
+    "active": false
+  },
+  {
+    "slug": "test-pocket-money",
+    "min_age": 7,
+    "max_age": 10,
+    "category": "money",
+    "title": "Pocket money",
+    "setup_text": "There is a jar on the counter and a long, careful list of things Mia wants to buy.",
+    "choices": [
+      {
+        "label": "Three coins a week, no questions",
+        "outcome_text": "The jar fills slowly. She counts it every Friday and tells nobody the total.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          },
+          "mood": "content"
+        }
+      },
+      {
+        "label": "Three coins, and a job for more",
+        "outcome_text": "The windows are streaky and she is very proud of them.",
+        "effects": {
+          "traits": {
+            "proud": 1,
+            "messy": 1
+          },
+          "mood": "proud",
+          "bond": -1
+        }
+      },
+      {
+        "label": "Save up for something together",
+        "outcome_text": "You are both saving for the same thing. She checks the jar more than you do.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          },
+          "mood": "delighted",
+          "bond": 1
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "test-batch",
+    "active": false
+  },
+  {
+    "slug": "test-friend-trouble",
+    "min_age": 8,
+    "max_age": 11,
+    "category": "friends",
+    "title": "The empty seat",
+    "setup_text": "A friend has stopped sitting next to Mia at lunch, and she is not sure why.",
+    "choices": [
+      {
+        "label": "Practise what to say",
+        "outcome_text": "She said it badly and it worked anyway. The seat is taken again.",
+        "effects": {
+          "traits": {
+            "brave": 1,
+            "honest": 1
+          },
+          "mood": "brave"
+        }
+      },
+      {
+        "label": "Let her sit with someone else",
+        "outcome_text": "There is a new seat at a new table. It took a fortnight to feel normal.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          },
+          "mood": "quiet",
+          "bond": -1
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "test-batch",
+    "active": false
+  },
+  {
+    "slug": "test-school-play",
+    "min_age": 9,
+    "max_age": 12,
+    "category": "school",
+    "title": "The second tree",
+    "setup_text": "Mia has a line in the school play and a bad case of the nerves.",
+    "choices": [
+      {
+        "label": "Rehearse in the kitchen",
+        "outcome_text": "She knows it backwards by Thursday. On the night, you mouth every word with her.",
+        "effects": {
+          "traits": {
+            "brave": 1,
+            "proud": 1
+          },
+          "mood": "proud",
+          "bond": 1
+        }
+      },
+      {
+        "label": "Tell her it is fine to be nervous",
+        "outcome_text": "She was nervous and she did it anyway. That is the bit she remembers.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          },
+          "mood": "brave"
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "test-batch",
+    "active": false
+  },
+  {
+    "slug": "test-late-night-talk",
+    "min_age": 13,
+    "max_age": 15,
+    "category": "values",
+    "title": "The kitchen light",
+    "setup_text": "It is late, and Mia is sitting at the kitchen table with something she has been carrying all week.",
+    "choices": [
+      {
+        "label": "Stay up and listen",
+        "outcome_text": "You heard all of it, even the parts that were hard to hear. She slept better than you did.",
+        "effects": {
+          "traits": {
+            "honest": 1,
+            "thoughtful": 1
+          },
+          "mood": "tender",
+          "bond": 2
+        }
+      },
+      {
+        "label": "Say it can wait until morning",
+        "outcome_text": "In the morning it had shrunk to a shrug. You both let it go.",
+        "effects": {
+          "traits": {
+            "shy": 1
+          },
+          "mood": "quiet",
+          "bond": -1
+        }
+      }
+    ],
+    "tone": "honest",
+    "batch": "test-batch",
+    "active": false
+  },
+  {
+    "slug": "test-leaving-home",
+    "min_age": 16,
+    "max_age": 17,
+    "category": "values",
+    "title": "The map on the wall",
+    "setup_text": "There is a map on Mia's wall with three cities circled, and none of them are near.",
+    "choices": [
+      {
+        "label": "Help her plan the first one",
+        "outcome_text": "The plan is on the fridge in her handwriting. You have never been so proud of a bus timetable.",
+        "effects": {
+          "traits": {
+            "brave": 1,
+            "thoughtful": 1
+          },
+          "mood": "proud",
+          "bond": 1
+        }
+      },
+      {
+        "label": "Ask her to show you the map",
+        "outcome_text": "She explained every circle. You asked questions until it got late.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          },
+          "mood": "tender",
+          "bond": 2
+        }
+      },
+      {
+        "label": "Say you will miss her",
+        "outcome_text": "She rolled her eyes and hugged you. The map stayed up.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          },
+          "mood": "tender"
+        }
+      }
+    ],
+    "tone": "bittersweet",
+    "batch": "test-batch",
+    "active": false
+  }
+]

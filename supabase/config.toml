@@ -4,9 +4,12 @@
 # `supabase functions deploy`); nothing in the app imports it. It is committed so the
 # function's gateway settings travel with the code they belong to.
 #
-# `send-push` is called by a Database Webhook, which authenticates the same way as a
+# `send-push` is called by Database Webhooks, which authenticate the same way as a
 # service key rather than as a signed-in user, so the platform-level JWT check is turned
-# off here and the function does its own check inside (see index.ts). This is exactly the
+# off here and the function does its own check inside (see index.ts). One of those callers
+# is not a table event at all: the hourly Raise a Child job posts a SCHEDULED body asking
+# the function to drain `raise_child_notifications`, which is why the payload is inspected
+# before a `record` is required. This is exactly the
 # configuration the Supabase docs describe for a webhook-driven push sender, and it is
 # why the table and the secrets stay unreachable from a phone.
 

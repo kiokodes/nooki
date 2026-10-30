@@ -24,6 +24,10 @@
  *   miss_you_taps INSERT / UPDATE → tell the *partner* they are missed (Home, where
  *                                the heart opens) — only the first tap of a waiting
  *                                batch, never every tap and never the opening itself
+ *   raise_child_notifications SCHEDULED → the hourly Raise a Child job has queued the
+ *                                day's one warm line; claim the rows the database wrote
+ *                                (already limited to one per person per day) and send
+ *                                each of them, then mark it sent
 
  * Every event is something the recipient must act on, so a Nooki notification is always
  * meaningful: a new message, a question waiting for your answer, a move waiting for you.
@@ -65,6 +69,14 @@ interface MessageRecord {
   session_id?: string | null;
   reply_to_id?: string | null;
   created_at?: string;
+}
+
+interface RaiseChildNotificationRow {
+  id: string;
+  user_id: string;
+  family_id: string;
+  title: string;
+  body: string;
 }
 
 interface EpistleRecord {
@@ -538,6 +550,40 @@ async function handleGameTurn(
 
 const PONG = json({ ok: true });
 
+/**
+ * Raise a Child, once a day, per person.
+ *
+ * The database has already decided who hears about today and what the line says: one
+ * queue row per user per day, written only when there is something warm to say (a year
+ * turned, a surprise arrived). This function only delivers them. A row is marked sent
+ * whichever way the send goes, because a missing device should not mean the same gentle
+ * line is retried all day; the next day's row is its own.
+ */
+async function handleRaiseChildScheduled(admin: Admin): Promise<Response> {
+  const { data, error } = await admin.rpc('raise_child_claim_notifications', { p_limit: 50 });
+  if (error) return json({ error: `Could not claim Raise a Child notifications: ${error.message}` }, 500);
+  const rows = (data ?? []) as RaiseChildNotificationRow[];
+  let sent = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const response = await deliver(admin, row.user_id, {
+      title: row.title,
+      body: row.body,
+      tag: `nooki-raise-child-${row.id}`,
+      tab: 'together',
+      url: '/?tab=together',
+      messageId: null,
+    });
+    const result = await response.json() as { sent?: number };
+    if ((result.sent ?? 0) > 0) sent += 1;
+    else skipped += 1;
+    await admin.rpc('raise_child_mark_notification_sent', { p_id: row.id });
+  }
+
+  return json({ claimed: rows.length, sent, skipped });
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method !== 'POST') {
     // Supabase sends a GET "verify" ping on creation; answer it so the webhook stays healthy.
@@ -566,6 +612,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const record = payload.record;
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+  // The Raise a Child job sends no record: it asks the function to drain a queue the
+  // database filled. Every other event carries the row that caused it.
+  if (payload.table === 'raise_child_notifications') {
+    if (payload.type !== 'SCHEDULED') return json({ skipped: 'not the daily queue' });
+    return handleRaiseChildScheduled(admin);
+  }
+
   if (!record || payload.table !== 'messages' && payload.table !== 'answers' && payload.table !== 'game_matches' && payload.table !== 'epistles' && payload.table !== 'miss_you_taps') {
     return json({ skipped: 'not a watched table' });
   }
