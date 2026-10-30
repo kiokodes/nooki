@@ -1,0 +1,572 @@
+[
+  {
+    "slug": "nigeria-first-words-two-languages",
+    "min_age": 0,
+    "max_age": 2,
+    "category": "values",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "Two names for the cup",
+    "setup_text": "People around your child use different languages. A grandparent asks which word to use for the cup at the table.",
+    "choices": [
+      {
+        "label": "Use both words during meals",
+        "outcome_text": "Both words found a place at the table. Everyone took turns remembering them.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask the grandparent to use their own word",
+        "outcome_text": "A familiar word came in the grandparent’s voice. The family asked what it meant and tried it too.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Use the word already common at home",
+        "outcome_text": "The familiar word stayed in the daily routine. The grandparent shared another word in a story.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-baby-family-photos-at-home",
+    "min_age": 0,
+    "max_age": 2,
+    "category": "home",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "Faces on the wall",
+    "setup_text": "A relative offers to print family photographs for the baby’s room. Wall space is small, and both sides of the family have many pictures.",
+    "choices": [
+      {
+        "label": "Make a small rotating display",
+        "outcome_text": "A few pictures went up at a time. The family changed them when there was room for a new face.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Put up one photo from each side",
+        "outcome_text": "Two pictures found space on the wall. Other photos stayed in an album within reach.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Keep the pictures in an album",
+        "outcome_text": "The wall stayed clear and the pictures lived together in a book. Looking at them became something to do with a visitor.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-toddler-visitor-playtime",
+    "min_age": 1,
+    "max_age": 3,
+    "category": "friends",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "A visitor at playtime",
+    "setup_text": "A neighbour offers to bring their toddler over. The suggested time overlaps with your child’s familiar afternoon rest.",
+    "choices": [
+      {
+        "label": "Meet before the usual rest",
+        "outcome_text": "The children had a shorter playtime before the house became quiet. Another visit could be planned later.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Try the visit after the rest",
+        "outcome_text": "The visit began later in the day. There was less time together before everyone needed to head home.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Meet outdoors for a short while",
+        "outcome_text": "The children met outside and came home before the afternoon was over. The visit needed a little more packing.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-toddler-market-helper",
+    "min_age": 2,
+    "max_age": 3,
+    "category": "money",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "Helping at the market",
+    "setup_text": "Your toddler wants to carry a small bag at the market. The shopping is heavy, and you are trying to get home before the rain.",
+    "choices": [
+      {
+        "label": "Give them one light item to carry",
+        "outcome_text": "A small bag had its own carrier. The journey took a little longer, with frequent checks on its contents.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Ask them to help choose an item instead",
+        "outcome_text": "Your child chose an item from the stall while the grown-ups carried the bags. There was still a job to do.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Save the carrying for another trip",
+        "outcome_text": "The bags got home before the rain. Your child helped unpack them once everyone was inside.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-toddler-bedtime-family-call",
+    "min_age": 2,
+    "max_age": 4,
+    "category": "home",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "A call near bedtime",
+    "setup_text": "A relative who lives far away can call only near your child’s bedtime. Your child loves seeing them, but the calls often run late.",
+    "choices": [
+      {
+        "label": "Keep the call short and regular",
+        "outcome_text": "A short call became part of the evening. There was never quite enough time for every story.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Make a longer call on a free evening",
+        "outcome_text": "The family found a less hurried evening to talk. Calls happened less often but had room for stories.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Send voice messages during the week",
+        "outcome_text": "Small voices travelled back and forth at different times. The live calls became less frequent.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-school-lunch-friend",
+    "min_age": 4,
+    "max_age": 6,
+    "category": "friends",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "A seat at lunch",
+    "setup_text": "Your child asks to sit with a new friend at lunch, but their usual friend expects them to sit together every day.",
+    "choices": [
+      {
+        "label": "Help them invite both friends",
+        "outcome_text": "The lunch plan made room for another child. It took a conversation to find a place where everyone could sit.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Let your child choose where to sit",
+        "outcome_text": "Your child made a choice at lunch and talked about it later at home. The old friendship needed another chance to meet.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Suggest different lunch days",
+        "outcome_text": "The week held time with each friend. Your child had to remember which day was whose.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-school-holiday-visit-duration",
+    "min_age": 4,
+    "max_age": 6,
+    "category": "home",
+    "required_trait_tags": [
+      "adventurous"
+    ],
+    "title": "The holiday visit",
+    "setup_text": "Your child wants an extra night with cousins during the school holiday. Your family has an early journey planned for the next morning.",
+    "choices": [
+      {
+        "label": "Stay another night and leave later",
+        "outcome_text": "There was one more evening with cousins. The journey started later than planned.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Leave as planned and arrange a call",
+        "outcome_text": "The family kept the early journey. The cousins planned a call for another day.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Ask about another visit soon",
+        "outcome_text": "The extra night did not happen, but a future visit went onto the calendar. It took a few calls to arrange.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-school-first-small-allowance",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "money",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "The weekly envelope",
+    "setup_text": "Your child asks for a little money to manage without asking each time. The family budget is already planned for the week.",
+    "choices": [
+      {
+        "label": "Set a small regular amount",
+        "outcome_text": "A small envelope became part of the week. The family adjusted another expense to make room.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Offer money for specific outings",
+        "outcome_text": "Money was set aside when an outing came up. Your child had less to manage between outings.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Plan a short trial together",
+        "outcome_text": "A trial amount was put aside for a few weeks. The family planned to revisit it after seeing how it worked.",
+        "effects": {
+          "traits": {
+            "honest": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-school-child-meal-choice",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "home",
+    "required_trait_tags": [
+      "creative"
+    ],
+    "title": "The family meal plan",
+    "setup_text": "Your child wants to choose one family meal each week. There are different tastes at the table and a budget to keep.",
+    "choices": [
+      {
+        "label": "Give them one meal to plan",
+        "outcome_text": "One meal on the list came from your child. Everyone worked within the week’s shopping budget.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      },
+      {
+        "label": "Choose a meal together each week",
+        "outcome_text": "The meal list had a new conversation in it. Choosing took longer, and everyone could suggest a dish.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Let them choose a side dish",
+        "outcome_text": "A side dish became your child’s part of the meal. The rest of the menu stayed with the usual plan.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01"
+  },
+  {
+    "slug": "nigeria-follow-near-school-journey",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "school",
+    "required_trait_tags": [
+      "patient"
+    ],
+    "title": "The familiar walk",
+    "setup_text": "Earlier, you chose the school close to home. Now your child wants to stop with friends on the walk back, making the journey longer.",
+    "choices": [
+      {
+        "label": "Agree on one stop each week",
+        "outcome_text": "One walk home grew longer. The family adjusted the afternoon plan on that day.",
+        "effects": {
+          "traits": {
+            "playful": 1
+          }
+        }
+      },
+      {
+        "label": "Keep the walk direct for now",
+        "outcome_text": "The familiar journey stayed short. Your child looked for another time to meet friends.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Plan a short stop with the other parents",
+        "outcome_text": "A few phone calls helped the families arrange a stop. The walk needed a little more coordination.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-choosing-school-distance",
+        "choice": 1
+      }
+    ]
+  },
+  {
+    "slug": "nigeria-follow-far-school-ride",
+    "min_age": 6,
+    "max_age": 9,
+    "category": "school",
+    "required_trait_tags": [
+      "organised"
+    ],
+    "title": "The longer school journey",
+    "setup_text": "Earlier, you chose the school farther away. Your child now wants to stay after school for a club, changing the journey home.",
+    "choices": [
+      {
+        "label": "Try the club on one day",
+        "outcome_text": "One journey home moved later. The family made room for the club in the week.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Find an activity closer to home",
+        "outcome_text": "The school journey stayed on its usual schedule. Your child looked for a similar activity nearby.",
+        "effects": {
+          "traits": {
+            "thoughtful": 1
+          }
+        }
+      },
+      {
+        "label": "Ask another family about sharing pickup",
+        "outcome_text": "The families discussed taking turns on the longer trip. The plan took some coordination before it began.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-choosing-school-distance",
+        "choice": 2
+      }
+    ]
+  },
+  {
+    "slug": "nigeria-follow-nursery-trial",
+    "min_age": 4,
+    "max_age": 6,
+    "category": "school",
+    "required_trait_tags": [
+      "warm"
+    ],
+    "title": "An old nursery friend",
+    "setup_text": "When your child was younger, you tried nursery for a few mornings. A friend from that time invites them to play, but the families live apart.",
+    "choices": [
+      {
+        "label": "Arrange a visit this month",
+        "outcome_text": "The children met again after some planning. The journey took part of the weekend, and there was plenty to catch up on.",
+        "effects": {
+          "traits": {
+            "kind": 1
+          }
+        }
+      },
+      {
+        "label": "Start with a short call",
+        "outcome_text": "The children heard familiar voices over the phone. The families could plan a visit when the timing worked.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Invite the friend to your area",
+        "outcome_text": "The invitation went out for a visit closer to home. The families still had to find a day that suited both.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-toddler-first-nursery",
+        "choice": 1
+      }
+    ]
+  },
+  {
+    "slug": "nigeria-follow-family-photo-boundary",
+    "min_age": 4,
+    "max_age": 6,
+    "category": "values",
+    "required_trait_tags": [
+      "curious"
+    ],
+    "title": "A picture for the family",
+    "setup_text": "When your child was a baby, you shared an update with relatives without a photo. Now a relative asks to post a picture of your child’s artwork.",
+    "choices": [
+      {
+        "label": "Ask your child who can see it",
+        "outcome_text": "Your child chose an audience for the picture. The relative waited for an answer before sharing it.",
+        "effects": {
+          "traits": {
+            "brave": 1
+          }
+        }
+      },
+      {
+        "label": "Share it directly with the relative",
+        "outcome_text": "The artwork reached one person without going to the whole group. The original stayed at home.",
+        "effects": {
+          "traits": {
+            "gentle": 1
+          }
+        }
+      },
+      {
+        "label": "Show the artwork at the next visit",
+        "outcome_text": "The picture travelled to a family visit instead of a group chat. There was time to talk about it in person.",
+        "effects": {
+          "traits": {
+            "proud": 1
+          }
+        }
+      }
+    ],
+    "tone": "warm",
+    "batch": "nigeria-family-memory-01",
+    "required_decisions": [
+      {
+        "event_slug": "nigeria-baby-photo-family-group",
+        "choice": 3
+      }
+    ]
+  }
+]

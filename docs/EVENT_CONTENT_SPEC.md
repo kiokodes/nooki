@@ -66,6 +66,7 @@ rows and touches nothing else, so a corrected batch is safe to import again.
 | `tone` | no | `warm`, `funny`, `gentle`, `honest`, `bittersweet`. |
 | `required_trait_tags` | no | Traits the family should have for this card to be a good fit. |
 | `excluded_trait_tags` | no | Traits that make it a bad fit. Never the same trait as required. |
+| `required_decisions` | no | Array of `{ "event_slug": "earlier-event", "choice": 1 }`. Every listed resolved decision must belong to this family. Choice is one-based. Unlike trait tags, these requirements are never relaxed in fallback. |
 | `batch` | no | A batch name, usually `batch-01`. Used by activate/deactivate and the coverage report. |
 | `active` | no | Ignored on import unless you pass `--activate`. A batch arrives switched off. |
 
@@ -103,6 +104,24 @@ Traits a parent can pick (usable as tags):
 `warm`, `organised`.
 
 A trait slug belongs to one side only: `curious` is a parent trait, never a child trait.
+
+---
+
+## Decision memory
+
+A family’s resolved `family_moments` are its durable memory, including decisions made
+before the feature was deployed. A follow-up can require one or more exact earlier
+choices. Each prerequisite must name an existing event and a valid one-based choice;
+check the source event before publishing. The scene should describe the earlier
+choice as something that happened, not assume the family has never changed since.
+A missing or unresolved earlier moment never matches. The picker may relax trait
+matching, but never decision requirements or an event's actual age range, even for
+general cards. When no follow-up matches, general cards keep the game moving.
+
+Once a source event has been resolved or referenced, its choice labels and order are
+protected in the database. Do not repurpose a published choice: write a new slug.
+Memory-dependent content should not assume a specific parent's private vote; it
+tracks the final resolved choice, including a lead parent's call or timeout.
 
 ---
 

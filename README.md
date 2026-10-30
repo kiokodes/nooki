@@ -1683,10 +1683,11 @@ with your pick.”
 
 1. **Database.** Apply, in order, `supabase/migrations/202610300001_raise_a_child.sql`,
    `202610300002_raise_a_child_talk_it_out.sql` (the split, the two decisions each, the
-   lead parent's call) and `202610300003_raise_a_child_chat_links.sql` (the link from a
-   "Talk it out" message back to its moment) in the SQL Editor — or use
-   `supabase/schema.sql` on a new project. All three are additive and safe to rerun; they
-   create thirteen tables and never alter one that already existed. Then run
+   lead parent's call), `202610300003_raise_a_child_chat_links.sql` (the link from a
+   "Talk it out" message back to its moment), and `202610300005_raise_child_decision_memory.sql`
+   (strict age ranges and family-scoped decision prerequisites) in the SQL Editor — or use
+   `supabase/schema.sql` on a new project. These migrations are safe to rerun. The memory
+   migration adds a column to `event_templates` and updates the picker. Then run
    `supabase/verify-games.sql`: it checks the family tables and the chat links, that the
    temperament and the bonds are unreadable from the app, and that only the nine app RPCs
    are executable.
@@ -1807,11 +1808,13 @@ is only discovered by a family mid-chapter. Write and change content through the
 what landed. `--json` on `validate` prints the machine-readable problem list, which is handy
 in CI.
 
-The picker is deliberately forgiving with content that is not there yet: it tries an exact
-age match, then widens to ±1, then any age; it prefers cards matching the family's traits,
-then falls back to unfiltered; it never repeats a card a family has already met; and when
-nothing fits it writes a quiet day rather than an error. `events:coverage` names the thin
-age bands and the categories with no cards, so a batch can be judged before it ships.
+The picker keeps every card within its exact age range. It prefers cards matching the
+family's traits, then falls back to unfiltered traits; it never repeats a card a family has
+already met. With `202610300005_raise_child_decision_memory.sql`, follow-ups may also
+require particular resolved choices from the same family; those requirements are never
+relaxed. Existing resolved moments serve as memory. If nothing fits, the family has a
+quiet day instead of an error. `events:coverage` names thin age bands and missing categories,
+but counts do not guarantee a particular family meets a card's trait or memory requirements.
 
 ### Tuning
 

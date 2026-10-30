@@ -213,6 +213,25 @@ export function validateEvents(events, { knownChildTraits = CHILD_TRAITS, knownP
       }
     }
 
+    if (event.required_decisions != null) {
+      if (!Array.isArray(event.required_decisions)) {
+        add(slug, 'required_decisions', 'Must be an array of past event and choice requirements.');
+      } else {
+        const seen = new Set();
+        for (const requirement of event.required_decisions) {
+          if (!isPlainObject(requirement) || !slugPattern.test(text(requirement.event_slug)) ||
+              !Number.isInteger(requirement.choice) || requirement.choice < 1 || requirement.choice > 4 ||
+              Object.keys(requirement).some((key) => !['event_slug', 'choice'].includes(key))) {
+            add(slug, 'required_decisions', 'Each requirement needs event_slug and a one-based choice from 1 to 4.');
+            continue;
+          }
+          if (requirement.event_slug === slug) add(slug, 'required_decisions', 'An event cannot require itself.');
+          if (seen.has(requirement.event_slug)) add(slug, 'required_decisions', 'An event can only appear once in requirements.');
+          seen.add(requirement.event_slug);
+        }
+      }
+    }
+
     const choices = event.choices;
     if (!Array.isArray(choices)) {
       add(slug, 'choices', 'choices must be an array of 2 to 4 options.');
@@ -380,6 +399,7 @@ export function toRows(events, { activate = false, batch = null } = {}) {
     category: text(event.category),
     required_trait_tags: Array.isArray(event.required_trait_tags) ? event.required_trait_tags : [],
     excluded_trait_tags: Array.isArray(event.excluded_trait_tags) ? event.excluded_trait_tags : [],
+    required_decisions: Array.isArray(event.required_decisions) ? event.required_decisions : [],
     title: text(event.title),
     setup_text: text(event.setup_text),
     choices: event.choices,
